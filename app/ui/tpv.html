@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>TPV Bizkaitropik</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --accent:#0ea5e9; --ok:#16a34a; --line:#334155; --txt:#e2e8f0; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; font-family:system-ui,Segoe UI,sans-serif; background:var(--bg); color:var(--txt); overflow:hidden; }
+  #app { display:flex; height:100vh; }
+  .col-botonera { flex:1; display:flex; flex-direction:column; padding:10px; min-width:0; }
+  .col-carrito { width:34%; max-width:420px; background:var(--panel); display:flex; flex-direction:column; border-left:2px solid var(--line); }
+  header { display:flex; align-items:center; gap:10px; padding:6px 10px; }
+  header .breadcrumb { flex:1; font-size:18px; color:#94a3b8; }
+  header .usuario { font-size:14px; color:#94a3b8; }
+  .btn { border:none; border-radius:12px; color:#fff; font-size:18px; font-weight:600;
+         padding:14px; cursor:pointer; min-height:90px; display:flex; flex-direction:column;
+         align-items:center; justify-content:center; gap:4px; }
+  .btn:active { filter:brightness(1.2); }
+  .grid { flex:1; display:grid; gap:10px; grid-auto-rows:1fr; overflow-y:auto; padding:4px; }
+  .b-articulo { background:#0369a1; }
+  .b-familia { background:#7c3aed; }
+  .b-funcion { background:#475569; }
+  .b-inicio { background:#0891b2; }
+  .b-precio { font-size:14px; opacity:.85; font-weight:400; }
+  .cites { font-size:12px; background:#b45309; border-radius:6px; padding:1px 6px; }
+  /* carrito */
+  .carrito-lineas { flex:1; overflow-y:auto; padding:10px; }
+  .linea { display:flex; align-items:center; gap:8px; padding:10px 6px; border-bottom:1px solid var(--line); }
+  .linea .desc { flex:1; }
+  .linea .cant { color:#94a3b8; font-size:14px; }
+  .linea .tot { font-variant-numeric:tabular-nums; font-weight:700; }
+  .linea .quita { background:#7f1d1d; border:none; color:#fff; border-radius:8px; width:38px; height:38px; font-size:20px; }
+  .total { padding:14px; font-size:30px; font-weight:800; display:flex; justify-content:space-between; border-top:2px solid var(--line); font-variant-numeric:tabular-nums; }
+  .acciones { display:flex; gap:10px; padding:10px; }
+  .acciones .btn { flex:1; min-height:70px; }
+  .b-cobrar { background:var(--ok); font-size:22px; }
+  .b-vaciar { background:#475569; flex:0 0 90px !important; }
+  /* overlay */
+  .overlay { position:fixed; inset:0; background:rgba(2,6,23,.85); display:flex; align-items:center; justify-content:center; z-index:10; }
+  .modal { background:var(--panel); border-radius:16px; padding:24px; width:min(92vw,440px); }
+  .modal h2 { margin:0 0 14px; }
+  .pinpad, .rapidos { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .pinpad .btn, .rapidos .btn { min-height:66px; background:#334155; font-size:24px; }
+  .pin-display { text-align:center; font-size:34px; letter-spacing:10px; height:44px; margin:10px 0; }
+  .campo { width:100%; font-size:26px; padding:12px; border-radius:10px; border:1px solid var(--line); background:#0f172a; color:#fff; text-align:right; }
+  .msg-error { color:#fca5a5; text-align:center; min-height:22px; }
+  .ticket-ok { text-align:center; }
+  .ticket-ok img { background:#fff; padding:8px; border-radius:8px; margin:10px auto; display:block; }
+  .fila-modal { display:flex; gap:10px; margin-top:12px; }
+  .fila-modal .btn { flex:1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="col-botonera">
+    <header>
+      <button class="btn b-inicio" style="min-height:auto;padding:8px 16px" onclick="irInicio()">Inicio</button>
+      <div class="breadcrumb" id="breadcrumb">Venta</div>
+      <div class="usuario" id="usuario"></div>
+    </header>
+    <div class="grid" id="grid"></div>
+  </div>
+  <div class="col-carrito">
+    <div class="carrito-lineas" id="carrito"></div>
+    <div class="total"><span>TOTAL</span><span id="total">0,00 &euro;</span></div>
+    <div class="acciones">
+      <button class="btn b-vaciar" onclick="vaciar()">&#128465;</button>
+      <button class="btn b-cobrar" onclick="abrirCobro()">COBRAR</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+let usuario = null;
+let carrito = [];      // {articulo_id, nombre_corto, cantidad, pvp?, requiere_cites, precio_libre}
+let ultimoCalculo = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!r.ok) {
+    const detalle = await r.json().catch(() => ({}));
+    throw new Error(detalle.detail || ("Error " + r.status));
+  }
+  return r.json();
+}
+const eur = (s) => (s ?? "0.00").toString().replace(".", ",") + " €";
+
+/* ---------- LOGIN ---------- */
+function pantallaLogin() {
+  let pin = "";
+  const ov = document.createElement("div");
+  ov.className = "overlay";
+  ov.innerHTML = `<div class="modal"><h2>Introduce tu PIN</h2>
+    <div class="pin-display" id="pd"></div><div class="msg-error" id="pe"></div>
+    <div class="pinpad" id="pp"></div></div>`;
+  document.body.appendChild(ov);
+  const pintar = () => { $("pd").textContent = "•".repeat(pin.length); };
+  const pp = ov.querySelector("#pp");
+  ["1","2","3","4","5","6","7","8","9","C","0","OK"].forEach((t) => {
+    const b = document.createElement("button");
+    b.className = "btn"; b.textContent = t;
+    b.onclick = async () => {
+      if (t === "C") { pin = ""; }
+      else if (t === "OK") {
+        try {
+          usuario = await api("/tpv/api/login", { method:"POST", body:JSON.stringify({ pin }) });
+          $("usuario").textContent = usuario.nombre + " (" + usuario.rol + ")";
+          ov.remove(); iniciar();
+        } catch (e) { $("pe").textContent = e.message; pin = ""; pintar(); }
+        return;
+      } else if (pin.length < 8) { pin += t; }
+      pintar();
+    };
+    pp.appendChild(b);
+  });
+}
+
+/* ---------- BOTONERA / NAVEGACION ---------- */
+async function irInicio() {
+  $("breadcrumb").textContent = "Venta";
+  const data = await api("/tpv/api/botonera");
+  const grid = $("grid");
+  grid.style.gridTemplateColumns = `repeat(${data.pagina.columnas}, 1fr)`;
+  grid.innerHTML = "";
+  for (const b of data.botones) {
+    const btn = document.createElement("button");
+    btn.className = "btn b-" + b.tipo;
+    btn.style.gridColumn = `${b.columna + 1} / span ${b.ancho}`;
+    btn.style.gridRow = `${b.fila + 1} / span ${b.alto}`;
+    if (b.color) btn.style.background = b.color;
+    if (b.tipo === "articulo") {
+      btn.innerHTML = `<span>${b.articulo.nombre_corto}</span><span class="b-precio">${eur(b.articulo.pvp)}</span>`;
+      btn.onclick = () => anadir(b.articulo);
+    } else if (b.tipo === "familia") {
+      btn.textContent = b.texto || b.familia.nombre;
+      btn.onclick = () => abrirFamilia(b.familia.id);
+    } else {
+      btn.textContent = b.texto || b.funcion;
+      btn.onclick = () => ejecutarFuncion(b.funcion);
+    }
+    grid.appendChild(btn);
+  }
+}
+
+async function abrirFamilia(id) {
+  const fam = await api("/tpv/api/familia/" + id);
+  $("breadcrumb").textContent = "Venta › " + fam.nombre;
+  const grid = $("grid");
+  grid.style.gridTemplateColumns = "repeat(4, 1fr)";
+  grid.innerHTML = "";
+  for (const sf of fam.subfamilias) {
+    const b = document.createElement("button");
+    b.className = "btn b-familia"; b.textContent = sf.nombre;
+    b.onclick = () => abrirFamilia(sf.id); grid.appendChild(b);
+  }
+  for (const a of fam.articulos) {
+    const b = document.createElement("button");
+    b.className = "btn b-articulo";
+    b.innerHTML = `<span>${a.nombre_corto}</span><span class="b-precio">${eur(a.pvp)}</span>`;
+    b.onclick = () => anadir(a); grid.appendChild(b);
+  }
+}
+
+function ejecutarFuncion(f) {
+  if (f === "cobrar") abrirCobro();
+  else if (f === "abrir_cajon")
+    api("/tpv/api/cajon", { method:"POST", body: JSON.stringify({ usuario_id: usuario.usuario_id }) }).catch(()=>{});
+  else alert("Funcion '" + f + "': disponible en una fase siguiente.");
+}
+
+/* ---------- CARRITO ---------- */
+function anadir(articulo) {
+  let pvp = articulo.pvp;
+  if (articulo.precio_libre) {
+    const v = prompt("Precio (con IVA) para " + articulo.nombre_corto + ":", articulo.pvp);
+    if (v === null) return;
+    pvp = v.replace(",", ".");
+  }
+  if (articulo.requiere_cites) alert("⚠ " + articulo.nombre_corto + " requiere documentacion CITES.");
+  const ex = carrito.find((l) => l.articulo_id === articulo.id && !articulo.precio_libre);
+  if (ex) ex.cantidad += 1;
+  else carrito.push({ articulo_id: articulo.id, nombre_corto: articulo.nombre_corto,
+                      cantidad: 1, pvp: articulo.precio_libre ? pvp : null });
+  recalcular();
+}
+
+async function recalcular() {
+  if (!carrito.length) { ultimoCalculo = null; $("total").innerHTML = "0,00 &euro;"; render(); return; }
+  const items = carrito.map((l) => ({ articulo_id: l.articulo_id, cantidad: String(l.cantidad),
+                                      pvp: l.pvp }));
+  ultimoCalculo = await api("/tpv/api/calcular", { method:"POST", body:JSON.stringify({ items }) });
+  $("total").textContent = eur(ultimoCalculo.total);
+  render();
+}
+
+function render() {
+  const cont = $("carrito"); cont.innerHTML = "";
+  const lineas = ultimoCalculo ? ultimoCalculo.lineas : [];
+  lineas.forEach((ln, i) => {
+    const div = document.createElement("div"); div.className = "linea";
+    div.innerHTML = `<div class="desc">${ln.descripcion}
+        <div class="cant">${carrito[i].cantidad} × ${eur(ln.pvp)} &middot; IVA ${ln.tipo_iva.replace(".",",")}%</div></div>
+      <div class="tot">${eur(ln.total)}</div>`;
+    const quita = document.createElement("button");
+    quita.className = "quita"; quita.textContent = "×";
+    quita.onclick = () => { carrito.splice(i, 1); recalcular(); };
+    div.appendChild(quita); cont.appendChild(div);
+  });
+}
+function vaciar() { carrito = []; recalcular(); }
+
+/* ---------- COBRO ---------- */
+function abrirCobro() {
+  if (!ultimoCalculo) { alert("El ticket esta vacio."); return; }
+  const total = ultimoCalculo.total;
+  const ov = document.createElement("div"); ov.className = "overlay";
+  ov.innerHTML = `<div class="modal"><h2>Cobrar ${eur(total)}</h2>
+    <input class="campo" id="efectivo" inputmode="decimal" value="${total.replace(".",",")}">
+    <div class="rapidos" id="rapidos"></div>
+    <div class="msg-error" id="ce"></div>
+    <div class="fila-modal">
+      <button class="btn b-vaciar" style="flex:0 0 40%" onclick="this.closest('.overlay').remove()">Cancelar</button>
+      <button class="btn b-cobrar" id="btnCobrar">Efectivo</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const rap = ov.querySelector("#rapidos");
+  ["5","10","20","50","Exacto"].forEach((v) => {
+    const b = document.createElement("button"); b.className = "btn"; b.textContent = v === "Exacto" ? v : v + " €";
+    b.onclick = () => { $("efectivo").value = v === "Exacto" ? total.replace(".",",") : v; };
+    rap.appendChild(b);
+  });
+  ov.querySelector("#btnCobrar").onclick = () => cobrar(ov, "efectivo");
+}
+
+async function cobrar(ov, medio) {
+  const importe = ($("efectivo").value || "0").replace(",", ".");
+  const items = carrito.map((l) => ({ articulo_id: l.articulo_id, cantidad: String(l.cantidad), pvp: l.pvp }));
+  try {
+    const r = await api("/tpv/api/cobrar", { method:"POST", body: JSON.stringify({
+      usuario_id: usuario.usuario_id, items, pagos: [{ medio, importe }] }) });
+    ov.querySelector(".modal").innerHTML = `<div class="ticket-ok">
+      <h2>&#10004; ${r.num_serie}</h2>
+      <div>Total: <b>${eur(r.total)}</b></div>
+      <div>Cambio: <b>${eur(r.cambio)}</b></div>
+      <img src="/tpv/api/venta/${r.venta_id}/qr.png" alt="QR" width="150" height="150">
+      <div style="font-size:13px;color:#94a3b8">Factura verificable en la sede electronica de la AEAT</div>
+      <div class="fila-modal"><button class="btn b-cobrar" id="cierra">Nueva venta</button></div></div>`;
+    ov.querySelector("#cierra").onclick = () => { ov.remove(); vaciar(); irInicio(); };
+  } catch (e) { $("ce").textContent = e.message; }
+}
+
+/* ---------- ESCANER (keyboard wedge) ---------- */
+let bufEscaner = "", tEscaner = 0;
+document.addEventListener("keydown", async (e) => {
+  if (e.target.tagName === "INPUT") return;
+  const ahora = Date.now();
+  if (ahora - tEscaner > 100) bufEscaner = "";
+  tEscaner = ahora;
+  if (e.key === "Enter") {
+    if (bufEscaner.length >= 4) {
+      try { anadir(await api("/tpv/api/articulo/por-codigo/" + encodeURIComponent(bufEscaner))); }
+      catch { /* codigo no encontrado */ }
+    }
+    bufEscaner = "";
+  } else if (e.key.length === 1) { bufEscaner += e.key; }
+});
+
+/* ---------- ARRANQUE ---------- */
+function iniciar() { irInicio(); render(); }
+pantallaLogin();
+</script>
+</body>
+</html>

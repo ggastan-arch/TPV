@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Base de datos local: NUNCA versionar (contiene la cadena de registros fiscales
+# y datos personales de clientes -> RGPD + secreto tributario).
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Entorno / configuracion local con posibles secretos.
+.env
+.env.*
+!.env.example
+
+# Certificados y claves: el certificado de la titular NUNCA sale del servidor
+# (invariante 7). Prohibido versionarlos en ningun caso.
+*.pfx
+*.p12
+*.pem
+*.cer
+*.crt
+*.key
+*.jks
+*.keystore
+*.der
+
+# Copias de seguridad
+*.bak
+backups/
+
+# Los XSD/WSDL oficiales de la AEAT (schemas/) SI se versionan: son publicos y los
+# tests los necesitan. Un certificado alli quedaria cubierto por los patrones de arriba.
+
+# Estado local de herramientas de agentes (no es codigo del proyecto)
+.atl/
+.claude/
+
+# SO / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

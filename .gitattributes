@@ -1,0 +1,9 @@
+# Normaliza los finales de linea a LF dentro del repositorio (multiplataforma).
+* text=auto eol=lf
+
+# Binarios: no tocar finales de linea.
+*.png binary
+*.pdf binary
+*.xlsx binary
+*.pfx binary
+*.p12 binary
