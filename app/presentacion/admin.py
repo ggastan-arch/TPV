@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_session, get_uow
+from app.presentacion.deps import get_session, get_uow
 from app.infraestructura.config import settings
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.seguridad import verificar_pin

@@ -70,10 +70,12 @@ dependencias). Dominio ya puro: redondeo, huella, validadores, validaciones de n
    `MotorFiscal` en `dominio/puertos.py`.
 2. ✅ **Repositorios**: `RepositorioArticulos`/`Ventas`/`Usuarios`/`Registros` + `UnidadDeTrabajo`
    (puertos) con adaptadores SQLAlchemy; `ColaRemision` → caso de uso `RemitirLote`.
-3. ⬜ **Reubicación de módulos** a `dominio/aplicacion/infraestructura/presentacion` y ajuste
-   de imports (cambio mecánico grande; los tests son la red). Pendiente: mover
-   `app/fiscal/*` (huella/xml/qr/... e impl. del motor) y `app/models` a infraestructura,
-   `app/api` a presentacion, `redondeo`/`huella`/`validaciones` a dominio.
+3. ✅ **Reubicación de módulos** a `dominio/aplicacion/infraestructura/presentacion`
+   (con `git mv`, imports reescritos por script, tests verdes en cada sub-paso):
+   3a servicios puros → `dominio/servicios`; 3b modelos ORM → `infraestructura/persistencia`;
+   3c fiscal → `infraestructura/fiscal`; 3d `core` (config/db/tipos/reloj/seguridad) →
+   `infraestructura`; 3e `api` → `presentacion` y `printing` → `infraestructura/impresion`.
+   La estructura de carpetas ya coincide con §2.
 4. ⬜ **Cierre**: regla de dependencias verificada (p. ej. `import-linter`), limpieza.
 
 Cada incremento es un PR/commit propio, reversible, con `make test` en verde.

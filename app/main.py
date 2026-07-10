@@ -4,9 +4,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.api.admin import router as admin_router
-from app.api.health import router as health_router
-from app.api.tpv import router as tpv_router
+from app.presentacion.admin import router as admin_router
+from app.presentacion.health import router as health_router
+from app.presentacion.tpv import router as tpv_router
 from app.infraestructura.config import settings
 
 

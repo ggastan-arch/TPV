@@ -24,7 +24,7 @@ from app.aplicacion.emitir_venta import (
 from app.aplicacion.lineas import ArticuloNoExiste
 from app.aplicacion.lineas import ItemVenta as ItemAplicacion
 from app.aplicacion.lineas import resolver_items
-from app.api.deps import get_motor, get_session, get_uow
+from app.presentacion.deps import get_motor, get_session, get_uow
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.seguridad import verificar_pin
 from app.infraestructura.fiscal import qr as qr_mod
@@ -225,7 +225,7 @@ def abrir_cajon_sin_venta(req: CajonReq, s: Session = Depends(get_session)) -> d
             fecha_hora_huso=ahora_huso(), usuario_id=req.usuario_id,
             accion="apertura_cajon_sin_venta", entidad="caja", origen="local"))
     try:
-        from app.printing.ticket import abrir_cajon, crear_impresora
+        from app.infraestructura.impresion.ticket import abrir_cajon, crear_impresora
 
         abrir_cajon(crear_impresora())
     except Exception as exc:  # noqa: BLE001 - local-first
@@ -249,7 +249,7 @@ def _imprimir_ticket_seguro(venta_id: int) -> None:
     """Imprime el ticket, pero la venta ya esta cerrada: un fallo de impresora no la rompe."""
     try:
         from app.infraestructura.db import SessionLocal
-        from app.printing.ticket import crear_impresora, imprimir_ticket
+        from app.infraestructura.impresion.ticket import crear_impresora, imprimir_ticket
 
         with SessionLocal() as s:
             venta = s.get(Venta, venta_id)

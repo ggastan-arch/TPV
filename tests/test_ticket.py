@@ -6,7 +6,7 @@ from escpos.printer import Dummy
 from _helpers import construir_venta
 from app.infraestructura.fiscal import qr as qr_mod
 from app.infraestructura.persistencia.modelos import RegistroFiscal, Venta
-from app.printing.ticket import abrir_cajon, imprimir_ticket
+from app.infraestructura.impresion.ticket import abrir_cajon, imprimir_ticket
 
 
 def _emitir_con_lineas(crear_sesion, motor, usuario_id):

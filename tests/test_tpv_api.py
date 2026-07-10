@@ -6,7 +6,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_motor, get_session, get_uow
+from app.presentacion.deps import get_motor, get_session, get_uow
 from app.infraestructura.fiscal.engine import NullEngine
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.main import crear_app
