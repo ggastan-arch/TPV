@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.tipos import Dinero, Porcentaje
+from app.infraestructura.tipos import Dinero, Porcentaje
 from app.infraestructura.persistencia.modelos.base import Base
 
 

@@ -9,8 +9,8 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from app.core.db import SessionLocal
-from app.core.seguridad import hash_pin
+from app.infraestructura.db import SessionLocal
+from app.infraestructura.seguridad import hash_pin
 from app.infraestructura.persistencia.modelos import (
     Articulo,
     Boton,

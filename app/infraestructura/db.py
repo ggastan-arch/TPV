@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import settings
+from app.infraestructura.config import settings
 
 
 def crear_engine(url: str | None = None, *, inmediato: bool = True, **kwargs) -> Engine:

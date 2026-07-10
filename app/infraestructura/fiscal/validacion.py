@@ -19,7 +19,7 @@ from pathlib import Path
 
 from lxml import etree
 
-from app.core.config import settings
+from app.infraestructura.config import settings
 
 _XS = "{http://www.w3.org/2001/XMLSchema}"
 

@@ -14,7 +14,7 @@ from urllib.parse import quote_plus
 
 import segno
 
-from app.core.config import settings
+from app.infraestructura.config import settings
 from app.dominio.servicios.huella import formato_importe
 from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
 

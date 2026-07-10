@@ -16,7 +16,7 @@ from decimal import Decimal
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.tipos import Dinero, Porcentaje
+from app.infraestructura.tipos import Dinero, Porcentaje
 from app.infraestructura.persistencia.modelos.base import Base
 
 # Series correlativas separadas (invariante 2): simplificadas, completas, rectificativas.

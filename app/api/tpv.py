@@ -25,8 +25,8 @@ from app.aplicacion.lineas import ArticuloNoExiste
 from app.aplicacion.lineas import ItemVenta as ItemAplicacion
 from app.aplicacion.lineas import resolver_items
 from app.api.deps import get_motor, get_session, get_uow
-from app.core.reloj import ahora_huso
-from app.core.seguridad import verificar_pin
+from app.infraestructura.reloj import ahora_huso
+from app.infraestructura.seguridad import verificar_pin
 from app.infraestructura.fiscal import qr as qr_mod
 from app.infraestructura.fiscal.engine import FiscalEngine
 from app.infraestructura.persistencia.modelos import (
@@ -248,7 +248,7 @@ def qr_venta(venta_id: int, s: Session = Depends(get_session)) -> Response:
 def _imprimir_ticket_seguro(venta_id: int) -> None:
     """Imprime el ticket, pero la venta ya esta cerrada: un fallo de impresora no la rompe."""
     try:
-        from app.core.db import SessionLocal
+        from app.infraestructura.db import SessionLocal
         from app.printing.ticket import crear_impresora, imprimir_ticket
 
         with SessionLocal() as s:

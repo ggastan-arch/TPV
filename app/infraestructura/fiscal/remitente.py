@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 
 from lxml import etree
 
-from app.core.config import settings
+from app.infraestructura.config import settings
 from app.infraestructura.fiscal.xml import NS as NS_SF
 
 SOAP = "http://schemas.xmlsoap.org/soap/envelope/"

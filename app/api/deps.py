@@ -5,8 +5,8 @@ from collections.abc import Iterator
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.core.db import SessionLocal
+from app.infraestructura.config import settings
+from app.infraestructura.db import SessionLocal
 from app.infraestructura.fiscal.engine import FiscalEngine, NullEngine
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 

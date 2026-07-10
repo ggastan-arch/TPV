@@ -1,11 +1,11 @@
-"""Entorno de Alembic. Resuelve la URL desde app.core.config (o el override del runner)
-y usa el engine configurado (WAL, foreign_keys)."""
+"""Entorno de Alembic. Resuelve la URL desde app.infraestructura.config (o el override
+del runner) y usa el engine configurado (WAL, foreign_keys)."""
 from __future__ import annotations
 
 from alembic import context
 
-from app.core.config import settings
-from app.core.db import crear_engine
+from app.infraestructura.config import settings
+from app.infraestructura.db import crear_engine
 from app.infraestructura.persistencia.modelos import Base  # registra todo el metadata
 
 config = context.config

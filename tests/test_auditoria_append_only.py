@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 
-from app.core.reloj import ahora_huso
+from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.persistencia.modelos import LogAuditoria
 
 

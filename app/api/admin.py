@@ -17,9 +17,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session, get_uow
-from app.core.config import settings
-from app.core.reloj import ahora_huso
-from app.core.seguridad import verificar_pin
+from app.infraestructura.config import settings
+from app.infraestructura.reloj import ahora_huso
+from app.infraestructura.seguridad import verificar_pin
 from app.infraestructura.fiscal.engine import NullEngine
 from app.infraestructura.persistencia.modelos import (
     Articulo,

@@ -15,8 +15,8 @@ from alembic.config import Config
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
-from app.core.db import crear_engine
-from app.core.seguridad import hash_pin
+from app.infraestructura.db import crear_engine
+from app.infraestructura.seguridad import hash_pin
 from app.infraestructura.fiscal.engine import NullEngine
 from app.infraestructura.persistencia.modelos import ContadorSerie, Serie, TipoIVA, Usuario
 

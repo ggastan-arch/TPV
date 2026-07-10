@@ -21,7 +21,7 @@ from decimal import Decimal
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.core.reloj import ahora_huso, fecha_expedicion_hoy
+from app.infraestructura.reloj import ahora_huso, fecha_expedicion_hoy
 from app.dominio.servicios.huella import huella_alta, huella_anulacion
 from app.infraestructura.persistencia.modelos.fiscal import (
     ContadorSerie,

@@ -7,7 +7,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.api.admin import router as admin_router
 from app.api.health import router as health_router
 from app.api.tpv import router as tpv_router
-from app.core.config import settings
+from app.infraestructura.config import settings
 
 
 def crear_app() -> FastAPI:
