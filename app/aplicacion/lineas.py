@@ -1,16 +1,18 @@
 """Resolucion y calculo de las lineas de un ticket (reutilizado por calcular y cobrar).
 
-Usa la funcion unica de redondeo (dominio) y busca los articulos por el repositorio
-(hoy, la sesion ORM directamente; se moverá tras un puerto en el incremento 2)."""
+Usa la funcion unica de redondeo (dominio) y busca los articulos por el puerto de
+repositorio (inversion de dependencias; sin acceso directo al ORM)."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-
-from sqlalchemy.orm import Session
+from typing import TYPE_CHECKING
 
 from app.core.redondeo import Linea, Totales, agregar_totales, calcular_linea
-from app.models import Articulo
+
+if TYPE_CHECKING:
+    from app.dominio.puertos import RepositorioArticulos
+    from app.models.maestros import Articulo
 
 
 @dataclass
@@ -22,7 +24,7 @@ class ItemVenta:
 
 @dataclass
 class LineaResuelta:
-    articulo: Articulo
+    articulo: "Articulo"
     pvp: Decimal
     cantidad: Decimal
     calculo: Linea
@@ -34,11 +36,13 @@ class ArticuloNoExiste(Exception):
         self.articulo_id = articulo_id
 
 
-def resolver_items(session: Session, items) -> tuple[list[LineaResuelta], Totales]:
+def resolver_items(
+    articulos: "RepositorioArticulos", items
+) -> tuple[list[LineaResuelta], Totales]:
     resueltas: list[LineaResuelta] = []
     calculos: list[Linea] = []
     for it in items:
-        articulo = session.get(Articulo, it.articulo_id)
+        articulo = articulos.buscar(it.articulo_id)
         if articulo is None:
             raise ArticuloNoExiste(it.articulo_id)
         pvp = it.pvp if (it.pvp is not None and articulo.precio_libre) else articulo.pvp

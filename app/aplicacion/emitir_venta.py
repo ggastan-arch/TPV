@@ -8,11 +8,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy.orm import Session
-
 from app.aplicacion.lineas import ItemVenta, resolver_items
-from app.dominio.puertos import MotorFiscal
-from app.models import Pago, Usuario, Venta, VentaLinea
+from app.dominio.puertos import MotorFiscal, UnidadDeTrabajo
+from app.models import Pago, Venta, VentaLinea
 
 
 @dataclass
@@ -39,8 +37,8 @@ class UsuarioNoValido(Exception):
 
 
 class EmitirVenta:
-    def __init__(self, session: Session, motor: MotorFiscal):
-        self.s = session
+    def __init__(self, uow: UnidadDeTrabajo, motor: MotorFiscal):
+        self.uow = uow
         self.motor = motor
 
     def ejecutar(
@@ -48,11 +46,11 @@ class EmitirVenta:
     ) -> ResultadoVenta:
         if not items:
             raise TicketVacio()
-        usuario = self.s.get(Usuario, usuario_id)  # 1a operacion -> BEGIN IMMEDIATE
+        usuario = self.uow.usuarios.buscar(usuario_id)  # 1a operacion -> BEGIN IMMEDIATE
         if usuario is None:
             raise UsuarioNoValido()
 
-        lineas, totales = resolver_items(self.s, items)
+        lineas, totales = resolver_items(self.uow.articulos, items)
         venta = Venta(estado="aparcada", usuario_id=usuario.id,
                       base_total=totales.base_total, cuota_total=totales.cuota_total,
                       total_con_iva=totales.total_con_iva)
@@ -64,9 +62,10 @@ class EmitirVenta:
                 cuota_linea=lr.calculo.cuota, total_linea=lr.calculo.total))
         for p in pagos:
             venta.pagos.append(Pago(medio=p.medio, importe=Decimal(p.importe)))
-        self.s.add(venta)
+        self.uow.ventas.agregar(venta)
 
-        registro = self.motor.emit(self.s, venta)
+        # El motor es un adaptador de infraestructura y opera sobre la sesion (ADR-0001).
+        registro = self.motor.emit(self.uow.session, venta)
 
         total = venta.total_con_iva
         efectivo = sum((Decimal(p.importe) for p in pagos if p.medio == "efectivo"),
@@ -75,5 +74,5 @@ class EmitirVenta:
         resultado = ResultadoVenta(
             venta_id=venta.id, num_serie=venta.num_serie_factura,
             fecha=registro.fecha_expedicion, total=str(total), cambio=str(cambio))
-        self.s.commit()
+        self.uow.commit()
         return resultado

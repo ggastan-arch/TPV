@@ -12,7 +12,12 @@ from app.aplicacion.emitir_venta import (
     UsuarioNoValido,
 )
 from app.aplicacion.lineas import ArticuloNoExiste, ItemVenta
+from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.models import Articulo, RegistroFiscal, Venta
+
+
+def _uc(session, motor):
+    return EmitirVenta(UnidadDeTrabajoSQL(session), motor)
 
 
 @pytest.fixture
@@ -26,7 +31,7 @@ def articulo_neon(session, datos_base):
 
 def test_emitir_venta_emite_y_encadena(crear_sesion, motor, datos_base, articulo_neon):
     with crear_sesion() as s:
-        resultado = EmitirVenta(s, motor).ejecutar(
+        resultado = _uc(s, motor).ejecutar(
             usuario_id=datos_base["usuario_id"],
             items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("2"))],
             pagos=[PagoVenta("efectivo", Decimal("10.00"))],
@@ -43,16 +48,16 @@ def test_emitir_venta_emite_y_encadena(crear_sesion, motor, datos_base, articulo
 
 def test_ticket_vacio(crear_sesion, motor, datos_base):
     with crear_sesion() as s, pytest.raises(TicketVacio):
-        EmitirVenta(s, motor).ejecutar(usuario_id=datos_base["usuario_id"], items=[], pagos=[])
+        _uc(s, motor).ejecutar(usuario_id=datos_base["usuario_id"], items=[], pagos=[])
 
 
 def test_usuario_no_valido(crear_sesion, motor, datos_base, articulo_neon):
     with crear_sesion() as s, pytest.raises(UsuarioNoValido):
-        EmitirVenta(s, motor).ejecutar(
+        _uc(s, motor).ejecutar(
             usuario_id=999999, items=[ItemVenta(articulo_id=articulo_neon)], pagos=[])
 
 
 def test_articulo_inexistente(crear_sesion, motor, datos_base):
     with crear_sesion() as s, pytest.raises(ArticuloNoExiste):
-        EmitirVenta(s, motor).ejecutar(
+        _uc(s, motor).ejecutar(
             usuario_id=datos_base["usuario_id"], items=[ItemVenta(articulo_id=999999)], pagos=[])

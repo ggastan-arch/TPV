@@ -24,14 +24,13 @@ from app.aplicacion.emitir_venta import (
 from app.aplicacion.lineas import ArticuloNoExiste
 from app.aplicacion.lineas import ItemVenta as ItemAplicacion
 from app.aplicacion.lineas import resolver_items
-from app.api.deps import get_motor, get_session
+from app.api.deps import get_motor, get_session, get_uow
 from app.core.reloj import ahora_huso
 from app.core.seguridad import verificar_pin
 from app.fiscal import qr as qr_mod
 from app.fiscal.engine import FiscalEngine
 from app.models import (
     Articulo,
-    CodigoBarras,
     Familia,
     LogAuditoria,
     PerfilBotonera,
@@ -158,17 +157,17 @@ def familia(familia_id: int, s: Session = Depends(get_session)) -> dict:
 
 
 @router.get("/api/articulo/por-codigo/{codigo}")
-def articulo_por_codigo(codigo: str, s: Session = Depends(get_session)) -> dict:
-    cb = s.execute(select(CodigoBarras).where(CodigoBarras.codigo == codigo)).scalars().first()
-    if cb is None:
+def articulo_por_codigo(codigo: str, uow=Depends(get_uow)) -> dict:
+    articulo = uow.articulos.buscar_por_codigo(codigo)
+    if articulo is None:
         raise HTTPException(404, "Codigo de barras no encontrado")
-    return _articulo_dto(s.get(Articulo, cb.articulo_id))
+    return _articulo_dto(articulo)
 
 
 @router.post("/api/calcular")
-def calcular(req: CalcularReq, s: Session = Depends(get_session)) -> dict:
+def calcular(req: CalcularReq, uow=Depends(get_uow)) -> dict:
     try:
-        lineas, totales = resolver_items(s, req.items)
+        lineas, totales = resolver_items(uow.articulos, req.items)
     except ArticuloNoExiste as exc:
         raise HTTPException(404, str(exc)) from exc
     return {
@@ -190,12 +189,12 @@ def calcular(req: CalcularReq, s: Session = Depends(get_session)) -> dict:
 @router.post("/api/cobrar")
 def cobrar(
     req: CobrarReq,
-    s: Session = Depends(get_session),
+    uow=Depends(get_uow),
     motor: FiscalEngine = Depends(get_motor),
 ) -> dict:
     # El endpoint es un adaptador fino: mapea el DTO HTTP y delega en el caso de uso.
     try:
-        resultado = EmitirVenta(s, motor).ejecutar(
+        resultado = EmitirVenta(uow, motor).ejecutar(
             usuario_id=req.usuario_id,
             items=[ItemAplicacion(articulo_id=i.articulo_id, cantidad=i.cantidad, pvp=i.pvp)
                    for i in req.items],

@@ -8,12 +8,21 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db import SessionLocal
 from app.fiscal.engine import FiscalEngine, NullEngine
+from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 
 
 def get_session() -> Iterator[Session]:
     s = SessionLocal()
     try:
         yield s
+    finally:
+        s.close()
+
+
+def get_uow() -> Iterator[UnidadDeTrabajoSQL]:
+    s = SessionLocal()
+    try:
+        yield UnidadDeTrabajoSQL(s)
     finally:
         s.close()
 
