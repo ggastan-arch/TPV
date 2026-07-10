@@ -9,8 +9,8 @@ from lxml import etree
 
 from _helpers import construir_venta, respuesta_remision_xml
 from app.aplicacion.remitir_lote import RemitirLote
-from app.fiscal.remitente import RemisionIncidencia, RemitenteVerifactu, endpoint_verifactu
-from app.fiscal.xml import NS, sistema_desde_settings
+from app.infraestructura.fiscal.remitente import RemisionIncidencia, RemitenteVerifactu, endpoint_verifactu
+from app.infraestructura.fiscal.xml import NS, sistema_desde_settings
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.infraestructura.persistencia.modelos import RemisionIntento
 

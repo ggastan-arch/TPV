@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.fiscal import qr
+from app.infraestructura.fiscal import qr
 
 
 def test_url_cotejo_pruebas_formato_documentado():

@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from escpos.constants import QR_ECLEVEL_M
 
 from app.core.config import settings
-from app.fiscal import qr as qr_mod
+from app.infraestructura.fiscal import qr as qr_mod
 
 if TYPE_CHECKING:
     from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal

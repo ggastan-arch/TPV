@@ -20,7 +20,7 @@ from app.api.deps import get_session, get_uow
 from app.core.config import settings
 from app.core.reloj import ahora_huso
 from app.core.seguridad import verificar_pin
-from app.fiscal.engine import NullEngine
+from app.infraestructura.fiscal.engine import NullEngine
 from app.infraestructura.persistencia.modelos import (
     Articulo,
     Familia,
@@ -123,8 +123,8 @@ def fiscal_reintentar(request: Request, usuario_id: int = Depends(require_admin)
     if not settings.certificado_cert_path:
         return {"ok": False, "mensaje": "Certificado no configurado: la remision no esta disponible."}
     from app.aplicacion.remitir_lote import RemitirLote
-    from app.fiscal.remitente import remitente_desde_settings
-    from app.fiscal.xml import sistema_desde_settings
+    from app.infraestructura.fiscal.remitente import remitente_desde_settings
+    from app.infraestructura.fiscal.xml import sistema_desde_settings
 
     respuesta = RemitirLote(uow, remitente_desde_settings()).ejecutar(
         nombre_emisor=settings.nombre_emisor, nif_obligado=settings.nif_emisor,

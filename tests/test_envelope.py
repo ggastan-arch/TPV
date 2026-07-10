@@ -4,8 +4,8 @@ from __future__ import annotations
 import pytest
 
 from _helpers import construir_venta
-from app.fiscal import validacion
-from app.fiscal.xml import (
+from app.infraestructura.fiscal import validacion
+from app.infraestructura.fiscal.xml import (
     Cabecera,
     envelope_remision,
     registro_alta_xml,

@@ -6,8 +6,8 @@ from decimal import Decimal
 from lxml import etree
 
 from app.dominio.servicios.redondeo import Linea, agregar_totales, calcular_linea
-from app.fiscal.remitente import NS_RESP
-from app.fiscal.xml import NS as NS_SF
+from app.infraestructura.fiscal.remitente import NS_RESP
+from app.infraestructura.fiscal.xml import NS as NS_SF
 from app.infraestructura.persistencia.modelos import Venta, VentaLinea
 
 _E_RESP = "{%s}" % NS_RESP

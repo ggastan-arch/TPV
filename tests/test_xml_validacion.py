@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from _helpers import construir_venta
-from app.fiscal import validacion
-from app.fiscal.xml import (
+from app.infraestructura.fiscal import validacion
+from app.infraestructura.fiscal.xml import (
     registro_alta_xml,
     registro_anulacion_xml,
     sistema_desde_settings,

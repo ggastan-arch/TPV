@@ -4,7 +4,7 @@ Estados: aparcada (aun no emitida, editable/borrable) / cobrada (emitida, inmuta
 anulada_con_rastro / sustituida (reemplazada por una factura completa F3).
 
 La serie y el numero se asignan en la MISMA transaccion de emision
-(ver app.fiscal.engine). La inmutabilidad tras emitir se aplica con triggers
+(ver app.infraestructura.fiscal.engine). La inmutabilidad tras emitir se aplica con triggers
 (ver models/ddl.py): ninguna venta emitida se borra ni se edita, salvo la
 transicion controlada de estado hacia anulada_con_rastro / sustituida.
 """

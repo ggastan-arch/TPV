@@ -8,14 +8,14 @@ import pytest
 from lxml import etree
 
 from _helpers import respuesta_remision_xml
-from app.fiscal.remitente import (
+from app.infraestructura.fiscal.remitente import (
     RemisionError,
     RemisionIncidencia,
     RemitenteVerifactu,
     endpoint_verifactu,
     remitente_desde_settings,
 )
-from app.fiscal.xml import NS, NS_LR
+from app.infraestructura.fiscal.xml import NS, NS_LR
 
 _E_SOAP = "{http://schemas.xmlsoap.org/soap/envelope/}"
 _ENVELOPE_MIN = ('<?xml version="1.0"?>'

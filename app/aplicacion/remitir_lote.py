@@ -4,7 +4,7 @@ Orquesta: obtiene los pendientes (FIFO) por el repositorio, construye el sobre, 
 por el puerto `Remitente` y registra el resultado de cada registro. Ante incidencia de
 conectividad, marca el lote como 'pendiente' para reintento (art. 17).
 
-La serializacion del sobre (XML) se delega en el modulo de infraestructura app.fiscal.xml
+La serializacion del sobre (XML) se delega en app.infraestructura.fiscal.xml
 (compromiso pragmatico, ADR-0001)."""
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING
 from app.dominio.puertos import UnidadDeTrabajo
 
 if TYPE_CHECKING:
-    from app.fiscal.remitente import Remitente, RespuestaEnvio
-    from app.fiscal.xml import SistemaInformatico
+    from app.infraestructura.fiscal.remitente import Remitente, RespuestaEnvio
+    from app.infraestructura.fiscal.xml import SistemaInformatico
 
 
 class RemitirLote:
@@ -25,8 +25,8 @@ class RemitirLote:
     def ejecutar(
         self, *, nombre_emisor: str, nif_obligado: str, sistema: "SistemaInformatico"
     ) -> "RespuestaEnvio | None":
-        from app.fiscal.remitente import RemisionIncidencia
-        from app.fiscal.xml import (
+        from app.infraestructura.fiscal.remitente import RemisionIncidencia
+        from app.infraestructura.fiscal.xml import (
             Cabecera,
             a_bytes,
             envelope_remision,

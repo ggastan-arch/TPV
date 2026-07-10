@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Protocol
 from app.dominio.servicios.validadores import validar_documento
 
 if TYPE_CHECKING:  # evitar dependencia en tiempo de ejecucion con el modulo XML (lxml)
-    from app.fiscal.xml import SistemaInformatico
+    from app.infraestructura.fiscal.xml import SistemaInformatico
 
 
 # Tipos impositivos de IVA admitidos para CalificacionOperacion S1 (doc 15.1).

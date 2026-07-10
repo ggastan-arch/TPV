@@ -27,8 +27,8 @@ from app.aplicacion.lineas import resolver_items
 from app.api.deps import get_motor, get_session, get_uow
 from app.core.reloj import ahora_huso
 from app.core.seguridad import verificar_pin
-from app.fiscal import qr as qr_mod
-from app.fiscal.engine import FiscalEngine
+from app.infraestructura.fiscal import qr as qr_mod
+from app.infraestructura.fiscal.engine import FiscalEngine
 from app.infraestructura.persistencia.modelos import (
     Articulo,
     Familia,

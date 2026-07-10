@@ -2,7 +2,7 @@
 
 Operacion `RegFactuSistemaFacturacion` (SOAP 1.1 document/literal) del WSDL
 SistemaFacturacion.wsdl. El cuerpo SOAP es directamente el sobre
-RegFactuSistemaFacturacion (ya construido y validado por app.fiscal.xml). La respuesta
+RegFactuSistemaFacturacion (ya construido y validado por app.infraestructura.fiscal.xml). La respuesta
 es RespuestaRegFactuSistemaFacturacion (RespuestaSuministro.xsd).
 
 El certificado de la titular (mutual-TLS) y el envio HTTP son INYECTABLES:
@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from lxml import etree
 
 from app.core.config import settings
-from app.fiscal.xml import NS as NS_SF
+from app.infraestructura.fiscal.xml import NS as NS_SF
 
 SOAP = "http://schemas.xmlsoap.org/soap/envelope/"
 NS_RESP = (
