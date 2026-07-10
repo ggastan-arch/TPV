@@ -21,7 +21,7 @@ from app.core.config import settings
 from app.core.reloj import ahora_huso
 from app.core.seguridad import verificar_pin
 from app.fiscal.engine import NullEngine
-from app.models import (
+from app.infraestructura.persistencia.modelos import (
     Articulo,
     Familia,
     LogAuditoria,

@@ -5,7 +5,7 @@ from escpos.printer import Dummy
 
 from _helpers import construir_venta
 from app.fiscal import qr as qr_mod
-from app.models import RegistroFiscal, Venta
+from app.infraestructura.persistencia.modelos import RegistroFiscal, Venta
 from app.printing.ticket import abrir_cajon, imprimir_ticket
 
 

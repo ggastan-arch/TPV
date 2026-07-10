@@ -12,7 +12,7 @@ import pytest
 import sqlalchemy as sa
 
 from _helpers import construir_venta
-from app.models import (
+from app.infraestructura.persistencia.modelos import (
     RegistroFacturaSustituida,
     RegistroFiscal,
     Venta,

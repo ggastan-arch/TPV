@@ -12,7 +12,7 @@ from app.dominio.servicios.redondeo import Linea, Totales, agregar_totales, calc
 
 if TYPE_CHECKING:
     from app.dominio.puertos import RepositorioArticulos
-    from app.models.maestros import Articulo
+    from app.infraestructura.persistencia.modelos.maestros import Articulo
 
 
 @dataclass

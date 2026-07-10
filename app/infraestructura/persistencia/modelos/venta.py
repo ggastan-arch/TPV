@@ -23,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.tipos import Cantidad, Dinero, Porcentaje
-from app.models.base import Base
+from app.infraestructura.persistencia.modelos.base import Base
 
 ESTADOS = ("aparcada", "cobrada", "anulada_con_rastro", "sustituida")
 

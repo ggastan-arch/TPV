@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from app.models.maestros import Articulo
-    from app.models.fiscal import RegistroFiscal
-    from app.models.operacion import Usuario
-    from app.models.venta import Venta
+    from app.infraestructura.persistencia.modelos.maestros import Articulo
+    from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
+    from app.infraestructura.persistencia.modelos.operacion import Usuario
+    from app.infraestructura.persistencia.modelos.venta import Venta
 
 
 class MotorFiscal(Protocol):

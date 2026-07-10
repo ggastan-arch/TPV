@@ -23,12 +23,12 @@ from sqlalchemy.orm import Session
 
 from app.core.reloj import ahora_huso, fecha_expedicion_hoy
 from app.dominio.servicios.huella import huella_alta, huella_anulacion
-from app.models.fiscal import (
+from app.infraestructura.persistencia.modelos.fiscal import (
     ContadorSerie,
     RegistroFiscal,
     RegistroFiscalDesglose,
 )
-from app.models.venta import Venta
+from app.infraestructura.persistencia.modelos.venta import Venta
 
 
 @dataclass

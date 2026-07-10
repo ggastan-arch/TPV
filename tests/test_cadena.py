@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from _helpers import construir_venta
-from app.models import RegistroFiscal
+from app.infraestructura.persistencia.modelos import RegistroFiscal
 
 
 def _emitir_varias(crear_sesion, motor, usuario_id, n):

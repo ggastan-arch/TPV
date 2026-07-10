@@ -5,7 +5,7 @@ import threading
 from decimal import Decimal
 
 from _helpers import construir_venta
-from app.models import ContadorSerie, RegistroFiscal, Venta
+from app.infraestructura.persistencia.modelos import ContadorSerie, RegistroFiscal, Venta
 
 N_HILOS = 20
 

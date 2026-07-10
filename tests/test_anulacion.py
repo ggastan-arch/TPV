@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 
 from _helpers import construir_venta
-from app.models import RegistroFiscal, Venta
+from app.infraestructura.persistencia.modelos import RegistroFiscal, Venta
 
 
 def _emitir(crear_sesion, motor, usuario_id):

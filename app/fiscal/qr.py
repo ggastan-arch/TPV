@@ -16,7 +16,7 @@ import segno
 
 from app.core.config import settings
 from app.dominio.servicios.huella import formato_importe
-from app.models.fiscal import RegistroFiscal
+from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
 
 # URL base del servicio de cotejo para sistemas que emiten facturas VERIFICABLES.
 BASE_PRUEBAS = "https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?"

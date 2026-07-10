@@ -18,7 +18,7 @@ from sqlalchemy.pool import NullPool
 from app.core.db import crear_engine
 from app.core.seguridad import hash_pin
 from app.fiscal.engine import NullEngine
-from app.models import ContadorSerie, Serie, TipoIVA, Usuario
+from app.infraestructura.persistencia.modelos import ContadorSerie, Serie, TipoIVA, Usuario
 
 RAIZ = Path(__file__).resolve().parents[1]
 ALEMBIC_INI = RAIZ / "alembic.ini"

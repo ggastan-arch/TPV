@@ -7,7 +7,7 @@ import pytest
 import sqlalchemy as sa
 
 from _helpers import construir_venta
-from app.models import RegistroFiscal, Venta
+from app.infraestructura.persistencia.modelos import RegistroFiscal, Venta
 
 
 def _emitir(crear_sesion, motor, usuario_id) -> int:

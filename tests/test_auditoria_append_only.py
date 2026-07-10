@@ -5,7 +5,7 @@ import pytest
 import sqlalchemy as sa
 
 from app.core.reloj import ahora_huso
-from app.models import LogAuditoria
+from app.infraestructura.persistencia.modelos import LogAuditoria
 
 
 def _insertar(crear_sesion) -> int:

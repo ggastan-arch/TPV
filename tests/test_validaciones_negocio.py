@@ -8,7 +8,7 @@ from _helpers import construir_venta
 from app.core.config import settings
 from app.dominio.servicios import validaciones_negocio as vn
 from app.fiscal.xml import sistema_desde_settings
-from app.models import RegistroFiscal
+from app.infraestructura.persistencia.modelos import RegistroFiscal
 
 AHORA = datetime.fromisoformat("2026-07-10T23:59:00+02:00")
 SISTEMA_OK = SimpleNamespace(id_sistema="BZ", nombre_sistema="TPV", solo_verifactu="S", multi_ot="N")

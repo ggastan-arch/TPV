@@ -10,7 +10,7 @@ from app.api.deps import get_motor, get_session, get_uow
 from app.fiscal.engine import NullEngine
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.main import crear_app
-from app.models import (
+from app.infraestructura.persistencia.modelos import (
     Articulo,
     Boton,
     CodigoBarras,

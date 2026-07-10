@@ -8,7 +8,7 @@ from app.api.deps import get_session, get_uow
 from app.core.seguridad import hash_pin
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.main import crear_app
-from app.models import LogAuditoria, Usuario
+from app.infraestructura.persistencia.modelos import LogAuditoria, Usuario
 
 
 @pytest.fixture

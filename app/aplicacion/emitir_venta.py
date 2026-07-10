@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from app.aplicacion.lineas import ItemVenta, resolver_items
 from app.dominio.puertos import MotorFiscal, UnidadDeTrabajo
-from app.models import Pago, Venta, VentaLinea
+from app.infraestructura.persistencia.modelos import Pago, Venta, VentaLinea
 
 
 @dataclass

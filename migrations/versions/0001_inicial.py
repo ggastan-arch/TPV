@@ -9,7 +9,7 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-from app.models.ddl import DROP_TRIGGERS, TRIGGERS
+from app.infraestructura.persistencia.ddl import DROP_TRIGGERS, TRIGGERS
 
 revision = "0001_inicial"
 down_revision = None

@@ -4,7 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
-from app.models import Articulo, CodigoBarras
+from app.infraestructura.persistencia.modelos import Articulo, CodigoBarras
 
 
 def test_repositorio_articulos(crear_sesion, datos_base):

@@ -18,8 +18,8 @@ from app.core.config import settings
 from app.fiscal import qr as qr_mod
 
 if TYPE_CHECKING:
-    from app.models.fiscal import RegistroFiscal
-    from app.models.venta import Venta
+    from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
+    from app.infraestructura.persistencia.modelos.venta import Venta
 
 
 def _eur(valor) -> str:

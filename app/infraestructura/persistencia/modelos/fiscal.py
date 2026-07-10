@@ -17,7 +17,7 @@ from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, Un
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.tipos import Dinero, Porcentaje
-from app.models.base import Base
+from app.infraestructura.persistencia.modelos.base import Base
 
 # Series correlativas separadas (invariante 2): simplificadas, completas, rectificativas.
 TIPOS_FACTURA = ("F1", "F2", "F3", "R1", "R2", "R3", "R4", "R5")

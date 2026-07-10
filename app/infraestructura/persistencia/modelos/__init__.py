@@ -2,9 +2,9 @@
 metadata este registrado (para Alembic y para create_all en tests)."""
 from __future__ import annotations
 
-from app.models.base import Base
-from app.models.botonera import Boton, FUNCIONES, PaginaBotonera, PerfilBotonera
-from app.models.fiscal import (
+from app.infraestructura.persistencia.modelos.base import Base
+from app.infraestructura.persistencia.modelos.botonera import Boton, FUNCIONES, PaginaBotonera, PerfilBotonera
+from app.infraestructura.persistencia.modelos.fiscal import (
     ContadorSerie,
     ESTADOS_REMISION,
     RESULTADOS_REMISION,
@@ -15,9 +15,9 @@ from app.models.fiscal import (
     Serie,
     TIPOS_FACTURA,
 )
-from app.models.maestros import Articulo, Cliente, CodigoBarras, Familia, TipoIVA
-from app.models.operacion import LogAuditoria, MovimientoStock, Usuario
-from app.models.venta import ESTADOS, Pago, Venta, VentaLinea, VentaSustitucion
+from app.infraestructura.persistencia.modelos.maestros import Articulo, Cliente, CodigoBarras, Familia, TipoIVA
+from app.infraestructura.persistencia.modelos.operacion import LogAuditoria, MovimientoStock, Usuario
+from app.infraestructura.persistencia.modelos.venta import ESTADOS, Pago, Venta, VentaLinea, VentaSustitucion
 
 __all__ = [
     "Base",

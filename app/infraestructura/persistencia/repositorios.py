@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.reloj import ahora_huso
-from app.models import Articulo, CodigoBarras, RegistroFiscal, RemisionIntento, Usuario, Venta
+from app.infraestructura.persistencia.modelos import Articulo, CodigoBarras, RegistroFiscal, RemisionIntento, Usuario, Venta
 
 # Estados terminales de aceptacion: ya no hace falta reintentar la remision.
 ESTADOS_ACEPTADOS = ("aceptado", "aceptado_con_errores")

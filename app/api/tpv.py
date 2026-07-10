@@ -29,7 +29,7 @@ from app.core.reloj import ahora_huso
 from app.core.seguridad import verificar_pin
 from app.fiscal import qr as qr_mod
 from app.fiscal.engine import FiscalEngine
-from app.models import (
+from app.infraestructura.persistencia.modelos import (
     Articulo,
     Familia,
     LogAuditoria,

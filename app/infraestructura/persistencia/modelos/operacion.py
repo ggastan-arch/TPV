@@ -7,7 +7,7 @@ from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.tipos import Cantidad
-from app.models.base import Base
+from app.infraestructura.persistencia.modelos.base import Base
 
 
 class Usuario(Base):

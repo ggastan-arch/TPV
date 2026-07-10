@@ -13,7 +13,7 @@ from app.aplicacion.emitir_venta import (
 )
 from app.aplicacion.lineas import ArticuloNoExiste, ItemVenta
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
-from app.models import Articulo, RegistroFiscal, Venta
+from app.infraestructura.persistencia.modelos import Articulo, RegistroFiscal, Venta
 
 
 def _uc(session, motor):

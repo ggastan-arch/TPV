@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.core.seguridad import hash_pin
-from app.models import (
+from app.infraestructura.persistencia.modelos import (
     Articulo,
     Boton,
     ContadorSerie,

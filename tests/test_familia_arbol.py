@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from sqlalchemy import text
 
-from app.models import Familia
+from app.infraestructura.persistencia.modelos import Familia
 
 PROFUNDIDAD = 6
 

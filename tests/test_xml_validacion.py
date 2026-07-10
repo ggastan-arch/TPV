@@ -8,7 +8,7 @@ from app.fiscal.xml import (
     registro_anulacion_xml,
     sistema_desde_settings,
 )
-from app.models import RegistroFacturaSustituida, RegistroFiscal
+from app.infraestructura.persistencia.modelos import RegistroFacturaSustituida, RegistroFiscal
 
 SISTEMA = sistema_desde_settings()
 EMISOR = "Bizkaitropik"

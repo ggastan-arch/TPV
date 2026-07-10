@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from sqlalchemy import inspect
 
-from app.models import Base
+from app.infraestructura.persistencia.modelos import Base
 
 
 def test_todas_las_tablas_y_columnas_del_modelo_existen(engine):

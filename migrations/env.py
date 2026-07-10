@@ -6,7 +6,7 @@ from alembic import context
 
 from app.core.config import settings
 from app.core.db import crear_engine
-from app.models import Base  # registra todo el metadata
+from app.infraestructura.persistencia.modelos import Base  # registra todo el metadata
 
 config = context.config
 

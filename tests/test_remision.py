@@ -12,7 +12,7 @@ from app.aplicacion.remitir_lote import RemitirLote
 from app.fiscal.remitente import RemisionIncidencia, RemitenteVerifactu, endpoint_verifactu
 from app.fiscal.xml import NS, sistema_desde_settings
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
-from app.models import RemisionIntento
+from app.infraestructura.persistencia.modelos import RemisionIntento
 
 _E_SF = "{%s}" % NS
 
