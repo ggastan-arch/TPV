@@ -6,6 +6,7 @@ modalidad **VERI\*FACTU**. Todos los tickets se expiden como **facturas simplifi
 
 > Contexto y decisiones: `docs/TPV_BIZKAITROPIK_consideraciones.md`,
 > `docs/VERIFACTU_ESQUEMAS_HAC1177.md` y `CLAUDE.md`.
+> Arquitectura y decisiones técnicas: `docs/ARCHITECTURE.md` y los ADR en `docs/adr/`.
 
 ## ⚠️ Seguridad (repositorio público)
 
