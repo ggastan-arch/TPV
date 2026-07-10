@@ -17,6 +17,7 @@ dependencies = [
     "segno>=1.6",
     "requests>=2.32",
     "python-escpos>=3.1",
+    "itsdangerous>=2.2",
 ]
 
 [project.optional-dependencies]

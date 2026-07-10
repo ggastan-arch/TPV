@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # Directorio de los XSD oficiales de la AEAT.
     schemas_dir: str = "schemas"
 
+    # Secreto para firmar la cookie de sesion de la consola de administracion.
+    # EN PRODUCCION hay que sobreescribirlo con TPV_SESSION_SECRET (valor largo y aleatorio).
+    session_secret: str = "dev-secreto-de-sesion-CAMBIAR-en-produccion"
+
     # Entorno de la AEAT para la URL del QR y los servicios web de remision.
     entorno_aeat: str = "pruebas"  # 'pruebas' | 'produccion'
 
