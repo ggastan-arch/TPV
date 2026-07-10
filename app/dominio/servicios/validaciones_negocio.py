@@ -20,7 +20,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Protocol
 
-from app.core.validadores import validar_documento
+from app.dominio.servicios.validadores import validar_documento
 
 if TYPE_CHECKING:  # evitar dependencia en tiempo de ejecucion con el modulo XML (lxml)
     from app.fiscal.xml import SistemaInformatico

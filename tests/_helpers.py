@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from lxml import etree
 
-from app.core.redondeo import Linea, agregar_totales, calcular_linea
+from app.dominio.servicios.redondeo import Linea, agregar_totales, calcular_linea
 from app.fiscal.remitente import NS_RESP
 from app.fiscal.xml import NS as NS_SF
 from app.models import Venta, VentaLinea

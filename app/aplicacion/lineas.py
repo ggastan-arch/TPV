@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from app.core.redondeo import Linea, Totales, agregar_totales, calcular_linea
+from app.dominio.servicios.redondeo import Linea, Totales, agregar_totales, calcular_linea
 
 if TYPE_CHECKING:
     from app.dominio.puertos import RepositorioArticulos

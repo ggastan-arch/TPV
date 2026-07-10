@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from lxml import etree
 
 from app.core.config import settings
-from app.fiscal.huella import formato_importe
+from app.dominio.servicios.huella import formato_importe
 from app.models.fiscal import RegistroFiscal
 
 # Namespace de destino del XSD SuministroInformacion (registros de facturacion).

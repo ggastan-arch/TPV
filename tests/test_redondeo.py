@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.core.redondeo import agregar_totales, calcular_linea, desglosar_total
+from app.dominio.servicios.redondeo import agregar_totales, calcular_linea, desglosar_total
 
 
 @pytest.mark.parametrize(

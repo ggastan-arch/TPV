@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.validadores import validar_documento
+from app.dominio.servicios.validadores import validar_documento
 
 
 @pytest.mark.parametrize(

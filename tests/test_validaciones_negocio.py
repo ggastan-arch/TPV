@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from _helpers import construir_venta
 from app.core.config import settings
-from app.fiscal import validaciones_negocio as vn
+from app.dominio.servicios import validaciones_negocio as vn
 from app.fiscal.xml import sistema_desde_settings
 from app.models import RegistroFiscal
 

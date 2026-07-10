@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.fiscal.huella import huella_alta, huella_anulacion
+from app.dominio.servicios.huella import huella_alta, huella_anulacion
 
 # Huellas encadenadas de los ejemplos: caso 2 usa la del caso 1; caso 3 la del caso 2.
 HUELLA_CASO_1 = "3C464DAF61ACB827C65FDA19F352A4E3BDC2C640E9E9FC4CC058073F38F12F60"
