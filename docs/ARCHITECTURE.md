@@ -76,7 +76,11 @@ dependencias). Dominio ya puro: redondeo, huella, validadores, validaciones de n
    3c fiscal → `infraestructura/fiscal`; 3d `core` (config/db/tipos/reloj/seguridad) →
    `infraestructura`; 3e `api` → `presentacion` y `printing` → `infraestructura/impresion`.
    La estructura de carpetas ya coincide con §2.
-4. ⬜ **Cierre**: regla de dependencias verificada (p. ej. `import-linter`), limpieza.
+4. ✅ **Cierre**: regla de dependencias verificada con `import-linter` (contratos en
+   `pyproject.toml` `[tool.importlinter]`) y comprobada en la suite (`tests/test_arquitectura.py`,
+   `make arch`). Contratos: el dominio es puro en runtime; nadie depende de `presentacion`;
+   `infraestructura` no depende de `aplicacion`/`presentacion`. Excepción documentada:
+   `aplicacion` sí usa `infraestructura` (entidades ORM y serialización del sobre), por ADR-0001.
 
 Cada incremento es un PR/commit propio, reversible, con `make test` en verde.
 

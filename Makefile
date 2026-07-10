@@ -9,10 +9,13 @@ UVICORN ?= $(PYTHON) -m uvicorn
 HOST ?= 127.0.0.1
 PORT ?= 8000
 
-.PHONY: dev test migrate seed revision
+.PHONY: dev test migrate seed revision arch
 
 dev:            ## servidor local con recarga (make dev PORT=8123 si el 8000 esta ocupado)
 	$(UVICORN) app.main:app --reload --host $(HOST) --port $(PORT)
+
+arch:           ## verifica la regla de dependencias hexagonal (import-linter)
+	lint-imports
 
 test:           ## pytest (invariantes fiscales, huella, redondeo, concurrencia)
 	$(PYTEST)
