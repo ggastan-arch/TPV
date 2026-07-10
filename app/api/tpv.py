@@ -15,8 +15,16 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.aplicacion.emitir_venta import (
+    EmitirVenta,
+    PagoVenta,
+    TicketVacio,
+    UsuarioNoValido,
+)
+from app.aplicacion.lineas import ArticuloNoExiste
+from app.aplicacion.lineas import ItemVenta as ItemAplicacion
+from app.aplicacion.lineas import resolver_items
 from app.api.deps import get_motor, get_session
-from app.core.redondeo import agregar_totales, calcular_linea
 from app.core.reloj import ahora_huso
 from app.core.seguridad import verificar_pin
 from app.fiscal import qr as qr_mod
@@ -26,12 +34,9 @@ from app.models import (
     CodigoBarras,
     Familia,
     LogAuditoria,
-    Pago,
     PerfilBotonera,
     RegistroFiscal,
     Usuario,
-    Venta,
-    VentaLinea,
 )
 
 _log = logging.getLogger(__name__)
@@ -82,21 +87,6 @@ def _articulo_dto(a: Articulo) -> dict:
         "requiere_cites": a.requiere_cites,
         "color": a.color_boton,
     }
-
-
-def _resolver_items(items: list[ItemVenta], s: Session):
-    """Devuelve [(articulo, pvp, cantidad, Linea)] calculando cada linea en Decimal."""
-    resultado = []
-    lineas_calc = []
-    for it in items:
-        articulo = s.get(Articulo, it.articulo_id)
-        if articulo is None:
-            raise HTTPException(404, f"Articulo {it.articulo_id} no existe")
-        pvp = it.pvp if (it.pvp is not None and articulo.precio_libre) else articulo.pvp
-        linea = calcular_linea(Decimal(pvp), Decimal(it.cantidad), Decimal(articulo.tipo_iva.porcentaje))
-        resultado.append((articulo, Decimal(pvp), Decimal(it.cantidad), linea))
-        lineas_calc.append(linea)
-    return resultado, agregar_totales(lineas_calc)
 
 
 # --- pagina ---------------------------------------------------------------------
@@ -177,13 +167,17 @@ def articulo_por_codigo(codigo: str, s: Session = Depends(get_session)) -> dict:
 
 @router.post("/api/calcular")
 def calcular(req: CalcularReq, s: Session = Depends(get_session)) -> dict:
-    lineas, totales = _resolver_items(req.items, s)
+    try:
+        lineas, totales = resolver_items(s, req.items)
+    except ArticuloNoExiste as exc:
+        raise HTTPException(404, str(exc)) from exc
     return {
         "lineas": [
-            {"articulo_id": a.id, "descripcion": a.nombre, "cantidad": str(cant),
-             "pvp": str(pvp), "tipo_iva": str(ln.porcentaje), "total": str(ln.total),
-             "requiere_cites": a.requiere_cites}
-            for (a, pvp, cant, ln) in lineas
+            {"articulo_id": lr.articulo.id, "descripcion": lr.articulo.nombre,
+             "cantidad": str(lr.cantidad), "pvp": str(lr.pvp),
+             "tipo_iva": str(lr.calculo.porcentaje), "total": str(lr.calculo.total),
+             "requiere_cites": lr.articulo.requiere_cites}
+            for lr in lineas
         ],
         "base_total": str(totales.base_total),
         "cuota_total": str(totales.cuota_total),
@@ -199,42 +193,29 @@ def cobrar(
     s: Session = Depends(get_session),
     motor: FiscalEngine = Depends(get_motor),
 ) -> dict:
-    if not req.items:
-        raise HTTPException(400, "El ticket esta vacio")
-    usuario = s.get(Usuario, req.usuario_id)  # 1a operacion -> abre BEGIN IMMEDIATE
-    if usuario is None:
-        raise HTTPException(401, "Usuario no valido")
+    # El endpoint es un adaptador fino: mapea el DTO HTTP y delega en el caso de uso.
+    try:
+        resultado = EmitirVenta(s, motor).ejecutar(
+            usuario_id=req.usuario_id,
+            items=[ItemAplicacion(articulo_id=i.articulo_id, cantidad=i.cantidad, pvp=i.pvp)
+                   for i in req.items],
+            pagos=[PagoVenta(medio=p.medio, importe=p.importe) for p in req.pagos],
+        )
+    except TicketVacio as exc:
+        raise HTTPException(400, "El ticket esta vacio") from exc
+    except UsuarioNoValido as exc:
+        raise HTTPException(401, "Usuario no valido") from exc
+    except ArticuloNoExiste as exc:
+        raise HTTPException(404, str(exc)) from exc
 
-    lineas, totales = _resolver_items(req.items, s)
-    venta = Venta(estado="aparcada", usuario_id=usuario.id,
-                  base_total=totales.base_total, cuota_total=totales.cuota_total,
-                  total_con_iva=totales.total_con_iva)
-    for (a, pvp, cant, ln) in lineas:
-        venta.lineas.append(VentaLinea(
-            articulo_id=a.id, descripcion=a.nombre, cantidad=cant, pvp_unitario=pvp,
-            tipo_iva_porcentaje=ln.porcentaje, base_linea=ln.base,
-            cuota_linea=ln.cuota, total_linea=ln.total))
-    for p in req.pagos:
-        venta.pagos.append(Pago(medio=p.medio, importe=Decimal(p.importe)))
-    s.add(venta)
-    registro = motor.emit(s, venta)
-
-    total = venta.total_con_iva
-    efectivo = sum((Decimal(p.importe) for p in req.pagos if p.medio == "efectivo"),
-                   Decimal("0.00"))
-    cambio = efectivo - total if efectivo > total else Decimal("0.00")
-    datos = {
-        "venta_id": venta.id,
-        "num_serie": venta.num_serie_factura,
-        "fecha": registro.fecha_expedicion,
-        "total": str(total),
-        "cambio": str(cambio),
-        "qr_url": qr_mod.url_cotejo_registro(registro),
+    _imprimir_ticket_seguro(resultado.venta_id)
+    return {
+        "venta_id": resultado.venta_id,
+        "num_serie": resultado.num_serie,
+        "fecha": resultado.fecha,
+        "total": resultado.total,
+        "cambio": resultado.cambio,
     }
-    s.commit()
-
-    _imprimir_ticket_seguro(datos["venta_id"])
-    return datos
 
 
 @router.post("/api/cajon")
