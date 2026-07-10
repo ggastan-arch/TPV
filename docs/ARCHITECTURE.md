@@ -65,14 +65,16 @@ dependencias). Dominio ya puro: redondeo, huella, validadores, validaciones de n
 
 ## 4. Plan de migración por incrementos (tests verdes entre cada uno)
 
-0. **Documentación** (este commit): `ARCHITECTURE.md` + ADRs.
-1. **Capa de aplicación**: `EmitirVenta` y `AbrirCajon` como casos de uso; los endpoints
-   `/tpv` pasan a ser adaptadores finos. Puertos definidos en `dominio/puertos.py`.
-2. **Repositorios**: `RepositorioVentas`/`RepositorioRegistros`/`RepositorioArticulos` como
-   puertos + adaptadores SQLAlchemy; `ColaRemision` → caso de uso `RemitirLote`.
-3. **Reubicación de módulos** a `dominio/aplicacion/infraestructura/presentacion` y ajuste
-   de imports (cambio mecánico grande; los tests son la red).
-4. **Cierre**: regla de dependencias verificada (p. ej. `import-linter`), limpieza.
+0. ✅ **Documentación**: `ARCHITECTURE.md` + ADRs.
+1. ✅ **Capa de aplicación**: `EmitirVenta` como caso de uso; endpoints `/tpv` finos; puerto
+   `MotorFiscal` en `dominio/puertos.py`.
+2. ✅ **Repositorios**: `RepositorioArticulos`/`Ventas`/`Usuarios`/`Registros` + `UnidadDeTrabajo`
+   (puertos) con adaptadores SQLAlchemy; `ColaRemision` → caso de uso `RemitirLote`.
+3. ⬜ **Reubicación de módulos** a `dominio/aplicacion/infraestructura/presentacion` y ajuste
+   de imports (cambio mecánico grande; los tests son la red). Pendiente: mover
+   `app/fiscal/*` (huella/xml/qr/... e impl. del motor) y `app/models` a infraestructura,
+   `app/api` a presentacion, `redondeo`/`huella`/`validaciones` a dominio.
+4. ⬜ **Cierre**: regla de dependencias verificada (p. ej. `import-linter`), limpieza.
 
 Cada incremento es un PR/commit propio, reversible, con `make test` en verde.
 

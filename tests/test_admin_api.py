@@ -4,8 +4,9 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_session
+from app.api.deps import get_session, get_uow
 from app.core.seguridad import hash_pin
+from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.main import crear_app
 from app.models import LogAuditoria, Usuario
 
@@ -29,7 +30,15 @@ def cliente(crear_sesion):
         finally:
             s.close()
 
+    def _get_uow():
+        s = crear_sesion()
+        try:
+            yield UnidadDeTrabajoSQL(s)
+        finally:
+            s.close()
+
     app.dependency_overrides[get_session] = _get_session
+    app.dependency_overrides[get_uow] = _get_uow
     return TestClient(app)
 
 

@@ -16,17 +16,15 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_session
+from app.api.deps import get_session, get_uow
 from app.core.config import settings
 from app.core.reloj import ahora_huso
 from app.core.seguridad import verificar_pin
-from app.fiscal.cola import ColaRemision
 from app.fiscal.engine import NullEngine
 from app.models import (
     Articulo,
     Familia,
     LogAuditoria,
-    RegistroFiscal,
     TipoIVA,
     Usuario,
     Venta,
@@ -91,13 +89,9 @@ def me(request: Request, s: Session = Depends(get_session)) -> dict:
 
 # --- Panel fiscal --------------------------------------------------------------
 @router.get("/api/fiscal/estado")
-def fiscal_estado(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> dict:
-    cola = ColaRemision(s)
+def fiscal_estado(_: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
     motor = NullEngine(settings.nif_emisor, settings.nombre_emisor)
-    informe = motor.verify_chain(s)
-    ultimos = s.execute(
-        select(RegistroFiscal).order_by(RegistroFiscal.orden.desc()).limit(10)
-    ).scalars().all()
+    informe = motor.verify_chain(uow.session)
     return {
         "declaracion_responsable": {
             "software": settings.nombre_sistema,
@@ -110,30 +104,35 @@ def fiscal_estado(_: int = Depends(require_admin), s: Session = Depends(get_sess
             "entorno": settings.entorno_aeat,
         },
         "cola": {
-            "pendientes": cola.contar_pendientes(),
-            "incidencia": cola.hay_incidencia_pendiente(),
+            "pendientes": uow.registros.contar_pendientes(),
+            "incidencia": uow.registros.hay_incidencia_pendiente(),
             "certificado_configurado": bool(settings.certificado_cert_path),
         },
         "cadena": {"ok": informe.ok, "registros": informe.registros, "errores": informe.errores},
         "ultimos_registros": [
             {"orden": r.orden, "tipo": r.tipo_registro, "num_serie": r.num_serie_factura,
              "estado_remision": r.estado_remision, "huella": (r.huella or "")[:16] + "..."}
-            for r in ultimos
+            for r in uow.registros.ultimos(10)
         ],
     }
 
 
 @router.post("/api/fiscal/reintentar")
 def fiscal_reintentar(request: Request, usuario_id: int = Depends(require_admin),
-                      s: Session = Depends(get_session)) -> dict:
+                      uow=Depends(get_uow)) -> dict:
     if not settings.certificado_cert_path:
         return {"ok": False, "mensaje": "Certificado no configurado: la remision no esta disponible."}
+    from app.aplicacion.remitir_lote import RemitirLote
     from app.fiscal.remitente import remitente_desde_settings
+    from app.fiscal.xml import sistema_desde_settings
 
-    respuesta = ColaRemision(s).remitir(remitente_desde_settings())
-    s.add(LogAuditoria(fecha_hora_huso=ahora_huso(), usuario_id=usuario_id,
-                       accion="reintento_remision", entidad="cola_fiscal", origen=_origen(request)))
-    s.commit()
+    respuesta = RemitirLote(uow, remitente_desde_settings()).ejecutar(
+        nombre_emisor=settings.nombre_emisor, nif_obligado=settings.nif_emisor,
+        sistema=sistema_desde_settings())
+    uow.session.add(LogAuditoria(fecha_hora_huso=ahora_huso(), usuario_id=usuario_id,
+                                 accion="reintento_remision", entidad="cola_fiscal",
+                                 origen=_origen(request)))
+    uow.commit()
     if respuesta is None:
         return {"ok": False, "mensaje": "Incidencia de conectividad; se reintentara."}
     return {"ok": True, "estado_envio": respuesta.estado_envio, "csv": respuesta.csv,

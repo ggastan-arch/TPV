@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.infraestructura.persistencia.repositorios import (
     RepositorioArticulosSQL,
+    RepositorioRegistrosSQL,
     RepositorioUsuariosSQL,
     RepositorioVentasSQL,
 )
@@ -16,6 +17,7 @@ class UnidadDeTrabajoSQL:
         self.articulos = RepositorioArticulosSQL(session)
         self.ventas = RepositorioVentasSQL(session)
         self.usuarios = RepositorioUsuariosSQL(session)
+        self.registros = RepositorioRegistrosSQL(session)
 
     def commit(self) -> None:
         self.session.commit()

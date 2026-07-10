@@ -38,6 +38,24 @@ class RepositorioUsuarios(Protocol):
     def buscar(self, usuario_id: int) -> "Usuario | None": ...
 
 
+class RepositorioRegistros(Protocol):
+    """Acceso a los registros fiscales para la cola de remision."""
+
+    def buscar(self, registro_id: int) -> "RegistroFiscal | None": ...
+    def pendientes(self, maximo: int = 1000) -> list["RegistroFiscal"]: ...
+    def contar_pendientes(self) -> int: ...
+    def hay_incidencia_pendiente(self) -> bool: ...
+    def registros_a_reintentar(
+        self, ahora=None, intervalo_horas: int = 1
+    ) -> list["RegistroFiscal"]: ...
+    def ultimos(self, limite: int = 10) -> list["RegistroFiscal"]: ...
+    def registrar_resultado(
+        self, registro: "RegistroFiscal", resultado: str, *,
+        codigo_error: str | None = None, descripcion: str | None = None,
+        csv: str | None = None,
+    ) -> None: ...
+
+
 class UnidadDeTrabajo(Protocol):
     """Agrupa los repositorios y controla la transaccion.
 
@@ -48,6 +66,7 @@ class UnidadDeTrabajo(Protocol):
     articulos: RepositorioArticulos
     ventas: RepositorioVentas
     usuarios: RepositorioUsuarios
+    registros: RepositorioRegistros
     session: "Session"
 
     def commit(self) -> None: ...
