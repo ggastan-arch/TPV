@@ -144,3 +144,33 @@ def test_desactivar_articulo(cliente, admin, datos_base):
     assert cliente.post(f"/admin/api/maestros/articulos/{nuevo_id}/desactivar").status_code == 200
     articulos = cliente.get("/admin/api/maestros/articulos").json()
     assert any(a["id"] == nuevo_id and a["activo"] is False for a in articulos)
+
+
+# --- Maestros: tipos de IVA ----------------------------------------------------
+def test_crear_tipo_iva_exige_sesion(cliente, datos_base):
+    assert cliente.post("/admin/api/maestros/tipos-iva",
+                        json={"nombre": "Superreducido", "porcentaje": "4.00"}).status_code == 401
+
+
+def test_crear_tipo_iva_ok(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/tipos-iva",
+                     json={"nombre": "Superreducido 4%", "porcentaje": "4.00"})
+    assert r.status_code == 201
+    nuevo_id = r.json()["id"]
+    tipos = cliente.get("/admin/api/maestros/tipos-iva").json()
+    assert any(t["id"] == nuevo_id and t["porcentaje"] == "4.00" for t in tipos)
+
+
+def test_crear_tipo_iva_porcentaje_invalido(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/tipos-iva",
+                     json={"nombre": "Malo", "porcentaje": "-1"})
+    assert r.status_code == 422
+
+
+def test_actualizar_tipo_iva_inexistente(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.put("/admin/api/maestros/tipos-iva/999999",
+                    json={"nombre": "X", "porcentaje": "21.00"})
+    assert r.status_code == 404

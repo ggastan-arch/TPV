@@ -55,6 +55,15 @@ class RepositorioTiposIvaSQL:
     def buscar(self, tipo_iva_id: int) -> TipoIVA | None:
         return self._s.get(TipoIVA, tipo_iva_id)
 
+    def agregar(self, tipo_iva: TipoIVA) -> None:
+        self._s.add(tipo_iva)
+
+    def listar(self, incluir_inactivos: bool = True) -> list[TipoIVA]:
+        stmt = select(TipoIVA).order_by(TipoIVA.id)
+        if not incluir_inactivos:
+            stmt = stmt.where(TipoIVA.activo.is_(True))
+        return list(self._s.execute(stmt).scalars())
+
 
 class RepositorioFamiliasSQL:
     def __init__(self, session: Session):

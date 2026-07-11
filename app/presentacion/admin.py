@@ -23,6 +23,12 @@ from app.aplicacion.articulos import (
     ServicioArticulos,
     TipoIvaNoExiste,
 )
+from app.aplicacion.tipos_iva import (
+    DatosTipoIva,
+    PorcentajeInvalido,
+    ServicioTiposIva,
+    TipoIvaNoEncontrado,
+)
 from app.presentacion.deps import get_session, get_uow
 from app.infraestructura.config import settings
 from app.infraestructura.reloj import ahora_huso
@@ -60,6 +66,12 @@ class ArticuloReq(BaseModel):
     color_boton: str | None = None
     icono: str | None = None
     codigos: list[str] = []
+
+
+class TipoIvaReq(BaseModel):
+    nombre: str
+    porcentaje: Decimal
+    calificacion: str = "S1"
 
 
 def _origen(request: Request) -> str:
@@ -257,4 +269,51 @@ def activar_articulo(articulo_id: int, request: Request,
         _servicio_articulos(request, usuario_id, uow).activar(articulo_id)
     except ArticuloNoEncontrado:
         raise HTTPException(404, "Articulo no encontrado")
+    return {"ok": True}
+
+
+# --- Maestros: tipos de IVA (escritura) ----------------------------------------
+def _servicio_tipos_iva(request: Request, usuario_id: int, uow) -> ServicioTiposIva:
+    return ServicioTiposIva(uow, usuario_id=usuario_id, origen=_origen(request))
+
+
+@router.post("/api/maestros/tipos-iva", status_code=201)
+def crear_tipo_iva(req: TipoIvaReq, request: Request,
+                   usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        nuevo_id = _servicio_tipos_iva(request, usuario_id, uow).crear(DatosTipoIva(**req.model_dump()))
+    except PorcentajeInvalido:
+        raise HTTPException(422, "El porcentaje de IVA no es valido (0-100)")
+    return {"id": nuevo_id}
+
+
+@router.put("/api/maestros/tipos-iva/{tipo_iva_id}")
+def actualizar_tipo_iva(tipo_iva_id: int, req: TipoIvaReq, request: Request,
+                        usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_tipos_iva(request, usuario_id, uow).actualizar(tipo_iva_id, DatosTipoIva(**req.model_dump()))
+    except TipoIvaNoEncontrado:
+        raise HTTPException(404, "Tipo de IVA no encontrado")
+    except PorcentajeInvalido:
+        raise HTTPException(422, "El porcentaje de IVA no es valido (0-100)")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/tipos-iva/{tipo_iva_id}/desactivar")
+def desactivar_tipo_iva(tipo_iva_id: int, request: Request,
+                        usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_tipos_iva(request, usuario_id, uow).desactivar(tipo_iva_id)
+    except TipoIvaNoEncontrado:
+        raise HTTPException(404, "Tipo de IVA no encontrado")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/tipos-iva/{tipo_iva_id}/activar")
+def activar_tipo_iva(tipo_iva_id: int, request: Request,
+                     usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_tipos_iva(request, usuario_id, uow).activar(tipo_iva_id)
+    except TipoIvaNoEncontrado:
+        raise HTTPException(404, "Tipo de IVA no encontrado")
     return {"ok": True}
