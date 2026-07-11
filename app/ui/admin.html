@@ -34,9 +34,12 @@
                  background:#0b1220; color:#fff; font-size:16px; }
   .login button { width:100%; padding:12px; }
   .msg-error { color:#fca5a5; min-height:20px; }
+  .banner-demo { background:var(--err); color:#fff; text-align:center; font-weight:800;
+                 letter-spacing:.5px; padding:6px 10px; }
 </style>
 </head>
 <body>
+<div id="banner-demo"></div>
 <div id="root"></div>
 
 <script>
@@ -159,8 +162,22 @@ async function pintarMaestros() {
     tabla("Usuarios", [["Nombre",r=>r.nombre],["Rol",r=>r.rol],["Activo",r=>r.activo?"sí":"no"]], users);
 }
 
+/* ---- BANNER MODO DEMO ---- */
+// Fuente unica de verdad: GET /health (mismo perfil que backend/ticket/motor).
+// Visible siempre que el perfil activo sea demo, con o sin sesion iniciada.
+async function pintarBannerDemo() {
+  try {
+    const salud = await api("/health");
+    $("#banner-demo").innerHTML = salud.perfil === "demo"
+      ? `<div class="banner-demo">MODO DEMO — datos de prueba, sin validez fiscal</div>` : "";
+  } catch { /* si /health falla, no bloquea el resto de la consola */ }
+}
+
 /* ---- ARRANQUE ---- */
-(async () => { try { await api("/admin/api/me"); dashboard(); } catch { vistaLogin(); } })();
+(async () => {
+  await pintarBannerDemo();
+  try { await api("/admin/api/me"); dashboard(); } catch { vistaLogin(); }
+})();
 </script>
 </body>
 </html>

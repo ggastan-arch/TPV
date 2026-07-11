@@ -17,6 +17,11 @@ dist/
 *.sqlite
 *.sqlite3
 
+# tpv_demo.db (perfil demo, ADR-0009) ya queda cubierta por el patron *.db de
+# arriba; entrada explicita para documentar la intencion: NUNCA versionar la BD
+# demo, aunque sus datos sean ficticios (es un fichero desechable/portatil).
+tpv_demo.db*
+
 # Entorno / configuracion local con posibles secretos.
 .env
 .env.*

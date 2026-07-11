@@ -28,4 +28,9 @@ def get_uow() -> Iterator[UnidadDeTrabajoSQL]:
 
 
 def get_motor() -> FiscalEngine:
+    # Primera rama, explicita: el perfil (no el cableado) es lo que garantiza
+    # "no remite" en demo. Blinda contra un futuro VerifactuEngine de produccion
+    # (fuera de alcance de este cambio) — en demo, el certificado NUNCA se lee.
+    if settings.perfil == "demo":
+        return NullEngine(id_emisor=settings.nif_emisor, nombre_emisor=settings.nombre_emisor)
     return NullEngine(id_emisor=settings.nif_emisor, nombre_emisor=settings.nombre_emisor)

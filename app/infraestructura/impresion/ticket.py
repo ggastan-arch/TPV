@@ -52,19 +52,31 @@ def imprimir_ticket(
     nombre_emisor: str | None = None,
     nif_emisor: str | None = None,
     cortar: bool = True,
+    demo: bool | None = None,
 ) -> None:
     ancho = ancho or settings.ticket_ancho
     nombre_emisor = nombre_emisor or settings.nombre_emisor
     nif_emisor = nif_emisor or settings.nif_emisor
+    demo = (settings.perfil == "demo") if demo is None else demo
     sep = "-" * ancho
 
-    # --- QR tributario al principio de la factura (Orden 20-21) ---
-    printer.set(align="center")
-    printer.text("QR tributario:\n")
-    url = qr_mod.url_cotejo_registro(registro)
-    # El QR nativo se centra por la alineacion activa (center=True no esta soportado).
-    printer.qr(url, ec=QR_ECLEVEL_M, size=6, native=True)
-    printer.text(qr_mod.LEYENDA_CORTA + "\n")
+    if demo:
+        # Invariante 5: nada de "modo formacion" sin marcar; cada documento de
+        # prueba queda inequivocamente etiquetado. Invariante 7 (indirecto): NO
+        # se invoca qr_mod.url_cotejo_registro ni printer.qr -> sin QR de cotejo
+        # real de la AEAT en un documento sin validez fiscal.
+        printer.set(align="center", bold=True)
+        printer.text("DOCUMENTO DE PRUEBA\n")
+        printer.text("SIN VALIDEZ FISCAL\n")
+        printer.set(align="center", bold=False)
+    else:
+        # --- QR tributario al principio de la factura (Orden 20-21) ---
+        printer.set(align="center")
+        printer.text("QR tributario:\n")
+        url = qr_mod.url_cotejo_registro(registro)
+        # El QR nativo se centra por la alineacion activa (center=True no esta soportado).
+        printer.qr(url, ec=QR_ECLEVEL_M, size=6, native=True)
+        printer.text(qr_mod.LEYENDA_CORTA + "\n")
 
     # --- Emisor ---
     printer.text(sep + "\n")

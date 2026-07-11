@@ -51,3 +51,40 @@ def test_abrir_cajon_emite_pulso():
     dummy = Dummy()
     abrir_cajon(dummy)
     assert b"\x1bp" in dummy.output  # comando ESC p de apertura de cajon
+
+
+def test_ticket_demo_marca_documento_de_prueba_sin_qr_real(crear_sesion, motor, datos_base):
+    venta_id, reg_id = _emitir_con_lineas(crear_sesion, motor, datos_base["usuario_id"])
+    with crear_sesion() as s:
+        venta = s.get(Venta, venta_id)
+        registro = s.get(RegistroFiscal, reg_id)
+        _ = venta.lineas
+        _ = registro.desglose
+
+        dummy = Dummy()
+        imprimir_ticket(dummy, venta, registro, demo=True)
+        salida = dummy.output
+
+        # Invariante 5: cada documento demo queda marcado sin ambiguedad.
+        assert "DOCUMENTO DE PRUEBA".encode() in salida
+        assert "SIN VALIDEZ FISCAL".encode() in salida
+        # Invariante 7 (indirecto): sin QR de cotejo real ni leyenda VERI*FACTU.
+        assert b"ValidarQR" not in salida
+        assert qr_mod.LEYENDA_CORTA.encode() not in salida
+
+
+def test_ticket_produccion_explicito_mantiene_qr_y_leyenda(crear_sesion, motor, datos_base):
+    venta_id, reg_id = _emitir_con_lineas(crear_sesion, motor, datos_base["usuario_id"])
+    with crear_sesion() as s:
+        venta = s.get(Venta, venta_id)
+        registro = s.get(RegistroFiscal, reg_id)
+        _ = venta.lineas
+        _ = registro.desglose
+
+        dummy = Dummy()
+        imprimir_ticket(dummy, venta, registro, demo=False)
+        salida = dummy.output
+
+        assert b"ValidarQR" in salida
+        assert qr_mod.LEYENDA_CORTA.encode() in salida
+        assert "DOCUMENTO DE PRUEBA".encode() not in salida
