@@ -5,13 +5,18 @@ from __future__ import annotations
 from alembic import context
 
 from app.infraestructura.config import settings
-from app.infraestructura.db import crear_engine
+from app.infraestructura.db import crear_engine, resolver_url_migracion
 from app.infraestructura.persistencia.modelos import Base  # registra todo el metadata
 
 config = context.config
 
-# URL: la del propio comando alembic (o el override de tests) tiene prioridad.
-url = config.get_main_option("sqlalchemy.url") or settings.database_url
+# URL con prioridad: override `-x sqlalchemy.url=...` > alembic.ini/config > settings.
+# El `-x` debe ganar para poder migrar contra una BD de scratch sin tocar la base real.
+url = resolver_url_migracion(
+    context.get_x_argument(as_dictionary=True),
+    config.get_main_option("sqlalchemy.url"),
+    settings.database_url,
+)
 
 target_metadata = Base.metadata
 

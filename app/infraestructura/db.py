@@ -19,6 +19,17 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.infraestructura.config import settings
 
 
+def resolver_url_migracion(
+    x_args: dict[str, str] | None, url_ini: str | None, url_defecto: str
+) -> str:
+    """URL para las migraciones Alembic, por prioridad:
+    override `-x sqlalchemy.url` del runner > `sqlalchemy.url` del alembic.ini/config >
+    `settings.database_url`. El override tiene prioridad para poder migrar contra una BD de
+    scratch sin tocar la base real (un `-x` vacio se ignora)."""
+    x_args = x_args or {}
+    return x_args.get("sqlalchemy.url") or url_ini or url_defecto
+
+
 def crear_engine(url: str | None = None, *, inmediato: bool = True, **kwargs) -> Engine:
     engine = create_engine(
         url or settings.database_url,
