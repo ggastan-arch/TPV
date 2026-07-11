@@ -95,6 +95,46 @@ def test_botonera_incluye_articulo(cliente, datos_tpv):
     assert {"articulo", "familia", "funcion"} <= tipos
 
 
+def test_botonera_refleja_layout_editado_por_el_editor(cliente, crear_sesion, datos_tpv):
+    """Requisito 'Compatibilidad del contrato de lectura del TPV' (spec): editar
+    el layout del perfil activo vía `ServicioBotonera.guardar_layout` no cambia
+    la FORMA de `GET /tpv/api/botonera` y refleja el nuevo layout guardado."""
+    from app.aplicacion.botoneras import DatosBoton, DatosLayout, ServicioBotonera
+    from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
+
+    # Layout original (fixture `datos_tpv`): 3 botones. Lo reemplazamos por uno
+    # nuevo, distinto, vía el servicio de aplicación (no HTTP, ver tasks.md Tarea 5).
+    with crear_sesion() as s:
+        svc = ServicioBotonera(UnidadDeTrabajoSQL(s))
+        arbol = svc.cargar_arbol()
+        pagina_id = arbol[0]["paginas"][0]["id"]
+        svc.guardar_layout(pagina_id, DatosLayout(
+            filas=4, columnas=5,
+            botones=[
+                DatosBoton(ref="solo", fila=2, columna=3,
+                           articulo_id=datos_tpv["neon_id"], texto="Neon nuevo"),
+            ],
+        ))
+
+    r = cliente.get("/tpv/api/botonera")
+    assert r.status_code == 200
+    cuerpo = r.json()
+
+    # Forma SIN cambios: mismas claves de siempre (regresion de shape).
+    assert set(cuerpo.keys()) == {"perfil", "pagina", "botones"}
+    assert set(cuerpo["pagina"].keys()) == {"id", "nombre", "columnas", "filas"}
+    assert cuerpo["botones"] and set(cuerpo["botones"][0].keys()) == {
+        "fila", "columna", "ancho", "alto", "color", "icono", "texto", "tipo", "articulo",
+    }
+
+    # Refleja el layout recien guardado (un solo boton, el nuevo).
+    assert len(cuerpo["botones"]) == 1
+    boton = cuerpo["botones"][0]
+    assert boton["fila"] == 2 and boton["columna"] == 3 and boton["texto"] == "Neon nuevo"
+    assert boton["tipo"] == "articulo"
+    assert boton["articulo"]["id"] == datos_tpv["neon_id"]
+
+
 def test_articulo_por_codigo(cliente, datos_tpv):
     r = cliente.get("/tpv/api/articulo/por-codigo/8412345678905")
     assert r.status_code == 200

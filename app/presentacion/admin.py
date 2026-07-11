@@ -46,6 +46,17 @@ from app.aplicacion.familias import (
     FamiliaPadreNoExiste,
     ServicioFamilias,
 )
+from app.aplicacion.botoneras import (
+    DatosBoton,
+    DatosLayout,
+    DatosPagina,
+    DestinoNoExiste,
+    LayoutInvalido,
+    PaginaNoEncontrada,
+    PerfilNoEncontrado,
+    RangoRejillaInvalido,
+    ServicioBotonera,
+)
 from app.aplicacion.generar_cierre_z import GenerarCierreZ
 from app.aplicacion.stock import (
     ArticuloNoRastreado,
@@ -141,6 +152,37 @@ class PinReq(BaseModel):
 
 class AjusteStockReq(BaseModel):
     activo: bool
+
+
+class PerfilBotoneraReq(BaseModel):
+    nombre: str
+
+
+class PaginaBotoneraReq(BaseModel):
+    nombre: str
+    orden: int = 0
+    columnas: int = 5
+    filas: int = 4
+
+
+class BotonLayoutReq(BaseModel):
+    ref: str
+    fila: int
+    columna: int
+    ancho: int = 1
+    alto: int = 1
+    articulo_id: int | None = None
+    familia_id: int | None = None
+    funcion: str | None = None
+    color: str | None = None
+    icono: str | None = None
+    texto: str | None = None
+
+
+class LayoutPaginaReq(BaseModel):
+    filas: int
+    columnas: int
+    botones: list[BotonLayoutReq] = []
 
 
 class EntradaStockReq(BaseModel):
@@ -699,3 +741,108 @@ def detalle_cierre_z(numero: int, _: int = Depends(require_admin), uow=Depends(g
     if cierre is None:
         raise HTTPException(404, "Cierre Z no encontrado")
     return _cierre_z_detalle(cierre)
+
+
+# --- Botonera (editor visual: perfil -> pagina -> boton) -----------------------
+def _servicio_botonera(request: Request, usuario_id: int, uow) -> ServicioBotonera:
+    return ServicioBotonera(uow, usuario_id=usuario_id, origen=_origen(request))
+
+
+@router.get("/api/botonera")
+def arbol_botonera(_: int = Depends(require_admin), uow=Depends(get_uow)) -> list[dict]:
+    return ServicioBotonera(uow).cargar_arbol()
+
+
+@router.post("/api/botonera/perfiles", status_code=201)
+def crear_perfil_botonera(req: PerfilBotoneraReq, request: Request,
+                          usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    nuevo_id = _servicio_botonera(request, usuario_id, uow).crear_perfil(req.nombre)
+    return {"id": nuevo_id}
+
+
+@router.put("/api/botonera/perfiles/{perfil_id}")
+def renombrar_perfil_botonera(perfil_id: int, req: PerfilBotoneraReq, request: Request,
+                              usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_botonera(request, usuario_id, uow).renombrar_perfil(perfil_id, req.nombre)
+    except PerfilNoEncontrado:
+        raise HTTPException(404, "Perfil no encontrado")
+    return {"ok": True}
+
+
+@router.post("/api/botonera/perfiles/{perfil_id}/activar")
+def activar_perfil_botonera(perfil_id: int, request: Request,
+                            usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_botonera(request, usuario_id, uow).activar_perfil(perfil_id)
+    except PerfilNoEncontrado:
+        raise HTTPException(404, "Perfil no encontrado")
+    return {"ok": True}
+
+
+@router.delete("/api/botonera/perfiles/{perfil_id}")
+def borrar_perfil_botonera(perfil_id: int, request: Request,
+                           usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_botonera(request, usuario_id, uow).borrar_perfil(perfil_id)
+    except PerfilNoEncontrado:
+        raise HTTPException(404, "Perfil no encontrado")
+    return {"ok": True}
+
+
+@router.post("/api/botonera/perfiles/{perfil_id}/paginas", status_code=201)
+def crear_pagina_botonera(perfil_id: int, req: PaginaBotoneraReq, request: Request,
+                         usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        nuevo_id = _servicio_botonera(request, usuario_id, uow).crear_pagina(
+            perfil_id,
+            DatosPagina(nombre=req.nombre, orden=req.orden, columnas=req.columnas, filas=req.filas),
+        )
+    except PerfilNoEncontrado:
+        raise HTTPException(404, "Perfil no encontrado")
+    except RangoRejillaInvalido:
+        raise HTTPException(422, "Filas/columnas fuera del rango permitido (1-12)")
+    return {"id": nuevo_id}
+
+
+@router.put("/api/botonera/paginas/{pagina_id}")
+def actualizar_pagina_botonera(pagina_id: int, req: PaginaBotoneraReq, request: Request,
+                               usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_botonera(request, usuario_id, uow).actualizar_pagina(
+            pagina_id,
+            DatosPagina(nombre=req.nombre, orden=req.orden, columnas=req.columnas, filas=req.filas),
+        )
+    except PaginaNoEncontrada:
+        raise HTTPException(404, "Pagina no encontrada")
+    except RangoRejillaInvalido:
+        raise HTTPException(422, "Filas/columnas fuera del rango permitido (1-12)")
+    return {"ok": True}
+
+
+@router.delete("/api/botonera/paginas/{pagina_id}")
+def borrar_pagina_botonera(pagina_id: int, request: Request,
+                          usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_botonera(request, usuario_id, uow).borrar_pagina(pagina_id)
+    except PaginaNoEncontrada:
+        raise HTTPException(404, "Pagina no encontrada")
+    return {"ok": True}
+
+
+@router.put("/api/botonera/paginas/{pagina_id}/layout")
+def guardar_layout_botonera(pagina_id: int, req: LayoutPaginaReq, request: Request,
+                           usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    datos = DatosLayout(
+        filas=req.filas, columnas=req.columnas,
+        botones=[DatosBoton(**b.model_dump()) for b in req.botones],
+    )
+    try:
+        _servicio_botonera(request, usuario_id, uow).guardar_layout(pagina_id, datos)
+    except PaginaNoEncontrada:
+        raise HTTPException(404, "Pagina no encontrada")
+    except LayoutInvalido as exc:
+        raise HTTPException(422, exc.errores)
+    except DestinoNoExiste as exc:
+        raise HTTPException(422, str(exc))
+    return {"ok": True}

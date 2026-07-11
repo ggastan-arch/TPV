@@ -102,53 +102,53 @@ Capa: `app/aplicacion/botoneras.py` (nuevo), mismo patrón que
 cada método valida → muta → audita → `commit`). **Depende de las Tareas 1 y
 2.** Secuencial respecto a ellas.
 
-- [ ] Rojo: crear `tests/test_botonera_casos_uso.py` con casos que fallan
+- [x] Rojo: crear `tests/test_botonera_casos_uso.py` con casos que fallan
       porque `ServicioBotonera` y sus excepciones aún no existen.
-- [ ] Rojo→Verde: excepciones `LayoutInvalido` (expone `.errores: list[str]`),
+- [x] Rojo→Verde: excepciones `LayoutInvalido` (expone `.errores: list[str]`),
       `PerfilNoEncontrado`, `PaginaNoEncontrada`, `DestinoNoExiste`.
-- [ ] Rojo→Verde: `crear_perfil(nombre) -> int` — se crea con `activo=False`;
+- [x] Rojo→Verde: `crear_perfil(nombre) -> int` — se crea con `activo=False`;
       auditado.
-- [ ] Rojo→Verde: `renombrar_perfil(perfil_id, nombre)` — `PerfilNoEncontrado`
+- [x] Rojo→Verde: `renombrar_perfil(perfil_id, nombre)` — `PerfilNoEncontrado`
       si no existe; auditado.
-- [ ] Rojo→Verde: `activar_perfil(perfil_id)` — el perfil activado queda
+- [x] Rojo→Verde: `activar_perfil(perfil_id)` — el perfil activado queda
       `activo=True` y CUALQUIER otro perfil que estuviera activo queda
       `activo=False`, todo en la misma transacción; auditado; test con 2+
       perfiles activos previos (estado inconsistente hipotético) para
       confirmar que todos quedan desactivados salvo el objetivo.
-- [ ] Rojo→Verde: `borrar_perfil(perfil_id)` — cascade de páginas/botones
+- [x] Rojo→Verde: `borrar_perfil(perfil_id)` — cascade de páginas/botones
       (delegado al repositorio de la Tarea 2); auditado; test explícito de que
       borrar el ÚLTIMO perfil (incluso si está activo) se permite sin error
       especial (el TPV degrada a 404 en su propio endpoint; ese
       comportamiento NO se valida aquí).
-- [ ] Rojo→Verde: `crear_pagina(perfil_id, datos)` — `PerfilNoEncontrado` si el
+- [x] Rojo→Verde: `crear_pagina(perfil_id, datos)` — `PerfilNoEncontrado` si el
       perfil no existe; `filas` y `columnas` deben estar en el rango permitido
       **1–12** (rechazo fuera de rango); auditado.
-- [ ] Rojo→Verde: `actualizar_pagina(pagina_id, datos)` — nombre/orden/
+- [x] Rojo→Verde: `actualizar_pagina(pagina_id, datos)` — nombre/orden/
       columnas/filas; `PaginaNoEncontrada` si no existe; mismo rango 1–12 para
       filas/columnas; auditado.
-- [ ] Rojo→Verde: `borrar_pagina(pagina_id)` — cascade de botones (Tarea 2);
+- [x] Rojo→Verde: `borrar_pagina(pagina_id)` — cascade de botones (Tarea 2);
       `PaginaNoEncontrada` si no existe; auditado.
-- [ ] Rojo→Verde: `guardar_layout(pagina_id, datos)` paso 1 — invoca
+- [x] Rojo→Verde: `guardar_layout(pagina_id, datos)` paso 1 — invoca
       `validar_layout_botonera` (función pura, Tarea 1); si devuelve errores,
       lanza `LayoutInvalido(errores)` SIN tocar BD.
-- [ ] Rojo→Verde: `guardar_layout` paso 2 — por cada botón con
+- [x] Rojo→Verde: `guardar_layout` paso 2 — por cada botón con
       `articulo_id`/`familia_id`, verifica existencia contra BD; si no existe,
       `DestinoNoExiste` SIN tocar BD (ni siquiera parcialmente).
-- [ ] Rojo→Verde: `guardar_layout` paso 3 — actualiza `filas/columnas` de la
+- [x] Rojo→Verde: `guardar_layout` paso 3 — actualiza `filas/columnas` de la
       página y reemplaza los botones (Tarea 2) de forma atómica; auditado;
       `commit`.
-- [ ] Rojo→Verde: test de integración — **layout inválido (bounds, solape,
+- [x] Rojo→Verde: test de integración — **layout inválido (bounds, solape,
       destino, función o referencia inexistente) → NADA persiste**: se
       compara el estado de BD (página + botones) antes y después de la
       llamada fallida y debe ser IDÉNTICO (mismo test también con excepción
       forzada a mitad de transacción para confirmar rollback real, no solo
       validación previa).
-- [ ] Rojo→Verde: test de integración — layout válido reemplaza el anterior
+- [x] Rojo→Verde: test de integración — layout válido reemplaza el anterior
       tal cual se envió (los botones previos ya no existen; los nuevos sí,
       con sus valores exactos).
-- [ ] Rojo→Verde: `cargar_arbol()` — devuelve la estructura perfil→página→
+- [x] Rojo→Verde: `cargar_arbol()` — devuelve la estructura perfil→página→
       botón lista para el editor (usa `RepositorioBotonera.arbol()`).
-- [ ] Verde: cada método que muta (crear/editar/borrar/activar/guardar_layout)
+- [x] Verde: cada método que muta (crear/editar/borrar/activar/guardar_layout)
       tiene su test de auditoría — existe un nuevo `LogAuditoria` con acción y
       entidad afectada tras la operación (invariante 4).
 
@@ -158,32 +158,32 @@ Capa: `app/presentacion/admin.py` (modificar) — `require_admin`, `get_uow`,
 Pydantic, mapeo de excepciones a HTTP, `_origen` para auditoría, siguiendo el
 patrón de los demás routers admin. **Depende de la Tarea 3.**
 
-- [ ] Rojo: crear `tests/test_botonera_admin_api.py` (TestClient, mismo
+- [x] Rojo: crear `tests/test_botonera_admin_api.py` (TestClient, mismo
       patrón que `tests/test_admin_api.py`) con casos que fallan porque los
       endpoints aún no existen.
-- [ ] Rojo→Verde: `GET /admin/api/botonera` — árbol completo; `require_admin`
+- [x] Rojo→Verde: `GET /admin/api/botonera` — árbol completo; `require_admin`
       (401 sin sesión válida, verificado con test explícito).
-- [ ] Rojo→Verde: `POST /admin/api/botonera/perfiles` — crear perfil (201/200
+- [x] Rojo→Verde: `POST /admin/api/botonera/perfiles` — crear perfil (201/200
       con id); auditado.
-- [ ] Rojo→Verde: `PUT /admin/api/botonera/perfiles/{id}` — renombrar; 404 si
+- [x] Rojo→Verde: `PUT /admin/api/botonera/perfiles/{id}` — renombrar; 404 si
       `PerfilNoEncontrado`.
-- [ ] Rojo→Verde: `POST /admin/api/botonera/perfiles/{id}/activar` — activa y
+- [x] Rojo→Verde: `POST /admin/api/botonera/perfiles/{id}/activar` — activa y
       desactiva los demás; 404 si no existe.
-- [ ] Rojo→Verde: `DELETE /admin/api/botonera/perfiles/{id}` — borra con
+- [x] Rojo→Verde: `DELETE /admin/api/botonera/perfiles/{id}` — borra con
       cascade; 404 si no existe.
-- [ ] Rojo→Verde: `POST /admin/api/botonera/perfiles/{id}/paginas` — crear
+- [x] Rojo→Verde: `POST /admin/api/botonera/perfiles/{id}/paginas` — crear
       página; 404 si el perfil no existe; 422 si filas/columnas fuera de
       rango 1–12.
-- [ ] Rojo→Verde: `PUT /admin/api/botonera/paginas/{id}` — actualizar
+- [x] Rojo→Verde: `PUT /admin/api/botonera/paginas/{id}` — actualizar
       nombre/orden/filas/columnas; 404 si no existe.
-- [ ] Rojo→Verde: `DELETE /admin/api/botonera/paginas/{id}` — borra con
+- [x] Rojo→Verde: `DELETE /admin/api/botonera/paginas/{id}` — borra con
       cascade; 404 si no existe.
-- [ ] Rojo→Verde: `PUT /admin/api/botonera/paginas/{id}/layout` — guarda
+- [x] Rojo→Verde: `PUT /admin/api/botonera/paginas/{id}/layout` — guarda
       layout completo; 404 si `PaginaNoEncontrada`; **422 con
       `{"detail": errores}`** si `LayoutInvalido`; 422 si `DestinoNoExiste`.
-- [ ] Verde: test explícito — todos los endpoints anteriores devuelven 401
+- [x] Verde: test explícito — todos los endpoints anteriores devuelven 401
       sin sesión de administrador (require_admin no se puede bypassear).
-- [ ] Verde: cada endpoint mutante deja rastro de auditoría con el `_origen`
+- [x] Verde: cada endpoint mutante deja rastro de auditoría con el `_origen`
       correcto (local/remoto, según patrón existente).
 
 ### Tarea 5 — Test de compatibilidad `GET /tpv/api/botonera`
@@ -193,14 +193,14 @@ Añadir caso a `tests/test_tpv_api.py` (fichero existente, junto a
 de la 4; se puede ejercitar editando vía `ServicioBotonera` directamente,
 sin pasar por HTTP, si eso adelanta la tarea).
 
-- [ ] Rojo: nuevo test que edita un layout del perfil activo vía
+- [x] Rojo: nuevo test que edita un layout del perfil activo vía
       `ServicioBotonera.guardar_layout` (o vía el endpoint de la Tarea 4) y
       luego consulta `GET /tpv/api/botonera`; falla porque aún no hay forma
       de editar.
-- [ ] Verde: la respuesta de `GET /tpv/api/botonera` conserva EXACTAMENTE la
+- [x] Verde: la respuesta de `GET /tpv/api/botonera` conserva EXACTAMENTE la
       misma forma (mismos campos: perfil activo, página de menor orden,
       botones con tipo y destino) y refleja el layout recién guardado.
-- [ ] Verde: test de regresión explícito — comparar el shape (claves) de la
+- [x] Verde: test de regresión explícito — comparar el shape (claves) de la
       respuesta contra un snapshot/estructura esperada fija, para detectar
       cualquier cambio de forma introducido por accidente en tareas
       anteriores.
