@@ -1,0 +1,40 @@
+change: modo-demo
+title: "Perfil de arranque DEMO aislado"
+status: archived
+archived_date: "2026-07-11"
+
+phases_completed:
+  - proposal
+  - spec
+  - design
+  - tasks
+  - apply
+  - verify
+  - archive
+
+implementation_commits:
+  - hash: e2944ad
+    description: "Feature implementation: modo-demo profile (config, motor, ticket, seed, bootstrap, console)"
+    type: feature
+  - hash: d8052c0
+    description: "Dossier: ADR-0009, documentation, and final adjustments"
+    type: dossier
+
+verification:
+  tests_passed: 174
+  tests_total: 174
+  import_linter_contracts_kept: 3
+  import_linter_contracts_broken: 0
+  critical_issues: 0
+  warnings: 2
+  warnings_detail:
+    - "Scenario 'Producción resuelve VerifactuEngine' is DEFERRED (VerifactuEngine not yet implemented)"
+    - "Scenario 'Consola en modo demo' has partial test coverage (backend contract tested, HTML render untested)"
+
+notes:
+  - "All 26 implementation tasks marked complete (✓)"
+  - "Spec consolidated to openspec/specs/modo-demo/spec.md"
+  - "Change respects invariants 5 and 7 per config.yaml rules.invariants_do_not_weaken"
+  - "Demo profile is isolated (tpv_demo.db), NullEngine forced, no AEAT submission"
+  - "Production behavior (TPV_PROFILE=produccion, default) non-regressed"
+  - "PR diff: 530 lines (app+tests) flagged size:exception per review workload forecast"

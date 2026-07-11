@@ -55,8 +55,12 @@ NOT cargar ni leer el certificado electrónico.
 - WHEN se resuelve el motor fiscal
 - THEN el motor resuelto es `NullEngine` y el certificado no se carga ni se lee
 
-#### Scenario: Producción resuelve VerifactuEngine
-- GIVEN que el perfil es `produccion` y existe un certificado válido
+#### Scenario: Producción resuelve el motor de remisión productivo — DEFERRED
+> **DEFERRED**: `VerifactuEngine` aún no está implementado (solo existe `NullEngine`);
+> ver trabajo futuro "remisión real a la AEAT" (out of scope). Hoy producción también
+> resuelve `NullEngine` (no-regresión); este escenario aplicará cuando exista el motor
+> de remisión productivo.
+- GIVEN que el perfil es `produccion`, existe un certificado válido y `VerifactuEngine` está disponible
 - WHEN se resuelve el motor fiscal
 - THEN el motor resuelto es `VerifactuEngine`
 
