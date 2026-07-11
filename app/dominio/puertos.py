@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from app.infraestructura.persistencia.modelos.cierre_z import CierreZ
     from app.infraestructura.persistencia.modelos.maestros import Articulo, Cliente, Familia, TipoIVA
     from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
-    from app.infraestructura.persistencia.modelos.operacion import Usuario
+    from app.infraestructura.persistencia.modelos.operacion import MovimientoStock, Usuario
     from app.infraestructura.persistencia.modelos.venta import Venta
 
 
@@ -116,6 +116,24 @@ class RepositorioCierresZ(Protocol):
     def cobradas_por_rango_orden(self, desde_orden: int, hasta_orden: int) -> TotalesRangoZ: ...
 
 
+class RepositorioConfiguracion(Protocol):
+    """Ajuste de empresa global (fila singleton), editable desde consola admin."""
+
+    def control_stock_activo(self) -> bool: ...
+    def fijar_control_stock(self, activo: bool) -> None: ...
+
+
+class RepositorioStock(Protocol):
+    """Stock informativo (entrada/venta/merma). Agregacion on-the-fly en
+    Python/Decimal (nunca `SUM` SQL, ver design.md): los importes se guardan como
+    TEXT y `SUM` degradaria a coma flotante."""
+
+    def agregar(self, movimiento: "MovimientoStock") -> None: ...
+    def stock_actual(self, articulo_id: int) -> Decimal: ...
+    def movimientos(self, articulo_id: int) -> list["MovimientoStock"]: ...
+    def rastreados_en_negativo(self) -> list[tuple[int, Decimal]]: ...
+
+
 class UnidadDeTrabajo(Protocol):
     """Agrupa los repositorios y controla la transaccion.
 
@@ -132,6 +150,8 @@ class UnidadDeTrabajo(Protocol):
     registros: RepositorioRegistros
     auditoria: RepositorioAuditoria
     cierres_z: RepositorioCierresZ
+    configuracion: RepositorioConfiguracion
+    stock: RepositorioStock
     session: "Session"
 
     def flush(self) -> None: ...

@@ -17,8 +17,10 @@ from app.infraestructura.persistencia.modelos import (
     CierreZ,
     Cliente,
     CodigoBarras,
+    ConfiguracionEmpresa,
     Familia,
     LogAuditoria,
+    MovimientoStock,
     RegistroFiscal,
     RemisionIntento,
     TipoIVA,
@@ -318,3 +320,60 @@ class RepositorioCierresZSQL:
             ],
             desglose_pago=sorted(por_medio.items()),
         )
+
+
+class RepositorioConfiguracionSQL:
+    """Ajuste de empresa global: fila singleton `id=1`. Tabla MUTABLE (no es dato
+    fiscal): sin triggers de inmutabilidad."""
+
+    def __init__(self, session: Session):
+        self._s = session
+
+    def control_stock_activo(self) -> bool:
+        cfg = self._s.get(ConfiguracionEmpresa, 1)
+        return bool(cfg.control_stock_activo) if cfg is not None else False
+
+    def fijar_control_stock(self, activo: bool) -> None:
+        cfg = self._s.get(ConfiguracionEmpresa, 1)
+        cfg.control_stock_activo = activo
+
+
+# Signo del efecto de cada tipo de movimiento sobre el saldo (design.md: `cantidad`
+# se guarda siempre como magnitud positiva; el signo lo aporta `tipo`).
+_SIGNO_MOVIMIENTO = {"entrada": Decimal("1"), "venta": Decimal("-1"), "merma": Decimal("-1")}
+
+
+class RepositorioStockSQL:
+    """Stock informativo: agregacion on-the-fly en Python/Decimal, nunca `SUM` SQL
+    (los importes se guardan como TEXT; `SUM` degradaria a coma flotante)."""
+
+    def __init__(self, session: Session):
+        self._s = session
+
+    def agregar(self, movimiento: MovimientoStock) -> None:
+        self._s.add(movimiento)
+
+    def movimientos(self, articulo_id: int) -> list[MovimientoStock]:
+        stmt = (
+            select(MovimientoStock)
+            .where(MovimientoStock.articulo_id == articulo_id)
+            .order_by(MovimientoStock.id)
+        )
+        return list(self._s.execute(stmt).scalars())
+
+    def stock_actual(self, articulo_id: int) -> Decimal:
+        saldo = Decimal("0")
+        for movimiento in self.movimientos(articulo_id):
+            saldo += _SIGNO_MOVIMIENTO[movimiento.tipo] * movimiento.cantidad
+        return saldo
+
+    def rastreados_en_negativo(self) -> list[tuple[int, Decimal]]:
+        ids_rastreados = self._s.execute(
+            select(Articulo.id).where(Articulo.control_stock.is_(True)).order_by(Articulo.id)
+        ).scalars()
+        negativos = []
+        for articulo_id in ids_rastreados:
+            saldo = self.stock_actual(articulo_id)
+            if saldo < 0:
+                negativos.append((articulo_id, saldo))
+        return negativos

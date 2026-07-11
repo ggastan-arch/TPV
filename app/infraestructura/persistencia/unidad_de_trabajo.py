@@ -8,8 +8,10 @@ from app.infraestructura.persistencia.repositorios import (
     RepositorioAuditoriaSQL,
     RepositorioCierresZSQL,
     RepositorioClientesSQL,
+    RepositorioConfiguracionSQL,
     RepositorioFamiliasSQL,
     RepositorioRegistrosSQL,
+    RepositorioStockSQL,
     RepositorioTiposIvaSQL,
     RepositorioUsuariosSQL,
     RepositorioVentasSQL,
@@ -28,6 +30,8 @@ class UnidadDeTrabajoSQL:
         self.registros = RepositorioRegistrosSQL(session)
         self.auditoria = RepositorioAuditoriaSQL(session)
         self.cierres_z = RepositorioCierresZSQL(session)
+        self.configuracion = RepositorioConfiguracionSQL(session)
+        self.stock = RepositorioStockSQL(session)
 
     def flush(self) -> None:
         self.session.flush()
