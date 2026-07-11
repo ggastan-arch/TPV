@@ -46,11 +46,11 @@ Nota: este repo no usa PRs (commit directo a `main`). "Chained PRs" se traduce a
 
 ## Phase 4: Integración no bloqueante en EmitirVenta
 
-- [ ] 4.1 RED: toggle apagado ⇒ venta con líneas rastreadas no crea `MovimientoStock` — `tests/test_emitir_venta.py`
-- [ ] 4.2 RED: toggle encendido ⇒ solo líneas `control_stock=true` generan movimiento `venta`
-- [ ] 4.3 RED (INNEGOCIABLE): `uow.stock.agregar` lanza dentro del SAVEPOINT ⇒ venta `cobrada`+registro fiscal encadenado, sin `MovimientoStock`, sin abortar
-- [ ] 4.4 RED: sobreventa (stock 1, vende 5) ⇒ saldo -4 y `rastreados_en_negativo` la cuenta
-- [ ] 4.5 GREEN: `_efecto_stock(venta, usuario_id)` en `app/aplicacion/emitir_venta.py`, llamado tras `motor.emit` y antes de `commit`; gateado por `uow.configuracion.control_stock_activo()`; por línea rastreada `with session.begin_nested(): uow.stock.agregar(...)`; `except Exception` capturada (log warning), nunca propagada
+- [x] 4.1 RED: toggle apagado ⇒ venta con líneas rastreadas no crea `MovimientoStock` — `tests/test_emitir_venta.py`
+- [x] 4.2 RED: toggle encendido ⇒ solo líneas `control_stock=true` generan movimiento `venta`
+- [x] 4.3 RED (INNEGOCIABLE): `uow.stock.agregar` lanza dentro del SAVEPOINT ⇒ venta `cobrada`+registro fiscal encadenado, sin `MovimientoStock`, sin abortar
+- [x] 4.4 RED: sobreventa (stock 1, vende 5) ⇒ saldo -4 y `rastreados_en_negativo` la cuenta
+- [x] 4.5 GREEN: `_efecto_stock(venta, usuario_id)` en `app/aplicacion/emitir_venta.py`, llamado tras `motor.emit` y antes de `commit`; gateado por `uow.configuracion.control_stock_activo()`; por línea rastreada `with session.begin_nested(): uow.stock.agregar(...)`; `except Exception` capturada (log warning), nunca propagada
 
 ## Phase 5: Endpoints
 

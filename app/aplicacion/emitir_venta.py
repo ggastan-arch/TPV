@@ -5,12 +5,16 @@ Orquesta el calculo de lineas (dominio) + la persistencia (sesion) + el motor fi
 y encadena en el mismo commit. Sin dependencias de HTTP."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from decimal import Decimal
 
 from app.aplicacion.lineas import ItemVenta, resolver_items
 from app.dominio.puertos import MotorFiscal, UnidadDeTrabajo
-from app.infraestructura.persistencia.modelos import Pago, Venta, VentaLinea
+from app.infraestructura.persistencia.modelos import MovimientoStock, Pago, Venta, VentaLinea
+from app.infraestructura.reloj import ahora_huso
+
+_log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -67,6 +71,8 @@ class EmitirVenta:
         # El motor es un adaptador de infraestructura y opera sobre la sesion (ADR-0001).
         registro = self.motor.emit(self.uow.session, venta)
 
+        self._efecto_stock(venta, usuario_id)
+
         total = venta.total_con_iva
         efectivo = sum((Decimal(p.importe) for p in pagos if p.medio == "efectivo"),
                        Decimal("0.00"))
@@ -76,3 +82,25 @@ class EmitirVenta:
             fecha=registro.fecha_expedicion, total=str(total), cambio=str(cambio))
         self.uow.commit()
         return resultado
+
+    def _efecto_stock(self, venta: Venta, usuario_id: int) -> None:
+        """Efecto de stock NO bloqueante (informativo, ver design.md "Punto critico").
+
+        Un fallo aqui NUNCA aborta la venta ni el registro fiscal ya flusheado
+        (invariante de cobro offline, CLAUDE.md): se aisla en un SAVEPOINT anidado
+        y se captura CUALQUIER excepcion sin propagarla. El `commit()` de la venta
+        se ejecuta despues, fuera de este try, para jamas enmascarar un fallo real
+        del cierre de la venta."""
+        if not self.uow.configuracion.control_stock_activo():
+            return
+        try:
+            with self.uow.session.begin_nested():  # SAVEPOINT sp_stock
+                for linea in venta.lineas:
+                    articulo = self.uow.articulos.buscar(linea.articulo_id)
+                    if articulo is not None and articulo.control_stock:
+                        self.uow.stock.agregar(MovimientoStock(
+                            tipo="venta", articulo_id=articulo.id, cantidad=linea.cantidad,
+                            venta_id=venta.id, usuario_id=usuario_id,
+                            fecha_hora_huso=ahora_huso()))
+        except Exception as exc:  # noqa: BLE001 - el stock jamas aborta la venta
+            _log.warning("efecto de stock no aplicado para venta %s: %s", venta.id, exc)
