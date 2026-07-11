@@ -174,3 +174,44 @@ def test_actualizar_tipo_iva_inexistente(cliente, admin, datos_base):
     r = cliente.put("/admin/api/maestros/tipos-iva/999999",
                     json={"nombre": "X", "porcentaje": "21.00"})
     assert r.status_code == 404
+
+
+# --- Maestros: familias --------------------------------------------------------
+def test_crear_familia_exige_sesion(cliente, datos_base):
+    assert cliente.post("/admin/api/maestros/familias",
+                        json={"nombre": "Peces"}).status_code == 401
+
+
+def test_crear_familia_ok(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/familias", json={"nombre": "Peces"})
+    assert r.status_code == 201
+    nuevo_id = r.json()["id"]
+    familias = cliente.get("/admin/api/maestros/familias").json()
+    assert any(f["id"] == nuevo_id and f["nombre"] == "Peces" for f in familias)
+
+
+def test_crear_familia_padre_inexistente(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/familias",
+                     json={"nombre": "Huerfana", "parent_id": 999999})
+    assert r.status_code == 422
+
+
+def test_reasignar_padre_ciclo_devuelve_422(cliente, admin, datos_base):
+    _login(cliente, admin)
+    padre = cliente.post("/admin/api/maestros/familias", json={"nombre": "Peces"}).json()["id"]
+    hijo = cliente.post("/admin/api/maestros/familias",
+                        json={"nombre": "Ciclidos", "parent_id": padre}).json()["id"]
+    # Intentar que el padre cuelgue de su hijo -> ciclo.
+    r = cliente.put(f"/admin/api/maestros/familias/{padre}",
+                    json={"nombre": "Peces", "parent_id": hijo})
+    assert r.status_code == 422
+
+
+def test_desactivar_familia_con_hijos_devuelve_409(cliente, admin, datos_base):
+    _login(cliente, admin)
+    padre = cliente.post("/admin/api/maestros/familias", json={"nombre": "Peces"}).json()["id"]
+    cliente.post("/admin/api/maestros/familias", json={"nombre": "Ciclidos", "parent_id": padre})
+    r = cliente.post(f"/admin/api/maestros/familias/{padre}/desactivar")
+    assert r.status_code == 409

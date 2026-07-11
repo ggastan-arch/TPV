@@ -72,6 +72,21 @@ class RepositorioFamiliasSQL:
     def buscar(self, familia_id: int) -> Familia | None:
         return self._s.get(Familia, familia_id)
 
+    def agregar(self, familia: Familia) -> None:
+        self._s.add(familia)
+
+    def listar(self, incluir_inactivos: bool = True) -> list[Familia]:
+        stmt = select(Familia).order_by(Familia.orden, Familia.nombre)
+        if not incluir_inactivos:
+            stmt = stmt.where(Familia.activo.is_(True))
+        return list(self._s.execute(stmt).scalars())
+
+    def hijos(self, familia_id: int, solo_activos: bool = False) -> list[Familia]:
+        stmt = select(Familia).where(Familia.parent_id == familia_id)
+        if solo_activos:
+            stmt = stmt.where(Familia.activo.is_(True))
+        return list(self._s.execute(stmt).scalars())
+
 
 class RepositorioAuditoriaSQL:
     def __init__(self, session: Session):

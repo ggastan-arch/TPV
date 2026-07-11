@@ -23,6 +23,14 @@ from app.aplicacion.articulos import (
     ServicioArticulos,
     TipoIvaNoExiste,
 )
+from app.aplicacion.familias import (
+    CicloEnFamilia,
+    DatosFamilia,
+    FamiliaConHijos,
+    FamiliaNoEncontrada,
+    FamiliaPadreNoExiste,
+    ServicioFamilias,
+)
 from app.aplicacion.tipos_iva import (
     DatosTipoIva,
     PorcentajeInvalido,
@@ -72,6 +80,14 @@ class TipoIvaReq(BaseModel):
     nombre: str
     porcentaje: Decimal
     calificacion: str = "S1"
+
+
+class FamiliaReq(BaseModel):
+    nombre: str
+    parent_id: int | None = None
+    orden: int = 0
+    color: str | None = None
+    imagen: str | None = None
 
 
 def _origen(request: Request) -> str:
@@ -316,4 +332,55 @@ def activar_tipo_iva(tipo_iva_id: int, request: Request,
         _servicio_tipos_iva(request, usuario_id, uow).activar(tipo_iva_id)
     except TipoIvaNoEncontrado:
         raise HTTPException(404, "Tipo de IVA no encontrado")
+    return {"ok": True}
+
+
+# --- Maestros: familias (escritura) --------------------------------------------
+def _servicio_familias(request: Request, usuario_id: int, uow) -> ServicioFamilias:
+    return ServicioFamilias(uow, usuario_id=usuario_id, origen=_origen(request))
+
+
+@router.post("/api/maestros/familias", status_code=201)
+def crear_familia(req: FamiliaReq, request: Request,
+                  usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        nuevo_id = _servicio_familias(request, usuario_id, uow).crear(DatosFamilia(**req.model_dump()))
+    except FamiliaPadreNoExiste:
+        raise HTTPException(422, "La familia padre indicada no existe")
+    return {"id": nuevo_id}
+
+
+@router.put("/api/maestros/familias/{familia_id}")
+def actualizar_familia(familia_id: int, req: FamiliaReq, request: Request,
+                       usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_familias(request, usuario_id, uow).actualizar(familia_id, DatosFamilia(**req.model_dump()))
+    except FamiliaNoEncontrada:
+        raise HTTPException(404, "Familia no encontrada")
+    except FamiliaPadreNoExiste:
+        raise HTTPException(422, "La familia padre indicada no existe")
+    except CicloEnFamilia:
+        raise HTTPException(422, "La reasignacion de padre crearia un ciclo en el arbol")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/familias/{familia_id}/desactivar")
+def desactivar_familia(familia_id: int, request: Request,
+                       usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_familias(request, usuario_id, uow).desactivar(familia_id)
+    except FamiliaNoEncontrada:
+        raise HTTPException(404, "Familia no encontrada")
+    except FamiliaConHijos:
+        raise HTTPException(409, "La familia tiene subfamilias activas; desactivelas primero")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/familias/{familia_id}/activar")
+def activar_familia(familia_id: int, request: Request,
+                    usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_familias(request, usuario_id, uow).activar(familia_id)
+    except FamiliaNoEncontrada:
+        raise HTTPException(404, "Familia no encontrada")
     return {"ok": True}
