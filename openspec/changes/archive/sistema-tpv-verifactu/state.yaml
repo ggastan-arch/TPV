@@ -1,0 +1,51 @@
+change: sistema-tpv-verifactu
+status: archived
+archived_at: "2026-07-11T09:00:00Z"
+phases_completed:
+  - proposal
+  - design
+  - specs
+  - tasks
+  - verify
+  - archive
+verification_status: PASS
+test_results: 161 passed
+architecture_check: clean (3 contracts kept, 0 broken)
+artifacts_consolidated: true
+specs_location: openspec/specs/
+
+phases:
+  proposal:
+    status: complete
+    topic_key: sdd/sistema-tpv-verifactu/proposal
+    artifact_count: 1
+  design:
+    status: complete
+    topic_key: sdd/sistema-tpv-verifactu/design
+    artifact_count: 1
+  specs:
+    status: complete
+    capabilities: [fundaciones-datos, motor-fiscal-verifactu, tpv-venta, consola-administracion, maestros-crud]
+    topic_keys:
+      - sdd/sistema-tpv-verifactu/spec-fundaciones-datos
+      - sdd/sistema-tpv-verifactu/spec-motor-fiscal-verifactu
+      - sdd/sistema-tpv-verifactu/spec-tpv-venta
+      - sdd/sistema-tpv-verifactu/spec-consola-administracion
+      - sdd/sistema-tpv-verifactu/spec-maestros-crud
+    consolidated_to: openspec/specs/{capability}/spec.md
+  tasks:
+    status: complete
+    topic_key: sdd/sistema-tpv-verifactu/tasks
+  verify:
+    status: PASS
+    topic_key: sdd/sistema-tpv-verifactu/verify-report
+    findings:
+      - type: CRITICAL
+        count: 0
+      - type: WARNING
+        count: 2
+      - type: SUGGESTION
+        count: 1
+  archive:
+    status: complete
+    topic_key: sdd/sistema-tpv-verifactu/archive-report

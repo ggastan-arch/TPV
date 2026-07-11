@@ -1,0 +1,83 @@
+schema: spec-driven
+
+context: |
+  TPV tactil monopuesto (acuariofilia, IRPF EO + recargo equivalencia).
+  SIF bajo RD 1007/2023 (RRSIF) + Orden HAC/1177/2024, modalidad VERI*FACTU.
+  Stack: Python 3.14 (>=3.12), FastAPI, SQLAlchemy 2.0 + SQLite WAL, Alembic, pytest.
+  Arquitectura hexagonal pragmatica (ADR-0001): dominio/aplicacion/infraestructura/
+  presentacion; modelos ORM = entidades. Retrofit SDD sobre codebase maduro (161 tests).
+
+retrofit: true
+
+testing:
+  strict_tdd: true
+  test_command: ".venv/Scripts/python -m pytest"
+  arch_command: "make arch"  # lint-imports (import-linter), verifica reglas hexagonales
+  frameworks:
+    - pytest
+    - httpx (FastAPI TestClient)
+  quality_tools:
+    linter: none
+    type_checker: none
+    formatter: none
+    architecture_linter: import-linter
+
+invariants_do_not_weaken:
+  - "Ninguna venta emitida ni registro fiscal se borra o edita (triggers de BD, ADR-0003)."
+  - "Numeracion correlativa sin huecos, asignada en la misma transaccion (ADR-0004)."
+  - "Registro de facturacion con huella SHA-256 encadenada por cada factura (ADR-0006/0007)."
+  - "Log de auditoria append-only para descuentos, anulaciones, aperturas de cajon, cambios de precio, imports, accesos admin."
+  - "Nada de 'modo formacion' ni tickets no contabilizados."
+  - "Horas con huso horario (ISO 8601 offset); verificar desviacion de reloj al arrancar."
+  - "El certificado electronico nunca sale del servidor ni se registra en logs."
+  - "Importes en Decimal, nunca float; redondeo half-up por linea en una unica funcion (ADR-0002/0005)."
+  - "Dominio puro en runtime (sin FastAPI/ORM/AEAT); regla verificada por import-linter (make arch)."
+
+authoritative_docs:
+  - CLAUDE.md
+  - docs/ARCHITECTURE.md
+  - docs/TPV_BIZKAITROPIK_consideraciones.md
+  - docs/VERIFACTU_ESQUEMAS_HAC1177.md
+  - docs/adr/0001-arquitectura-hexagonal-pragmatica.md
+  - docs/adr/0002-importes-decimal-en-texto.md
+  - docs/adr/0003-inmutabilidad-en-base-de-datos.md
+  - docs/adr/0004-numeracion-correlativa-sin-huecos.md
+  - docs/adr/0005-funcion-unica-de-redondeo.md
+  - docs/adr/0006-motor-fiscal-intercambiable.md
+  - docs/adr/0007-huella-conforme-orden-art13.md
+  - docs/adr/0008-modalidad-verifactu.md
+
+precedence_on_conflict: "normativa (HAC1177) > consideraciones de negocio > CLAUDE.md > este config"
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Never propose weakening an item in invariants_do_not_weaken; flag it as blocked instead
+    - For fiscal-adjacent changes, cite the relevant ADR or normativa section
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Reference existing invariants instead of restating them ad hoc
+  design:
+    - Include sequence diagrams for complex flows (fiscal emission, remisión queue)
+    - Document architecture decisions with rationale; add a new ADR draft if a decision changes an existing one
+    - Respect hexagonal layering (dominio/aplicacion/infraestructura/presentacion) per ADR-0001
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Every task touching fiscal logic must include its invariant test as an explicit subtask
+  apply:
+    - Follow existing code patterns (repositorios/puertos, casos de uso finos, comentarios en español)
+    - Never add DELETE/UPDATE over ventas o registros emitidos
+    - Never parallelize the fingerprint chain
+    tdd: true
+    test_command: ".venv/Scripts/python -m pytest"
+    arch_command: "make arch"
+  verify:
+    test_command: ".venv/Scripts/python -m pytest"
+    build_command: ""
+    arch_command: "make arch"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
+    - Warn loudly if a delta touches an invariant in invariants_do_not_weaken
