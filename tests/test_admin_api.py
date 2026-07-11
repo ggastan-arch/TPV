@@ -100,3 +100,47 @@ def test_reintentar_sin_certificado(cliente, admin):
     cuerpo = r.json()
     assert cuerpo["ok"] is False
     assert "Certificado" in cuerpo["mensaje"]
+
+
+# --- Maestros: alta/edicion/baja de articulos ----------------------------------
+def _nuevo_articulo(datos_base, **extra):
+    cuerpo = {"nombre": "Neon cardenal", "nombre_corto": "Neon",
+              "tipo_iva_id": datos_base["iva21_id"], "pvp": "2.50"}
+    cuerpo.update(extra)
+    return cuerpo
+
+
+def test_crear_articulo_exige_sesion(cliente, datos_base):
+    assert cliente.post("/admin/api/maestros/articulos",
+                        json=_nuevo_articulo(datos_base)).status_code == 401
+
+
+def test_crear_articulo_ok(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/articulos", json=_nuevo_articulo(datos_base))
+    assert r.status_code == 201
+    nuevo_id = r.json()["id"]
+    articulos = cliente.get("/admin/api/maestros/articulos").json()
+    assert any(a["id"] == nuevo_id and a["nombre"] == "Neon cardenal" for a in articulos)
+
+
+def test_crear_articulo_tipo_iva_inexistente(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/articulos",
+                     json=_nuevo_articulo(datos_base, tipo_iva_id=999999))
+    assert r.status_code == 422
+
+
+def test_actualizar_articulo_inexistente(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.put("/admin/api/maestros/articulos/999999", json=_nuevo_articulo(datos_base))
+    assert r.status_code == 404
+
+
+def test_desactivar_articulo(cliente, admin, datos_base):
+    _login(cliente, admin)
+    nuevo_id = cliente.post("/admin/api/maestros/articulos",
+                            json=_nuevo_articulo(datos_base)).json()["id"]
+    assert cliente.post(f"/admin/api/maestros/articulos/{nuevo_id}/desactivar").status_code == 200
+    articulos = cliente.get("/admin/api/maestros/articulos").json()
+    assert any(a["id"] == nuevo_id and a["activo"] is False for a in articulos)

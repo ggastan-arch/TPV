@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from app.infraestructura.persistencia.modelos.maestros import Articulo
+    from app.infraestructura.persistencia.modelos.maestros import Articulo, Familia, TipoIVA
     from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
     from app.infraestructura.persistencia.modelos.operacion import Usuario
     from app.infraestructura.persistencia.modelos.venta import Venta
@@ -27,6 +27,16 @@ class MotorFiscal(Protocol):
 class RepositorioArticulos(Protocol):
     def buscar(self, articulo_id: int) -> "Articulo | None": ...
     def buscar_por_codigo(self, codigo: str) -> "Articulo | None": ...
+    def agregar(self, articulo: "Articulo") -> None: ...
+    def listar(self, incluir_inactivos: bool = True) -> list["Articulo"]: ...
+
+
+class RepositorioTiposIva(Protocol):
+    def buscar(self, tipo_iva_id: int) -> "TipoIVA | None": ...
+
+
+class RepositorioFamilias(Protocol):
+    def buscar(self, familia_id: int) -> "Familia | None": ...
 
 
 class RepositorioVentas(Protocol):
@@ -36,6 +46,13 @@ class RepositorioVentas(Protocol):
 
 class RepositorioUsuarios(Protocol):
     def buscar(self, usuario_id: int) -> "Usuario | None": ...
+
+
+class RepositorioAuditoria(Protocol):
+    def registrar(
+        self, *, accion: str, entidad: str | None = None, entidad_id: str | None = None,
+        detalle: str | None = None, usuario_id: int | None = None, origen: str = "local",
+    ) -> None: ...
 
 
 class RepositorioRegistros(Protocol):
@@ -64,10 +81,14 @@ class UnidadDeTrabajo(Protocol):
     """
 
     articulos: RepositorioArticulos
+    tipos_iva: RepositorioTiposIva
+    familias: RepositorioFamilias
     ventas: RepositorioVentas
     usuarios: RepositorioUsuarios
     registros: RepositorioRegistros
+    auditoria: RepositorioAuditoria
     session: "Session"
 
+    def flush(self) -> None: ...
     def commit(self) -> None: ...
     def rollback(self) -> None: ...

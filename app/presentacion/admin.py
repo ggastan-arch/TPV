@@ -16,6 +16,13 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.aplicacion.articulos import (
+    ArticuloNoEncontrado,
+    DatosArticulo,
+    FamiliaNoExiste,
+    ServicioArticulos,
+    TipoIvaNoExiste,
+)
 from app.presentacion.deps import get_session, get_uow
 from app.infraestructura.config import settings
 from app.infraestructura.reloj import ahora_huso
@@ -38,6 +45,21 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 class LoginAdminReq(BaseModel):
     nombre: str
     password: str
+
+
+class ArticuloReq(BaseModel):
+    nombre: str
+    nombre_corto: str
+    tipo_iva_id: int
+    pvp: Decimal
+    familia_id: int | None = None
+    coste: Decimal | None = None
+    control_stock: bool = False
+    precio_libre: bool = False
+    requiere_cites: bool = False
+    color_boton: str | None = None
+    icono: str | None = None
+    codigos: list[str] = []
 
 
 def _origen(request: Request) -> str:
@@ -185,3 +207,54 @@ def maestros_usuarios(_: int = Depends(require_admin), s: Session = Depends(get_
     # Nunca se expone el hash del PIN.
     return [{"id": u.id, "nombre": u.nombre, "rol": u.rol, "activo": u.activo}
             for u in s.execute(select(Usuario).order_by(Usuario.nombre)).scalars()]
+
+
+# --- Maestros: articulos (escritura) -------------------------------------------
+def _servicio_articulos(request: Request, usuario_id: int, uow) -> ServicioArticulos:
+    return ServicioArticulos(uow, usuario_id=usuario_id, origen=_origen(request))
+
+
+@router.post("/api/maestros/articulos", status_code=201)
+def crear_articulo(req: ArticuloReq, request: Request,
+                   usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        nuevo_id = _servicio_articulos(request, usuario_id, uow).crear(DatosArticulo(**req.model_dump()))
+    except TipoIvaNoExiste:
+        raise HTTPException(422, "El tipo de IVA indicado no existe")
+    except FamiliaNoExiste:
+        raise HTTPException(422, "La familia indicada no existe")
+    return {"id": nuevo_id}
+
+
+@router.put("/api/maestros/articulos/{articulo_id}")
+def actualizar_articulo(articulo_id: int, req: ArticuloReq, request: Request,
+                        usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_articulos(request, usuario_id, uow).actualizar(articulo_id, DatosArticulo(**req.model_dump()))
+    except ArticuloNoEncontrado:
+        raise HTTPException(404, "Articulo no encontrado")
+    except TipoIvaNoExiste:
+        raise HTTPException(422, "El tipo de IVA indicado no existe")
+    except FamiliaNoExiste:
+        raise HTTPException(422, "La familia indicada no existe")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/articulos/{articulo_id}/desactivar")
+def desactivar_articulo(articulo_id: int, request: Request,
+                        usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_articulos(request, usuario_id, uow).desactivar(articulo_id)
+    except ArticuloNoEncontrado:
+        raise HTTPException(404, "Articulo no encontrado")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/articulos/{articulo_id}/activar")
+def activar_articulo(articulo_id: int, request: Request,
+                     usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_articulos(request, usuario_id, uow).activar(articulo_id)
+    except ArticuloNoEncontrado:
+        raise HTTPException(404, "Articulo no encontrado")
+    return {"ok": True}
