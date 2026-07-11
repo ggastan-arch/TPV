@@ -46,6 +46,7 @@ from app.aplicacion.familias import (
     FamiliaPadreNoExiste,
     ServicioFamilias,
 )
+from app.aplicacion.generar_cierre_z import GenerarCierreZ
 from app.aplicacion.tipos_iva import (
     DatosTipoIva,
     PorcentajeInvalido,
@@ -550,3 +551,52 @@ def activar_usuario(usuario_objetivo_id: int, request: Request,
     except UsuarioNoEncontrado:
         raise HTTPException(404, "Usuario no encontrado")
     return {"ok": True}
+
+
+# --- Maestros: cierres Z (informe Z inmutable) ---------------------------------
+def _cierre_z_resumen(cierre) -> dict:
+    return {
+        "numero": cierre.numero,
+        "fecha_hora_huso": cierre.fecha_hora_huso,
+        "desde_orden": cierre.desde_orden,
+        "hasta_orden": cierre.hasta_orden,
+        "num_tickets": cierre.num_tickets,
+        "base_total": str(cierre.base_total),
+        "cuota_total": str(cierre.cuota_total),
+        "total_con_iva": str(cierre.total_con_iva),
+    }
+
+
+def _cierre_z_detalle(cierre) -> dict:
+    resumen = _cierre_z_resumen(cierre)
+    resumen["desglose_iva"] = [
+        {"tipo_impositivo": str(d.tipo_impositivo), "base_imponible": str(d.base_imponible),
+         "cuota_repercutida": str(d.cuota_repercutida)}
+        for d in cierre.desglose_iva
+    ]
+    resumen["desglose_pago"] = [
+        {"medio": d.medio, "importe": str(d.importe)} for d in cierre.desglose_pago
+    ]
+    return resumen
+
+
+@router.post("/api/maestros/cierres-z", status_code=201)
+def generar_cierre_z(request: Request, usuario_id: int = Depends(require_admin),
+                     uow=Depends(get_uow)) -> dict:
+    # `GenerarCierreZ` ya audita la generacion internamente (accion="generar_cierre_z");
+    # no se duplica la auditoria aqui.
+    resultado = GenerarCierreZ(uow).ejecutar(usuario_id=usuario_id, origen=_origen(request))
+    return _cierre_z_resumen(resultado)
+
+
+@router.get("/api/maestros/cierres-z")
+def listar_cierres_z(_: int = Depends(require_admin), uow=Depends(get_uow)) -> list[dict]:
+    return [_cierre_z_resumen(c) for c in uow.cierres_z.listar()]
+
+
+@router.get("/api/maestros/cierres-z/{numero}")
+def detalle_cierre_z(numero: int, _: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    cierre = uow.cierres_z.buscar(numero)
+    if cierre is None:
+        raise HTTPException(404, "Cierre Z no encontrado")
+    return _cierre_z_detalle(cierre)

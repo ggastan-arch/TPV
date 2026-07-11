@@ -63,12 +63,12 @@ sola pasada. Auto-revisar por checkpoint antes del commit final, no de un tirón
 
 ## Fase 6: Endpoints `/admin`
 
-- [ ] 6.1 RED: `tests/test_cierre_z_api.py` — POST/GET sin sesión → 401 (patrón `test_admin_api.py`); falla.
-- [ ] 6.2 RED: sumar escenarios — POST autenticado crea `CierreZ` + fila `log_auditoria`; GET lista; GET detalle por número (404 si no existe).
-- [ ] 6.3 GREEN: en `app/presentacion/admin.py` — `POST /api/cierres-z`, `GET /api/cierres-z`, `GET /api/cierres-z/{numero}` con `Depends(require_admin)` + `Depends(get_uow)`, invocando `GenerarCierreZ`.
-- [ ] 6.4 GREEN: tests 6.1/6.2 verdes.
+- [x] 6.1 RED: `tests/test_cierre_z_api.py` — POST/GET sin sesión → 401 (patrón `test_admin_api.py`); falla.
+- [x] 6.2 RED: sumar escenarios — POST autenticado crea `CierreZ` + fila `log_auditoria`; GET lista; GET detalle por número (404 si no existe).
+- [x] 6.3 GREEN: en `app/presentacion/admin.py` — `POST /api/maestros/cierres-z`, `GET /api/maestros/cierres-z`, `GET /api/maestros/cierres-z/{numero}` con `Depends(require_admin)` + `Depends(get_uow)`, invocando `GenerarCierreZ` (ruta bajo `/api/maestros/*` por coherencia con el resto de maestros, ver Deviations en apply-progress).
+- [x] 6.4 GREEN: tests 6.1/6.2 verdes.
 
 ## Fase 7: Verificación final
 
-- [ ] 7.1 `.venv/Scripts/python -m pytest` completo: 189 tests previos + nuevos, todo verde (sin regresión).
-- [ ] 7.2 `make arch` (import-linter): `generar_cierre_z.py` solo importa puertos + modelos, capas hexagonales respetadas.
+- [x] 7.1 `.venv/Scripts/python -m pytest` completo: 210 tests previos + 8 nuevos = 218, todo verde (sin regresión).
+- [x] 7.2 `lint-imports` (import-linter): 3 contratos KEPT, `generar_cierre_z.py` solo importa puertos + modelos, capas hexagonales respetadas.
