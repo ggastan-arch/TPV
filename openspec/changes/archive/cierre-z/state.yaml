@@ -1,0 +1,87 @@
+# SDD Change State: cierre-z
+
+change_name: cierre-z
+status: archived
+archived_date: 2026-07-11
+
+## Phases Completed
+phases:
+  proposal:
+    status: completed
+    artifact: proposal.md
+  spec:
+    status: completed
+    artifact: specs/cierre-z/spec.md
+  design:
+    status: completed
+    artifact: design.md
+  tasks:
+    status: completed
+    artifact: tasks.md
+    total_tasks: 30
+    completed_tasks: 30
+  apply:
+    status: completed
+    batches:
+      - tanda_a:
+          commit: 187570d
+          description: "Modelos ORM + triggers + migraciones"
+      - tanda_b:
+          commit: 78c16bc
+          description: "Puertos, adaptadores y caso de uso"
+      - tanda_c:
+          commit: cf0c874
+          description: "Endpoints /admin/api/maestros/cierres-z + verificación final"
+  verify:
+    status: completed
+    verdict: PASS WITH WARNINGS
+    critical_issues: 0
+    warnings: 1
+    suggestions: 1
+    tests_passed: 219
+    tests_total: 219
+    lint_status: "3 kept, 0 broken"
+    report_id: 173
+
+## Test Execution
+testing:
+  mode: strict_tdd
+  total_tests: 219
+  passed: 219
+  failed: 0
+  import_linter:
+    contracts: 3
+    kept: 3
+    broken: 0
+
+## Verification Details
+verification:
+  compliance_matrix: "8/8 requirements implemented (1 scenario mitigated, not blocking)"
+  correctness: "All spec requirements verified"
+  migration_verified: true
+  snapshot_immutability: true
+  numeracion_warning: "WARNING: Concurrency test for Z-numbering (GenerarCierreZ) not dedicated; mitigated by BEGIN IMMEDIATE architecture already proven under contention"
+  concurrency_test_added: true
+  concurrency_test_file: "tests/test_cierre_z_concurrencia.py"
+
+## Commits
+commits:
+  - commit: 187570d
+    description: "Tanda A: Modelos ORM CierreZ + triggers de inmutabilidad + migración"
+    author: applied
+  - commit: 78c16bc
+    description: "Tanda B: Puertos/adaptadores RepositorioCierresZ + caso de uso GenerarCierreZ + snapshot tests"
+    author: applied
+  - commit: cf0c874
+    description: "Tanda C: Endpoints /admin/api/maestros/cierres-z + test de API + verify final"
+    author: applied
+
+## Spec Consolidation
+spec_consolidation:
+  source: "openspec/changes/cierre-z/specs/cierre-z/spec.md"
+  destination: "openspec/specs/cierre-z/spec.md"
+  status: "merged"
+  requirements_count: 8
+
+## Archive Location
+archive_location: "openspec/changes/archive/2026-07-11-cierre-z/"
