@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.infraestructura.persistencia.modelos.base import Base
 from app.infraestructura.persistencia.modelos.botonera import Boton, FUNCIONES, PaginaBotonera, PerfilBotonera
+from app.infraestructura.persistencia.modelos.cierre_z import CierreZ, CierreZDesgloseIva, CierreZDesglosePago
 from app.infraestructura.persistencia.modelos.fiscal import (
     ContadorSerie,
     ESTADOS_REMISION,
@@ -28,6 +29,9 @@ __all__ = [
     "Cliente",
     "Serie",
     "ContadorSerie",
+    "CierreZ",
+    "CierreZDesgloseIva",
+    "CierreZDesglosePago",
     "Venta",
     "VentaLinea",
     "Pago",

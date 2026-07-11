@@ -3,14 +3,18 @@
 Envuelven una `Session`. Las entidades son los modelos ORM (ADR-0001)."""
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.dominio.puertos import TotalesRangoZ
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.persistencia.modelos import (
     Articulo,
+    CierreZ,
     Cliente,
     CodigoBarras,
     Familia,
@@ -211,6 +215,14 @@ class RepositorioRegistrosSQL:
         stmt = select(RegistroFiscal).order_by(RegistroFiscal.orden.desc()).limit(limite)
         return list(self._s.execute(stmt).scalars())
 
+    def max_orden_alta(self) -> int:
+        """Mayor `orden` entre los registros de tipo alta (0 si no existe ninguno).
+        Fija `hasta_orden` del Cierre Z (ver design.md, mecanismo de rango)."""
+        stmt = select(func.max(RegistroFiscal.orden)).where(
+            RegistroFiscal.tipo_registro == "alta"
+        )
+        return self._s.execute(stmt).scalar_one_or_none() or 0
+
     def registrar_resultado(
         self, registro: RegistroFiscal, resultado: str, *,
         codigo_error: str | None = None, descripcion: str | None = None,
@@ -233,3 +245,76 @@ class RepositorioRegistrosSQL:
             .limit(1)
         )
         return self._s.execute(stmt).scalars().first()
+
+
+class RepositorioCierresZSQL:
+    """Cierre Z: snapshot inmutable derivado por rango de `registro_fiscal.orden`.
+    Solo LECTURA sobre `venta`/`registro_fiscal` (invariante 1); jamas los muta."""
+
+    def __init__(self, session: Session):
+        self._s = session
+
+    def ultimo(self) -> CierreZ | None:
+        stmt = select(CierreZ).order_by(CierreZ.numero.desc()).limit(1)
+        return self._s.execute(stmt).scalars().first()
+
+    def agregar(self, cierre: CierreZ) -> None:
+        self._s.add(cierre)
+
+    def buscar(self, numero: int) -> CierreZ | None:
+        stmt = select(CierreZ).where(CierreZ.numero == numero)
+        return self._s.execute(stmt).scalars().first()
+
+    def listar(self, limite: int = 100) -> list[CierreZ]:
+        stmt = select(CierreZ).order_by(CierreZ.numero.desc()).limit(limite)
+        return list(self._s.execute(stmt).scalars())
+
+    def cobradas_por_rango_orden(self, desde_orden: int, hasta_orden: int) -> TotalesRangoZ:
+        """Agrega totales y desgloses de las ventas `cobrada` cuyo registro de ALTA
+        tiene `orden` en [desde_orden, hasta_orden]. Rango vacio -> totales en cero
+        (Z a cero permitido, ver design.md)."""
+        if hasta_orden < desde_orden:
+            return TotalesRangoZ(
+                num_tickets=0, base_total=Decimal("0.00"), cuota_total=Decimal("0.00"),
+                total_con_iva=Decimal("0.00"), desglose_iva=[], desglose_pago=[],
+            )
+
+        stmt = (
+            select(Venta)
+            .join(RegistroFiscal, RegistroFiscal.venta_id == Venta.id)
+            .where(
+                RegistroFiscal.tipo_registro == "alta",
+                RegistroFiscal.orden >= desde_orden,
+                RegistroFiscal.orden <= hasta_orden,
+                Venta.estado == "cobrada",
+            )
+        )
+        ventas = list(self._s.execute(stmt).scalars())
+
+        base_total = Decimal("0.00")
+        cuota_total = Decimal("0.00")
+        total_con_iva = Decimal("0.00")
+        bases_iva: dict[Decimal, Decimal] = defaultdict(lambda: Decimal("0.00"))
+        cuotas_iva: dict[Decimal, Decimal] = defaultdict(lambda: Decimal("0.00"))
+        por_medio: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
+
+        for venta in ventas:
+            base_total += venta.base_total
+            cuota_total += venta.cuota_total
+            total_con_iva += venta.total_con_iva
+            for linea in venta.lineas:
+                bases_iva[linea.tipo_iva_porcentaje] += linea.base_linea
+                cuotas_iva[linea.tipo_iva_porcentaje] += linea.cuota_linea
+            for pago in venta.pagos:
+                por_medio[pago.medio] += pago.importe
+
+        return TotalesRangoZ(
+            num_tickets=len(ventas),
+            base_total=base_total,
+            cuota_total=cuota_total,
+            total_con_iva=total_con_iva,
+            desglose_iva=[
+                (tipo, bases_iva[tipo], cuotas_iva[tipo]) for tipo in sorted(bases_iva)
+            ],
+            desglose_pago=sorted(por_medio.items()),
+        )

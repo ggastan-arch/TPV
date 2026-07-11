@@ -6,15 +6,31 @@ en la variante pragmatica las firmas usan las entidades ORM como tipos.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
+    from app.infraestructura.persistencia.modelos.cierre_z import CierreZ
     from app.infraestructura.persistencia.modelos.maestros import Articulo, Cliente, Familia, TipoIVA
     from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
     from app.infraestructura.persistencia.modelos.operacion import Usuario
     from app.infraestructura.persistencia.modelos.venta import Venta
+
+
+@dataclass
+class TotalesRangoZ:
+    """Agregado de las ventas cobradas de un rango de `registro_fiscal.orden`
+    (registros de alta). Usado por `GenerarCierreZ` para congelar el snapshot."""
+
+    num_tickets: int
+    base_total: Decimal
+    cuota_total: Decimal
+    total_con_iva: Decimal
+    desglose_iva: list[tuple[Decimal, Decimal, Decimal]]  # (tipo_impositivo, base, cuota)
+    desglose_pago: list[tuple[str, Decimal]]  # (medio, importe)
 
 
 class MotorFiscal(Protocol):
@@ -86,6 +102,18 @@ class RepositorioRegistros(Protocol):
         codigo_error: str | None = None, descripcion: str | None = None,
         csv: str | None = None,
     ) -> None: ...
+    def max_orden_alta(self) -> int: ...
+
+
+class RepositorioCierresZ(Protocol):
+    """Acceso al Cierre Z: snapshot inmutable (invariante 1) derivado por rango de
+    `registro_fiscal.orden`. Nunca se actualiza ni se borra un Cierre Z persistido."""
+
+    def ultimo(self) -> "CierreZ | None": ...
+    def agregar(self, cierre: "CierreZ") -> None: ...
+    def buscar(self, numero: int) -> "CierreZ | None": ...
+    def listar(self, limite: int = 100) -> list["CierreZ"]: ...
+    def cobradas_por_rango_orden(self, desde_orden: int, hasta_orden: int) -> TotalesRangoZ: ...
 
 
 class UnidadDeTrabajo(Protocol):
@@ -103,6 +131,7 @@ class UnidadDeTrabajo(Protocol):
     usuarios: RepositorioUsuarios
     registros: RepositorioRegistros
     auditoria: RepositorioAuditoria
+    cierres_z: RepositorioCierresZ
     session: "Session"
 
     def flush(self) -> None: ...

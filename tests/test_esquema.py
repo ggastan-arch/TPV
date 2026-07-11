@@ -41,5 +41,11 @@ def test_triggers_de_inmutabilidad_instalados(engine):
         "trg_log_auditoria_no_delete",
         "trg_movimiento_stock_no_update",
         "trg_movimiento_stock_no_delete",
+        "trg_cierre_z_no_update",
+        "trg_cierre_z_no_delete",
+        "trg_cierre_z_desglose_iva_no_update",
+        "trg_cierre_z_desglose_iva_no_delete",
+        "trg_cierre_z_desglose_pago_no_update",
+        "trg_cierre_z_desglose_pago_no_delete",
     }
     assert esperados <= nombres, f"Faltan triggers: {esperados - nombres}"

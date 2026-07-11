@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.infraestructura.persistencia.repositorios import (
     RepositorioArticulosSQL,
     RepositorioAuditoriaSQL,
+    RepositorioCierresZSQL,
     RepositorioClientesSQL,
     RepositorioFamiliasSQL,
     RepositorioRegistrosSQL,
@@ -26,6 +27,7 @@ class UnidadDeTrabajoSQL:
         self.usuarios = RepositorioUsuariosSQL(session)
         self.registros = RepositorioRegistrosSQL(session)
         self.auditoria = RepositorioAuditoriaSQL(session)
+        self.cierres_z = RepositorioCierresZSQL(session)
 
     def flush(self) -> None:
         self.session.flush()

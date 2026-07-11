@@ -241,3 +241,58 @@ DROP_TRIGGERS_REMISION: list[str] = [
     "DROP TRIGGER IF EXISTS trg_remision_intento_no_update;",
     "DROP TRIGGER IF EXISTS trg_remision_intento_no_delete;",
 ]
+
+# --- Triggers de la migracion 0003 (Cierre Z: snapshot inmutable, sin excepciones) ---
+TRIGGERS_CIERRE_Z: list[str] = [
+    """
+    CREATE TRIGGER trg_cierre_z_no_update
+    BEFORE UPDATE ON cierre_z
+    BEGIN
+        SELECT RAISE(ABORT, 'Cierre Z inmutable: no se puede modificar');
+    END;
+    """,
+    """
+    CREATE TRIGGER trg_cierre_z_no_delete
+    BEFORE DELETE ON cierre_z
+    BEGIN
+        SELECT RAISE(ABORT, 'Cierre Z inmutable: no se puede borrar');
+    END;
+    """,
+    """
+    CREATE TRIGGER trg_cierre_z_desglose_iva_no_update
+    BEFORE UPDATE ON cierre_z_desglose_iva
+    BEGIN
+        SELECT RAISE(ABORT, 'Desglose de IVA del Cierre Z inmutable');
+    END;
+    """,
+    """
+    CREATE TRIGGER trg_cierre_z_desglose_iva_no_delete
+    BEFORE DELETE ON cierre_z_desglose_iva
+    BEGIN
+        SELECT RAISE(ABORT, 'Desglose de IVA del Cierre Z inmutable');
+    END;
+    """,
+    """
+    CREATE TRIGGER trg_cierre_z_desglose_pago_no_update
+    BEFORE UPDATE ON cierre_z_desglose_pago
+    BEGIN
+        SELECT RAISE(ABORT, 'Desglose de pago del Cierre Z inmutable');
+    END;
+    """,
+    """
+    CREATE TRIGGER trg_cierre_z_desglose_pago_no_delete
+    BEFORE DELETE ON cierre_z_desglose_pago
+    BEGIN
+        SELECT RAISE(ABORT, 'Desglose de pago del Cierre Z inmutable');
+    END;
+    """,
+]
+
+DROP_TRIGGERS_CIERRE_Z: list[str] = [
+    "DROP TRIGGER IF EXISTS trg_cierre_z_no_update;",
+    "DROP TRIGGER IF EXISTS trg_cierre_z_no_delete;",
+    "DROP TRIGGER IF EXISTS trg_cierre_z_desglose_iva_no_update;",
+    "DROP TRIGGER IF EXISTS trg_cierre_z_desglose_iva_no_delete;",
+    "DROP TRIGGER IF EXISTS trg_cierre_z_desglose_pago_no_update;",
+    "DROP TRIGGER IF EXISTS trg_cierre_z_desglose_pago_no_delete;",
+]
