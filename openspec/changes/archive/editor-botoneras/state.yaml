@@ -1,0 +1,126 @@
+changeName: editor-botoneras
+project: tpv
+artifactStore: openspec
+status: archived
+createdDate: 2026-07-11
+archivedDate: 2026-07-12
+
+# Phases completed
+phases:
+  proposal:
+    status: completed
+    artifact: proposal.md
+    createdDate: 2026-07-11T20:39:27Z
+  spec:
+    status: completed
+    artifact: specs/editor-botoneras/spec.md
+    createdDate: 2026-07-11T20:44:30Z
+  design:
+    status: completed
+    artifact: design.md
+    createdDate: 2026-07-11T20:45:59Z
+  tasks:
+    status: completed
+    artifact: tasks.md
+    createdDate: 2026-07-11T21:39:13Z
+  apply:
+    status: completed
+    artifact: apply-progress.md
+    batches:
+      - batch: 1a
+        description: Validador puro + RepositorioBotonera
+        commit: 9b37c63
+        completedDate: 2026-07-11
+      - batch: 1b
+        description: ServicioBotonera + endpoints admin + compatibilidad TPV
+        commit: db8b980
+        completedDate: 2026-07-11
+      - batch: 2
+        description: Editor drag&drop + cierre del rango 1-12
+        commit: 29fa2c4
+        completedDate: 2026-07-12
+  verify:
+    status: completed
+    artifact: verify-report.md
+    verdict: PASS
+    createdDate: 2026-07-11T22:26:07Z
+    findings:
+      criticalIssues: 0
+      warnings: 1
+      suggestions: 1
+      warningClosure: "Rango 1-12 en guardar_layout cerrado en commit 29fa2c4 (validación en servicio + mapeo a 422 + 2 tests)"
+  archive:
+    status: completed
+    artifact: archive-report.md
+    createdDate: 2026-07-12
+
+# Verification evidence
+verification:
+  testSuite:
+    total: 350
+    passed: 350
+    failed: 0
+    status: PASS
+  contractCheck:
+    tool: import-linter
+    contracts:
+      - name: contract-1
+        status: KEPT
+      - name: contract-2
+        status: KEPT
+      - name: contract-3
+        status: KEPT
+    broken: 0
+    status: PASS
+  criticalIssues: 0
+
+# Commits
+commits:
+  - hash: 9b37c63
+    batch: 1a
+    message: "Tanda 1a: validador puro validar_layout_botonera + RepositorioBotonera"
+  - hash: db8b980
+    batch: 1b
+    message: "Tanda 1b: ServicioBotonera + endpoints /admin/api/botonera/* + test compatibilidad TPV"
+  - hash: 29fa2c4
+    batch: 2
+    message: "Tanda 2: editor drag&drop + cierre de validación de rango 1-12 en guardar_layout"
+
+# Implementation summary
+implementation:
+  backend:
+    - app/dominio/servicios/botonera.py (nueva, función pura validar_layout_botonera)
+    - app/aplicacion/botoneras.py (nueva, ServicioBotonera)
+    - app/dominio/puertos.py (modificada, Protocol RepositorioBotonera)
+    - app/infraestructura/persistencia/repositorios.py (modificada, RepositorioBotoneraSQL)
+    - app/infraestructura/persistencia/unidad_de_trabajo.py (modificada, self.botoneras)
+    - app/presentacion/admin.py (modificada, endpoints /admin/api/botonera/*)
+  frontend:
+    - app/ui/admin.html (modificada, pestaña botoneras con editor drag&drop)
+  tests:
+    - tests/test_botonera_dominio.py (nueva, validación función pura)
+    - tests/test_botonera_repositorio.py (nueva, persistencia)
+    - tests/test_botonera_casos_uso.py (nueva, servicios)
+    - tests/test_botonera_admin_api.py (nueva, endpoints)
+    - tests/test_tpv_api.py (modificada, test compatibilidad botonera)
+
+# Manual verification pending
+manualVerificationItems:
+  - description: Checklist de verificación manual del editor en navegador (Tarea 7)
+    status: PENDING
+    impact: "No bloquea cierre del código. Requiere ejecución humana en navegador real."
+    checklist:
+      - "Crear un perfil nuevo, agregarle una página, colocar 3+ botones de distinto destino y guardar"
+      - "Arrastrar un botón fuera de límites, guardar: backend rechaza (422)"
+      - "Solapar dos botones y guardar: mismo comportamiento de rechazo"
+      - "Redimensionar un botón fuera de rejilla: guardar rechaza"
+      - "Crear dos perfiles, activar el segundo, confirmar en UI que el primero quedó inactivo"
+      - "Borrar una página con botones: confirmar desaparición sin residuos"
+      - "Borrar el ÚLTIMO perfil (activo): confirmar que UI no rompe"
+      - "Verificar en TPV (/tpv) que el layout se refleja tras recargar"
+
+notes:
+  - "El WARNING del rango 1-12 en guardar_layout (detectado en verify) fue cerrado en commit 29fa2c4"
+  - "El checklist manual del editor queda como item humano pendiente, no bloquea archivo"
+  - "Cambio aditivo, no toca ventas ni registros fiscales"
+  - "Rollback simple: quitar endpoints nuevos, UI editor, servicio y repo"
