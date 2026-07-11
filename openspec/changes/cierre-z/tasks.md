@@ -51,15 +51,15 @@ sola pasada. Auto-revisar por checkpoint antes del commit final, no de un tirón
 
 ## Fase 4: Caso de uso `GenerarCierreZ`
 
-- [ ] 4.1 RED: `tests/test_cierre_z_generar.py` — numeración correlativa Z-1, Z-2… y `UniqueConstraint`; falla (no existe `GenerarCierreZ`).
-- [ ] 4.2 RED: sumar escenarios — rango contiguo (`desde_n = hasta_{n-1}+1`), cuadre de totales/desglose IVA y pago, Z a cero (0 tickets, totales 0.00, sin excepción), ticket aparcado emitido tras un cierre cae en el Z siguiente por `registro_fiscal.orden`.
-- [ ] 4.3 GREEN: crear `app/aplicacion/generar_cierre_z.py` — `GenerarCierreZ.ejecutar(usuario_id, origen="local") -> ResultadoCierreZ`: `BEGIN IMMEDIATE`, `ultimo()`, `max_orden_alta()`, `cobradas_por_rango_orden`, `agregar()`+`flush()`, `auditoria.registrar(...)`, `commit()`. Rango vacío NO lanza excepción (requisito resuelto).
-- [ ] 4.4 GREEN: tests 4.1/4.2 verdes.
+- [x] 4.1 RED: `tests/test_cierre_z_generar.py` — numeración correlativa Z-1, Z-2… y `UniqueConstraint`; falla (no existe `GenerarCierreZ`).
+- [x] 4.2 RED: sumar escenarios — rango contiguo (`desde_n = hasta_{n-1}+1`), cuadre de totales/desglose IVA y pago, Z a cero (0 tickets, totales 0.00, sin excepción), ticket aparcado emitido tras un cierre cae en el Z siguiente por `registro_fiscal.orden`.
+- [x] 4.3 GREEN: crear `app/aplicacion/generar_cierre_z.py` — `GenerarCierreZ.ejecutar(usuario_id, origen="local") -> ResultadoCierreZ`: `BEGIN IMMEDIATE`, `ultimo()`, `max_orden_alta()`, `cobradas_por_rango_orden`, `agregar()`+`flush()`, `auditoria.registrar(...)`, `commit()`. Rango vacío NO lanza excepción (requisito resuelto).
+- [x] 4.4 GREEN: tests 4.1/4.2 verdes.
 
 ## Fase 5: Snapshot inmutable
 
-- [ ] 5.1 RED: `tests/test_cierre_z_snapshot.py` — generar Z, `motor.cancel()` sobre venta de su rango, releer Z; totales sin cambios.
-- [ ] 5.2 GREEN: confirmar/ajustar que la lectura del Z solo consulta `cierre_z*` (nunca recomputa contra `venta`/`registro_fiscal`); test 5.1 verde.
+- [x] 5.1 RED: `tests/test_cierre_z_snapshot.py` — generar Z, `motor.cancel()` sobre venta de su rango, releer Z; totales sin cambios.
+- [x] 5.2 GREEN: confirmar/ajustar que la lectura del Z solo consulta `cierre_z*` (nunca recomputa contra `venta`/`registro_fiscal`); test 5.1 verde.
 
 ## Fase 6: Endpoints `/admin`
 
