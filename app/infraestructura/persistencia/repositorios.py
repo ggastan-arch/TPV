@@ -14,6 +14,7 @@ from app.dominio.puertos import TotalesRangoZ
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.persistencia.modelos import (
     Articulo,
+    Boton,
     CierreZ,
     Cliente,
     CodigoBarras,
@@ -21,6 +22,8 @@ from app.infraestructura.persistencia.modelos import (
     Familia,
     LogAuditoria,
     MovimientoStock,
+    PaginaBotonera,
+    PerfilBotonera,
     RegistroFiscal,
     RemisionIntento,
     TipoIVA,
@@ -377,3 +380,43 @@ class RepositorioStockSQL:
             if saldo < 0:
                 negativos.append((articulo_id, saldo))
         return negativos
+
+
+class RepositorioBotoneraSQL:
+    """Botonera configurable (perfil -> pagina -> boton). Tabla mutable (config,
+    no dato fiscal): sin triggers de inmutabilidad. El borrado en cascada de
+    perfil/pagina se hace con `session.delete(...)` directamente, apoyado en
+    `cascade="all, delete-orphan"` de las relaciones del modelo."""
+
+    def __init__(self, session: Session):
+        self._s = session
+
+    def arbol(self) -> list[PerfilBotonera]:
+        """Perfiles con sus paginas y botones (para el editor completo)."""
+        stmt = select(PerfilBotonera).order_by(PerfilBotonera.id)
+        return list(self._s.execute(stmt).scalars())
+
+    def buscar_perfil(self, perfil_id: int) -> PerfilBotonera | None:
+        return self._s.get(PerfilBotonera, perfil_id)
+
+    def agregar_perfil(self, perfil: PerfilBotonera) -> None:
+        self._s.add(perfil)
+
+    def perfiles(self) -> list[PerfilBotonera]:
+        """Todos los perfiles (usado por `activar_perfil` para desactivar los
+        demas en la misma transaccion)."""
+        stmt = select(PerfilBotonera).order_by(PerfilBotonera.id)
+        return list(self._s.execute(stmt).scalars())
+
+    def buscar_pagina(self, pagina_id: int) -> PaginaBotonera | None:
+        return self._s.get(PaginaBotonera, pagina_id)
+
+    def agregar_pagina(self, pagina: PaginaBotonera) -> None:
+        self._s.add(pagina)
+
+    def reemplazar_botones(self, pagina: PaginaBotonera, botones: list[Boton]) -> None:
+        """Reemplazo atomico: vacia la coleccion (delete-orphan borra los
+        botones previos en el flush) y agrega los nuevos."""
+        pagina.botones.clear()
+        self._s.flush()
+        pagina.botones.extend(botones)

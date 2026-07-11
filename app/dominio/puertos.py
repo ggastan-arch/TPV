@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
+    from app.infraestructura.persistencia.modelos.botonera import Boton, PaginaBotonera, PerfilBotonera
     from app.infraestructura.persistencia.modelos.cierre_z import CierreZ
     from app.infraestructura.persistencia.modelos.maestros import Articulo, Cliente, Familia, TipoIVA
     from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
@@ -123,6 +124,19 @@ class RepositorioConfiguracion(Protocol):
     def fijar_control_stock(self, activo: bool) -> None: ...
 
 
+class RepositorioBotonera(Protocol):
+    """Acceso al arbol perfil -> pagina -> boton (configuracion de la botonera del
+    TPV: tabla mutable, sin triggers de inmutabilidad, no es dato fiscal)."""
+
+    def arbol(self) -> list["PerfilBotonera"]: ...
+    def buscar_perfil(self, perfil_id: int) -> "PerfilBotonera | None": ...
+    def agregar_perfil(self, perfil: "PerfilBotonera") -> None: ...
+    def perfiles(self) -> list["PerfilBotonera"]: ...
+    def buscar_pagina(self, pagina_id: int) -> "PaginaBotonera | None": ...
+    def agregar_pagina(self, pagina: "PaginaBotonera") -> None: ...
+    def reemplazar_botones(self, pagina: "PaginaBotonera", botones: list["Boton"]) -> None: ...
+
+
 class RepositorioStock(Protocol):
     """Stock informativo (entrada/venta/merma). Agregacion on-the-fly en
     Python/Decimal (nunca `SUM` SQL, ver design.md): los importes se guardan como
@@ -152,6 +166,7 @@ class UnidadDeTrabajo(Protocol):
     cierres_z: RepositorioCierresZ
     configuracion: RepositorioConfiguracion
     stock: RepositorioStock
+    botoneras: RepositorioBotonera
     session: "Session"
 
     def flush(self) -> None: ...

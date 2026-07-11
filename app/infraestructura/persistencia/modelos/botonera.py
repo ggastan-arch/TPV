@@ -3,24 +3,18 @@
 Un boton apunta EXACTAMENTE a uno de: articulo, familia (navega a hijos) o funcion
 (cobrar, convertir en factura, devolucion, aparcar/recuperar, abrir cajon,
 descuento, cierre de caja). Un CHECK garantiza que el destino sea unico.
-"""
+
+`FUNCIONES` es un concepto de DOMINIO (el conjunto de acciones rapidas soportadas
+por un boton); se define en `app.dominio.servicios.botonera` y se reexporta aqui
+para quien importe los modelos. La infraestructura depende del dominio, nunca al
+reves (dominio puro en runtime, ver pyproject.toml [tool.importlinter])."""
 from __future__ import annotations
 
 from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.dominio.servicios.botonera import FUNCIONES
 from app.infraestructura.persistencia.modelos.base import Base
-
-FUNCIONES = (
-    "cobrar",
-    "convertir_factura",
-    "devolucion",
-    "aparcar",
-    "recuperar",
-    "abrir_cajon",
-    "descuento",
-    "cierre_caja",
-)
 
 
 class PerfilBotonera(Base):

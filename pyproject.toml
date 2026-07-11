@@ -58,6 +58,7 @@ ignore_imports = [
     "app.dominio.puertos -> app.infraestructura.persistencia.modelos.operacion",
     "app.dominio.puertos -> app.infraestructura.persistencia.modelos.venta",
     "app.dominio.puertos -> app.infraestructura.persistencia.modelos.cierre_z",
+    "app.dominio.puertos -> app.infraestructura.persistencia.modelos.botonera",
     "app.dominio.servicios.validaciones_negocio -> app.infraestructura.fiscal.xml",
 ]
 
