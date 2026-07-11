@@ -1,0 +1,71 @@
+---
+change_name: control-stock
+status: archived
+artifact_store: openspec
+created_at: "2026-07-11T17:13:05Z"
+archived_at: "2026-07-11T20:00:00Z"
+
+phases_completed:
+  - proposal
+  - spec
+  - design
+  - tasks
+  - apply
+  - verify
+  - archive
+
+implementation_detail:
+  tandas: 3
+  commits:
+    - hash: cc8173e
+      description: "Tanda 1: config + repos + casos de uso"
+    - hash: d6da8c5
+      description: "Tanda 2: SAVEPOINT en EmitirVenta"
+    - hash: a23683f
+      description: "Tanda 3: endpoints + alarma"
+
+verification:
+  test_count: 252
+  tests_passed: 252
+  tests_failed: 0
+  lint_imports: "3 KEPT / 0 BROKEN"
+  critical_issues: 0
+  warnings: 1
+  warning_detail: "Verification-process incident (non-destructive): accidental real-DB migration run; mitigated by second run on isolated scratch DB; user to confirm tpv.db state and harden env.py"
+
+spec_sync:
+  source: "openspec/changes/control-stock/specs/control-stock/spec.md"
+  destination: "openspec/specs/control-stock/spec.md"
+  action: "created (new capability)"
+  requirements_count: 10
+  scenarios_count: 12
+
+deliverables:
+  - domain: control-stock
+    new_models:
+      - ConfiguracionEmpresa (singleton, control_stock_activo bool)
+      - MovimientoStock (append-only: entrada/venta/merma)
+    new_usecases:
+      - RegistrarEntrada (audited)
+      - RegistrarMerma (motivo obligatorio, audited)
+      - ConsultarStock (on-the-fly Decimal aggregation)
+    integration_points:
+      - EmitirVenta (efecto_stock in SAVEPOINT, non-blocking)
+    endpoints_admin:
+      - POST /api/stock/ajuste (toggle control_stock_activo)
+      - POST /api/stock/entrada
+      - POST /api/stock/merma
+      - GET /api/stock
+      - GET /api/stock/{id}/movimientos
+      - GET /api/stock/estado
+    endpoints_tpv:
+      - GET /api/stock/alarma (informational, PIN-protected)
+
+notes:
+  - Control de stock es informativo y NUNCA bloquea el cobro
+  - Sobreventa siempre permitida (stock negativo válido)
+  - Fallo de stock en SAVEPOINT no aborta la venta (invariante crítica, testeada)
+  - Anulación no revierte stock en esta entrega (out of scope)
+  - Migration 0004_configuracion_empresa crea tabla singleton + index
+  - Aggregation uses Python/Decimal, never SQL SUM (ADR-0002 compliance)
+  - All tasks completed (20/20); all scenarios pass (12/12 compliant)
