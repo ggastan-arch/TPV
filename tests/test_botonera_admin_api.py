@@ -249,6 +249,16 @@ def test_guardar_layout_invalido_da_422_con_detalle(cliente, admin):
     assert any("sin_destino" in e for e in cuerpo["detail"])
 
 
+def test_guardar_layout_rango_invalido_da_422(cliente, admin):
+    perfil_id = _crear_perfil(cliente, admin)
+    pagina_id = _crear_pagina(cliente, admin, perfil_id)
+    _login(cliente, admin)
+    r = cliente.put(f"/admin/api/botonera/paginas/{pagina_id}/layout", json={
+        "filas": 999, "columnas": 5, "botones": [],
+    })
+    assert r.status_code == 422
+
+
 def test_guardar_layout_con_destino_inexistente_da_422(cliente, admin):
     perfil_id = _crear_perfil(cliente, admin)
     pagina_id = _crear_pagina(cliente, admin, perfil_id)

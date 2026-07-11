@@ -345,6 +345,23 @@ def test_guardar_layout_invalido_por_funcion_no_persiste_nada(crear_sesion, dato
         assert _estado_pagina(s, pagina_id) == estado_previo
 
 
+def test_guardar_layout_rango_invalido_no_persiste_nada(crear_sesion, datos_base):
+    # El backend valida el rango 1-12 tambien al guardar layout, no solo al crear pagina:
+    # un cliente NO puede fijar filas/columnas absurdas por esta via.
+    with crear_sesion() as s, s.begin():
+        _, pagina_id, articulo_id = _perfil_con_pagina_y_boton(s, datos_base)
+    with crear_sesion() as s:
+        estado_previo = _estado_pagina(s, pagina_id)
+    with crear_sesion() as s:
+        with pytest.raises(RangoRejillaInvalido):
+            _svc(s, datos_base).guardar_layout(pagina_id, DatosLayout(
+                filas=999, columnas=5,
+                botones=[DatosBoton(ref="a", fila=0, columna=0, articulo_id=articulo_id)],
+            ))
+    with crear_sesion() as s:
+        assert _estado_pagina(s, pagina_id) == estado_previo
+
+
 # --- guardar_layout: paso 2, referencias inexistentes en BD (DestinoNoExiste) --
 
 def test_guardar_layout_con_articulo_inexistente_falla_y_no_persiste(crear_sesion, datos_base):

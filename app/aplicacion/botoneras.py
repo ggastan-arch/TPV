@@ -151,6 +151,7 @@ class ServicioBotonera:
     # -- layout: guardado atomico --------------------------------------------------
     def guardar_layout(self, pagina_id: int, datos: DatosLayout) -> None:
         pagina = self._buscar_pagina(pagina_id)
+        self._validar_rango_rejilla(datos.filas, datos.columnas)
 
         specs = [
             BotonSpec(ref=b.ref, fila=b.fila, columna=b.columna, ancho=b.ancho, alto=b.alto,

@@ -845,4 +845,6 @@ def guardar_layout_botonera(pagina_id: int, req: LayoutPaginaReq, request: Reque
         raise HTTPException(422, exc.errores)
     except DestinoNoExiste as exc:
         raise HTTPException(422, str(exc))
+    except RangoRejillaInvalido:
+        raise HTTPException(422, "Filas/columnas fuera del rango permitido (1-12)")
     return {"ok": True}

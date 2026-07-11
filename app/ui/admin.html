@@ -36,6 +36,36 @@
   .msg-error { color:#fca5a5; min-height:20px; }
   .banner-demo { background:var(--err); color:#fff; text-align:center; font-weight:800;
                  letter-spacing:.5px; padding:6px 10px; }
+  /* botoneras (editor drag & drop) */
+  .rejilla-botonera { position:relative; display:grid; gap:6px; background:#0b1220;
+                       padding:6px; border-radius:8px; min-height:200px; }
+  .celda-vacia { background:rgba(255,255,255,.03); border:1px dashed var(--line); border-radius:6px; }
+  .boton-editor { position:relative; border-radius:8px; padding:8px; color:#fff; font-size:13px;
+                  cursor:grab; display:flex; align-items:center; justify-content:center;
+                  overflow:hidden; text-align:center; }
+  .boton-editor.seleccionado { outline:3px solid var(--accent); }
+  .boton-editor.boton-error { outline:3px solid var(--err); }
+  .boton-editor .quitar { position:absolute; top:2px; right:2px; background:rgba(0,0,0,.45);
+                           color:#fff; border:none; border-radius:4px; width:20px; height:20px;
+                           cursor:pointer; line-height:1; }
+  .boton-editor .resize { position:absolute; right:0; bottom:0; width:16px; height:16px;
+                           cursor:nwse-resize; background:rgba(255,255,255,.35);
+                           border-top-left-radius:6px; }
+  .paleta-item { padding:8px 10px; margin-bottom:6px; border-radius:8px; cursor:grab; font-size:13px; }
+  .paleta-articulo { background:#0369a1; color:#fff; }
+  .paleta-familia { background:#7c3aed; color:#fff; }
+  .paleta-funcion { background:#475569; color:#fff; }
+  .panel-edicion label { display:block; margin-top:8px; font-size:13px; color:#94a3b8; }
+  .panel-edicion input { width:100%; padding:8px; border-radius:8px; border:1px solid var(--line);
+                          background:#0b1220; color:#fff; margin-top:4px; }
+  .overlay { position:fixed; inset:0; background:rgba(2,6,23,.85); display:flex;
+             align-items:center; justify-content:center; z-index:20; }
+  .modal { background:var(--panel); border-radius:16px; padding:24px; width:min(92vw,420px); }
+  .modal label { display:block; margin-top:10px; font-size:13px; color:#94a3b8; }
+  .modal input { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line);
+                 background:#0b1220; color:#fff; font-size:15px; margin-top:4px; }
+  .fila-modal { display:flex; gap:10px; margin-top:16px; }
+  .fila-modal .accion { flex:1; }
 </style>
 </head>
 <body>
@@ -81,6 +111,7 @@ async function dashboard() {
       <button data-t="fiscal">Fiscal</button>
       <button data-t="dia">Día</button>
       <button data-t="maestros">Maestros</button>
+      <button data-t="botoneras">Botoneras</button>
     </div><main id="main"></main>`;
   $("#salir").onclick = async () => { await api("/admin/api/logout",{method:"POST"}); vistaLogin(); };
   document.querySelectorAll(".tabs button").forEach((b) =>
@@ -97,6 +128,7 @@ async function pintarPestana() {
   marcarTab();
   if (pestanaActual === "fiscal") return pintarFiscal();
   if (pestanaActual === "dia") return pintarDia();
+  if (pestanaActual === "botoneras") return pintarBotoneras();
   return pintarMaestros();
 }
 
@@ -160,6 +192,412 @@ async function pintarMaestros() {
     tabla("Tipos de IVA", [["Nombre",r=>r.nombre],["%",r=>r.porcentaje],["Activo",r=>r.activo?"sí":"no"]], ivas) +
     tabla("Familias", [["Nombre",r=>r.nombre],["Padre",r=>r.parent_id??"—"]], fams) +
     tabla("Usuarios", [["Nombre",r=>r.nombre],["Rol",r=>r.rol],["Activo",r=>r.activo?"sí":"no"]], users);
+}
+
+/* ---- BOTONERAS (editor drag & drop) ---- */
+// Estado del editor: perfil/pagina seleccionados, copia de trabajo EN MEMORIA de los
+// botones de la pagina actual (no se persiste hasta pulsar "Guardar") y el destino que
+// se esta arrastrando (boton existente o item de la paleta). El backend es la unica
+// autoridad de validez (rango/solape/destino/funcion): el editor deja arrastrar y
+// redimensionar libremente y muestra los errores 422 que devuelva "Guardar".
+let bbArbol = [];
+let bbPerfilId = null;
+let bbPaginaId = null;
+let bbPaginaDims = { filas: 4, columnas: 5 };
+let bbBotones = [];                 // copia de trabajo: {ref, fila, columna, ancho, alto, articulo_id, familia_id, funcion, color, icono, texto}
+let bbBotonSeleccionado = null;     // ref del boton con foco en el panel de edicion
+let bbArrastrando = null;           // {tipo:"mover", ref} | {tipo:"crear", origen, id?, valor?, nombre}
+let bbNuevoContador = 0;
+let bbErrores = [];
+let bbArticulos = [];
+let bbFamilias = [];
+const FUNCIONES_BOTONERA = [
+  ["cobrar", "Cobrar"], ["convertir_factura", "Convertir en factura"],
+  ["devolucion", "Devolución"], ["aparcar", "Aparcar venta"],
+  ["recuperar", "Recuperar venta"], ["abrir_cajon", "Abrir cajón"],
+  ["descuento", "Descuento"], ["cierre_caja", "Cierre de caja"],
+];
+
+function perfilActual() { return bbArbol.find((p) => p.id === bbPerfilId) || null; }
+function paginaActual() {
+  const perfil = perfilActual();
+  return perfil ? (perfil.paginas.find((pg) => pg.id === bbPaginaId) || null) : null;
+}
+
+async function pintarBotoneras(preferPerfilId, preferPaginaId) {
+  const [arbol, arts, fams] = await Promise.all([
+    api("/admin/api/botonera"), api("/admin/api/maestros/articulos"), api("/admin/api/maestros/familias")]);
+  bbArbol = arbol;
+  bbArticulos = arts.filter((a) => a.activo);
+  bbFamilias = fams.filter((f) => f.activo);
+  if (preferPerfilId !== undefined) bbPerfilId = preferPerfilId;
+  if (bbPerfilId === null || !bbArbol.some((p) => p.id === bbPerfilId)) {
+    bbPerfilId = bbArbol.length ? bbArbol[0].id : null;
+  }
+  if (preferPaginaId !== undefined) bbPaginaId = preferPaginaId;
+  seleccionarPaginaInicial();
+  renderBotoneras();
+}
+
+function seleccionarPaginaInicial() {
+  const perfil = perfilActual();
+  if (!perfil || !perfil.paginas.length) { bbPaginaId = null; cargarBotonesEnMemoria(null); return; }
+  if (!perfil.paginas.some((pg) => pg.id === bbPaginaId)) bbPaginaId = perfil.paginas[0].id;
+  cargarBotonesEnMemoria(paginaActual());
+}
+
+function cargarBotonesEnMemoria(pagina) {
+  bbErrores = [];
+  bbBotonSeleccionado = null;
+  if (!pagina) { bbBotones = []; bbPaginaDims = { filas: 4, columnas: 5 }; return; }
+  bbPaginaDims = { filas: pagina.filas, columnas: pagina.columnas };
+  bbBotones = pagina.botones.map((b) => ({ ...b, ref: String(b.id) }));
+}
+
+function renderBotoneras() {
+  const perfil = perfilActual();
+  const pagina = paginaActual();
+  const selPerfil = bbArbol.length
+    ? `<select id="bbSelPerfil">${bbArbol.map((p) =>
+        `<option value="${p.id}" ${p.id === bbPerfilId ? "selected" : ""}>${p.nombre}${p.activo ? " (activo)" : ""}</option>`).join("")}</select>`
+    : `<select id="bbSelPerfil" disabled><option>Sin perfiles</option></select>`;
+  const selPagina = perfil && perfil.paginas.length
+    ? `<select id="bbSelPagina">${perfil.paginas.map((pg) =>
+        `<option value="${pg.id}" ${pg.id === bbPaginaId ? "selected" : ""}>${pg.nombre} (orden ${pg.orden})</option>`).join("")}</select>`
+    : `<select id="bbSelPagina" disabled><option>Sin páginas</option></select>`;
+
+  $("#main").innerHTML = `
+    <div class="card">
+      <h2>Botoneras</h2>
+      <div class="grid2">
+        <div><label>Perfil</label><br>${selPerfil}
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="accion" id="bbPerfilNuevo">Nuevo</button>
+            <button class="accion" id="bbPerfilRenombrar" ${perfil ? "" : "disabled"}>Renombrar</button>
+            <button class="accion" id="bbPerfilActivar" ${perfil && !perfil.activo ? "" : "disabled"}>Activar</button>
+            <button class="accion" id="bbPerfilBorrar" ${perfil ? "" : "disabled"}>Borrar</button>
+          </div>
+        </div>
+        <div><label>Página</label><br>${selPagina}
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="accion" id="bbPaginaNueva" ${perfil ? "" : "disabled"}>Nueva</button>
+            <button class="accion" id="bbPaginaEditar" ${pagina ? "" : "disabled"}>Editar</button>
+            <button class="accion" id="bbPaginaBorrar" ${pagina ? "" : "disabled"}>Borrar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="display:flex;gap:20px;flex-wrap:wrap">
+      <div style="flex:2;min-width:320px">
+        <h3>Rejilla ${pagina ? `(${pagina.filas} × ${pagina.columnas})` : ""}</h3>
+        <div id="bbRejilla" class="rejilla-botonera"></div>
+        <div class="msg-error" id="bbErrores"></div>
+        <p><button class="accion" id="bbGuardar" ${pagina ? "" : "disabled"}>Guardar</button> <span id="bbMsg"></span></p>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <h3>Paleta de destinos</h3>
+        <div id="bbPaleta"></div>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <h3>Editar botón</h3>
+        <div id="bbPanelEdicion" class="panel-edicion"></div>
+      </div>
+    </div>`;
+
+  if (bbArbol.length) $("#bbSelPerfil").onchange = (e) => {
+    bbPerfilId = Number(e.target.value); bbPaginaId = null; seleccionarPaginaInicial(); renderBotoneras();
+  };
+  if (perfil && perfil.paginas.length) $("#bbSelPagina").onchange = (e) => {
+    bbPaginaId = Number(e.target.value); cargarBotonesEnMemoria(paginaActual()); renderBotoneras();
+  };
+  $("#bbPerfilNuevo").onclick = crearPerfilBotonera;
+  $("#bbPerfilRenombrar").onclick = renombrarPerfilBotonera;
+  $("#bbPerfilActivar").onclick = activarPerfilBotonera;
+  $("#bbPerfilBorrar").onclick = borrarPerfilBotonera;
+  $("#bbPaginaNueva").onclick = () => modalPagina(null);
+  $("#bbPaginaEditar").onclick = () => modalPagina(paginaActual());
+  $("#bbPaginaBorrar").onclick = borrarPaginaBotonera;
+  $("#bbGuardar").onclick = guardarLayoutBotonera;
+
+  renderRejilla();
+  renderPaleta();
+  renderPanelEdicion();
+  renderErroresLayout();
+}
+
+/* -- rejilla: render, drag&drop, resize -- */
+function renderRejilla() {
+  const cont = $("#bbRejilla");
+  if (!paginaActual()) { cont.innerHTML = "<p>Seleccioná o creá una página para esta botonera.</p>"; return; }
+  const { filas, columnas } = bbPaginaDims;
+  cont.style.gridTemplateColumns = `repeat(${columnas}, minmax(70px,1fr))`;
+  cont.style.gridTemplateRows = `repeat(${filas}, 70px)`;
+  cont.innerHTML = "";
+  for (let f = 0; f < filas; f++) {
+    for (let c = 0; c < columnas; c++) {
+      const celda = document.createElement("div");
+      celda.className = "celda-vacia";
+      celda.style.gridColumn = `${c + 1} / span 1`;
+      celda.style.gridRow = `${f + 1} / span 1`;
+      celda.ondragover = (e) => e.preventDefault();
+      celda.ondrop = (e) => { e.preventDefault(); manejarDropBotonera(f, c); };
+      cont.appendChild(celda);
+    }
+  }
+  bbBotones.forEach((b) => cont.appendChild(crearElementoBoton(b)));
+}
+
+function descripcionDestino(b) {
+  if (b.articulo_id != null) {
+    const a = bbArticulos.find((x) => x.id === b.articulo_id);
+    return a ? a.nombre : ("Artículo #" + b.articulo_id);
+  }
+  if (b.familia_id != null) {
+    const f = bbFamilias.find((x) => x.id === b.familia_id);
+    return f ? f.nombre : ("Familia #" + b.familia_id);
+  }
+  if (b.funcion) {
+    const f = FUNCIONES_BOTONERA.find((x) => x[0] === b.funcion);
+    return f ? f[1] : b.funcion;
+  }
+  return "(sin destino)";
+}
+
+function crearElementoBoton(b) {
+  const div = document.createElement("div");
+  div.className = "boton-editor" + (bbBotonSeleccionado === b.ref ? " seleccionado" : "");
+  div.dataset.ref = b.ref;
+  div.style.gridColumn = `${b.columna + 1} / span ${b.ancho}`;
+  div.style.gridRow = `${b.fila + 1} / span ${b.alto}`;
+  div.style.background = b.color || (b.articulo_id != null ? "#0369a1" : b.familia_id != null ? "#7c3aed" : "#475569");
+  div.draggable = true;
+  div.innerHTML = `<span>${b.icono ? b.icono + " " : ""}${b.texto || descripcionDestino(b)}</span>
+    <button class="quitar" type="button" title="Quitar del layout">×</button>
+    <div class="resize" title="Redimensionar"></div>`;
+  div.ondragstart = (e) => {
+    bbArrastrando = { tipo: "mover", ref: b.ref };
+    e.dataTransfer.setData("text/plain", b.ref);
+  };
+  div.ondragover = (e) => e.preventDefault();
+  div.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); manejarDropBotonera(b.fila, b.columna); };
+  div.onclick = () => { bbBotonSeleccionado = b.ref; renderRejilla(); renderPanelEdicion(); };
+  div.querySelector(".quitar").onclick = (e) => {
+    e.stopPropagation();
+    bbBotones = bbBotones.filter((x) => x.ref !== b.ref);
+    if (bbBotonSeleccionado === b.ref) bbBotonSeleccionado = null;
+    renderRejilla(); renderPanelEdicion();
+  };
+  div.querySelector(".resize").onmousedown = (e) => iniciarRedimensionBoton(e, b.ref);
+  return div;
+}
+
+function manejarDropBotonera(fila, columna) {
+  if (!bbArrastrando) return;
+  if (bbArrastrando.tipo === "mover") {
+    const b = bbBotones.find((x) => x.ref === bbArrastrando.ref);
+    if (b) { b.fila = fila; b.columna = columna; }
+  } else if (bbArrastrando.tipo === "crear") {
+    bbNuevoContador += 1;
+    const nuevo = { ref: "nuevo-" + bbNuevoContador, fila, columna, ancho: 1, alto: 1,
+      articulo_id: null, familia_id: null, funcion: null, color: null, icono: null, texto: null };
+    if (bbArrastrando.origen === "articulo") { nuevo.articulo_id = bbArrastrando.id; nuevo.texto = bbArrastrando.nombre; }
+    else if (bbArrastrando.origen === "familia") { nuevo.familia_id = bbArrastrando.id; nuevo.texto = bbArrastrando.nombre; }
+    else { nuevo.funcion = bbArrastrando.valor; nuevo.texto = bbArrastrando.nombre; }
+    bbBotones.push(nuevo);
+    bbBotonSeleccionado = nuevo.ref;
+  }
+  bbArrastrando = null;
+  renderRejilla();
+  renderPanelEdicion();
+}
+
+function iniciarRedimensionBoton(e, ref) {
+  e.preventDefault(); e.stopPropagation();
+  const boton = bbBotones.find((x) => x.ref === ref);
+  const cont = $("#bbRejilla");
+  if (!boton || !cont) return;
+  const rect = cont.getBoundingClientRect();
+  const anchoCelda = rect.width / bbPaginaDims.columnas;
+  const altoCelda = rect.height / bbPaginaDims.filas;
+  const anchoInicial = boton.ancho, altoInicial = boton.alto;
+  const xInicial = e.clientX, yInicial = e.clientY;
+  function mover(ev) {
+    const deltaCols = Math.round((ev.clientX - xInicial) / anchoCelda);
+    const deltaFilas = Math.round((ev.clientY - yInicial) / altoCelda);
+    boton.ancho = Math.max(1, anchoInicial + deltaCols);
+    boton.alto = Math.max(1, altoInicial + deltaFilas);
+    renderRejilla();
+  }
+  function soltar() {
+    document.removeEventListener("mousemove", mover);
+    document.removeEventListener("mouseup", soltar);
+  }
+  document.addEventListener("mousemove", mover);
+  document.addEventListener("mouseup", soltar);
+}
+
+/* -- paleta de destinos (articulos / familias / funciones) -- */
+function paletaItem(tipo, id, label, nombre) {
+  return `<div class="paleta-item paleta-${tipo}" draggable="true" data-tipo="${tipo}"
+             data-id="${id}" data-nombre="${nombre.replace(/"/g, "&quot;")}">${label}</div>`;
+}
+
+function renderPaleta() {
+  const cont = $("#bbPaleta");
+  if (!cont) return;
+  const arts = bbArticulos.map((a) => paletaItem("articulo", a.id, `${a.nombre} (${eur(a.pvp)})`, a.nombre)).join("");
+  const fams = bbFamilias.map((f) => paletaItem("familia", f.id, f.nombre, f.nombre)).join("");
+  const funcs = FUNCIONES_BOTONERA.map(([v, label]) => paletaItem("funcion", v, label, label)).join("");
+  cont.innerHTML = `<h4>Artículos</h4>${arts || "—"}<h4>Familias</h4>${fams || "—"}<h4>Funciones</h4>${funcs}`;
+  cont.querySelectorAll(".paleta-item").forEach((el) => {
+    el.ondragstart = (e) => {
+      const { tipo, id, nombre } = el.dataset;
+      bbArrastrando = tipo === "funcion"
+        ? { tipo: "crear", origen: "funcion", valor: id, nombre }
+        : { tipo: "crear", origen: tipo, id: Number(id), nombre };
+      e.dataTransfer.setData("text/plain", tipo + ":" + id);
+    };
+  });
+}
+
+/* -- panel de edicion del boton seleccionado -- */
+function renderPanelEdicion() {
+  const cont = $("#bbPanelEdicion");
+  if (!cont) return;
+  const b = bbBotones.find((x) => x.ref === bbBotonSeleccionado);
+  if (!b) { cont.innerHTML = "<p>Seleccioná un botón de la rejilla para editarlo.</p>"; return; }
+  cont.innerHTML = `<p><b>${descripcionDestino(b)}</b></p>
+    <label>Texto<input id="bbEdTexto" value="${(b.texto || "").replace(/"/g, "&quot;")}"></label>
+    <label>Color<input id="bbEdColor" type="color" value="${b.color || "#0369a1"}"></label>
+    <label>Icono (emoji o texto corto)<input id="bbEdIcono" value="${(b.icono || "").replace(/"/g, "&quot;")}"></label>`;
+  $("#bbEdTexto").oninput = (e) => { b.texto = e.target.value; actualizarTextoBoton(b); };
+  $("#bbEdColor").oninput = (e) => { b.color = e.target.value; actualizarColorBoton(b); };
+  $("#bbEdIcono").oninput = (e) => { b.icono = e.target.value; actualizarTextoBoton(b); };
+}
+function actualizarTextoBoton(b) {
+  const el = document.querySelector(`.boton-editor[data-ref="${b.ref}"] span`);
+  if (el) el.textContent = (b.icono ? b.icono + " " : "") + (b.texto || descripcionDestino(b));
+}
+function actualizarColorBoton(b) {
+  const el = document.querySelector(`.boton-editor[data-ref="${b.ref}"]`);
+  if (el) el.style.background = b.color;
+}
+
+/* -- gestion de perfiles -- */
+async function crearPerfilBotonera() {
+  const nombre = prompt("Nombre del nuevo perfil:");
+  if (!nombre) return;
+  const r = await api("/admin/api/botonera/perfiles", { method: "POST", body: JSON.stringify({ nombre }) });
+  await pintarBotoneras(r.id);
+}
+async function renombrarPerfilBotonera() {
+  const perfil = perfilActual(); if (!perfil) return;
+  const nombre = prompt("Nuevo nombre del perfil:", perfil.nombre);
+  if (!nombre) return;
+  await api(`/admin/api/botonera/perfiles/${perfil.id}`, { method: "PUT", body: JSON.stringify({ nombre }) });
+  await pintarBotoneras(perfil.id);
+}
+async function activarPerfilBotonera() {
+  const perfil = perfilActual(); if (!perfil) return;
+  await api(`/admin/api/botonera/perfiles/${perfil.id}/activar`, { method: "POST" });
+  await pintarBotoneras(perfil.id);
+}
+async function borrarPerfilBotonera() {
+  const perfil = perfilActual(); if (!perfil) return;
+  if (!confirm(`¿Borrar el perfil "${perfil.nombre}" y todas sus páginas/botones? Esta acción no se puede deshacer.`)) return;
+  await api(`/admin/api/botonera/perfiles/${perfil.id}`, { method: "DELETE" });
+  await pintarBotoneras(null);
+}
+
+/* -- gestion de paginas -- */
+async function borrarPaginaBotonera() {
+  const pagina = paginaActual(); if (!pagina) return;
+  if (!confirm(`¿Borrar la página "${pagina.nombre}" y sus botones? Esta acción no se puede deshacer.`)) return;
+  await api(`/admin/api/botonera/paginas/${pagina.id}`, { method: "DELETE" });
+  await pintarBotoneras(bbPerfilId);
+}
+
+function modalPagina(pagina) {
+  const editando = !!pagina;
+  const ov = document.createElement("div");
+  ov.className = "overlay";
+  ov.innerHTML = `<div class="modal">
+    <h2>${editando ? "Editar página" : "Nueva página"}</h2>
+    <label>Nombre<input id="mpNombre" value="${editando ? pagina.nombre.replace(/"/g, "&quot;") : ""}"></label>
+    <label>Orden<input id="mpOrden" type="number" value="${editando ? pagina.orden : 0}"></label>
+    <label>Filas (1-12)<input id="mpFilas" type="number" min="1" max="12" value="${editando ? pagina.filas : 4}"></label>
+    <label>Columnas (1-12)<input id="mpColumnas" type="number" min="1" max="12" value="${editando ? pagina.columnas : 5}"></label>
+    <div class="msg-error" id="mpError"></div>
+    <div class="fila-modal">
+      <button class="accion" id="mpCancelar" style="background:#475569">Cancelar</button>
+      <button class="accion" id="mpGuardar">Guardar</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector("#mpCancelar").onclick = () => ov.remove();
+  ov.querySelector("#mpGuardar").onclick = async () => {
+    const datos = {
+      nombre: ov.querySelector("#mpNombre").value,
+      orden: Number(ov.querySelector("#mpOrden").value),
+      filas: Number(ov.querySelector("#mpFilas").value),
+      columnas: Number(ov.querySelector("#mpColumnas").value),
+    };
+    try {
+      if (editando) {
+        await api(`/admin/api/botonera/paginas/${pagina.id}`, { method: "PUT", body: JSON.stringify(datos) });
+        ov.remove();
+        await pintarBotoneras(bbPerfilId, pagina.id);
+      } else {
+        const perfil = perfilActual();
+        const r = await api(`/admin/api/botonera/perfiles/${perfil.id}/paginas`, { method: "POST", body: JSON.stringify(datos) });
+        ov.remove();
+        await pintarBotoneras(perfil.id, r.id);
+      }
+    } catch (e) { ov.querySelector("#mpError").textContent = e.message; }
+  };
+}
+
+/* -- guardado del layout completo -- */
+async function guardarLayoutBotonera() {
+  const pagina = paginaActual();
+  if (!pagina) return;
+  const payload = {
+    filas: bbPaginaDims.filas, columnas: bbPaginaDims.columnas,
+    botones: bbBotones.map((b) => ({
+      ref: b.ref, fila: b.fila, columna: b.columna, ancho: b.ancho, alto: b.alto,
+      articulo_id: b.articulo_id, familia_id: b.familia_id, funcion: b.funcion,
+      color: b.color, icono: b.icono, texto: b.texto,
+    })),
+  };
+  // Fetch crudo (no el helper `api()`): el 422 de un layout invalido devuelve
+  // `detail` como LISTA de errores (uno por boton), no como string unico; hay que
+  // distinguirlo del resto de endpoints para poder resaltar cada `ref` afectado
+  // SIN perder el estado en memoria del editor.
+  const r = await fetch(`/admin/api/botonera/paginas/${pagina.id}/layout`,
+    { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    bbErrores = Array.isArray(body.detail) ? body.detail : [body.detail || ("Error " + r.status)];
+    renderErroresLayout();
+    return;
+  }
+  bbErrores = [];
+  await pintarBotoneras(bbPerfilId, pagina.id);
+  if ($("#bbMsg")) $("#bbMsg").textContent = "Guardado";
+}
+
+function renderErroresLayout() {
+  const cont = $("#bbErrores");
+  if (!cont) return;
+  cont.innerHTML = bbErrores.length
+    ? "<b>La botonera NO se guardó:</b><ul>" + bbErrores.map((e) => `<li>${e}</li>`).join("") + "</ul>"
+    : "";
+  document.querySelectorAll(".boton-editor").forEach((el) => el.classList.remove("boton-error"));
+  bbErrores.forEach((msg) => {
+    msg.split(":")[0].split("/").forEach((ref) => {
+      const el = document.querySelector(`.boton-editor[data-ref="${ref.trim()}"]`);
+      if (el) el.classList.add("boton-error");
+    });
+  });
 }
 
 /* ---- BANNER MODO DEMO ---- */

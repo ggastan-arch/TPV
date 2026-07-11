@@ -232,37 +232,40 @@ el riesgo de esta tanda es de usabilidad, no de integridad de datos.
 **Depende por completo de la Tanda 1** (consume `/admin/api/botonera/*`).
 Secuencial, un solo desarrollador (no paraleliza con nada de esta tanda).
 
-- [ ] Nueva pestaña `data-t="botoneras"`: botón en `dashboard()` y rama en
+- [x] Nueva pestaña `data-t="botoneras"`: botón en `dashboard()` y rama en
       `pintarPestana()`, siguiendo el patrón de las demás pestañas de
       `admin.html`.
-- [ ] Carga inicial: `GET /admin/api/botonera` pinta selector de perfil,
+- [x] Carga inicial: `GET /admin/api/botonera` pinta selector de perfil,
       selector de página, y la rejilla `filas × columnas` con
       `display:grid`.
-- [ ] Render de rejilla: cada celda es un `dropzone`; cada botón existente se
+- [x] Render de rejilla: cada celda es un `dropzone`; cada botón existente se
       posiciona con `grid-row`/`grid-column` (`span alto/ancho`).
-- [ ] Arrastrar/soltar: `dragstart` guarda el id del botón arrastrado;
+- [x] Arrastrar/soltar: `dragstart` guarda el id del botón arrastrado;
       `drop` sobre una celda actualiza fila/columna EN MEMORIA (no persiste
       hasta pulsar "Guardar").
-- [ ] Redimensionar: tiradores en el botón que ajustan `ancho`/`alto` en
+- [x] Redimensionar: tiradores en el botón que ajustan `ancho`/`alto` en
       memoria (arrastre desde una esquina/borde).
-- [ ] Paleta de destinos: lista lateral con artículos, familias y las
+- [x] Paleta de destinos: lista lateral con artículos, familias y las
       `FUNCIONES` soportadas; arrastrar un ítem de la paleta a la rejilla
       crea un botón nuevo con ese destino.
-- [ ] Panel de edición: color, icono y texto del botón actualmente
+- [x] Panel de edición: color, icono y texto del botón actualmente
       seleccionado.
-- [ ] Gestión de perfiles: crear, renombrar, activar y borrar perfil desde
+- [x] Gestión de perfiles: crear, renombrar, activar y borrar perfil desde
       la UI (llama a los endpoints de perfiles).
-- [ ] Gestión de páginas: crear, editar (nombre/orden/filas/columnas) y
+- [x] Gestión de páginas: crear, editar (nombre/orden/filas/columnas) y
       borrar página desde la UI.
-- [ ] Botón "Guardar": envía `PUT .../paginas/{id}/layout` con el layout
+- [x] Botón "Guardar": envía `PUT .../paginas/{id}/layout` con el layout
       completo en memoria (`{filas, columnas, botones: [...]}`).
-- [ ] Manejo de error 422: si el backend rechaza el layout, se muestran los
+- [x] Manejo de error 422: si el backend rechaza el layout, se muestran los
       `errores` devueltos, resaltando el botón afectado por su `ref`
       (ningún estado se pierde en memoria; el usuario puede corregir y
       reintentar).
 - [ ] **Checklist de verificación manual** (a ejecutar por una persona, sin
       test automático; dejar constancia de que se ejecutó antes de dar la
-      tarea por cerrada):
+      tarea por cerrada). **PENDIENTE DE EJECUCIÓN HUMANA**: el código
+      implementado por el agente NO fue ejercitado en un navegador real
+      (el agente no tiene esa capacidad); estos pasos deben ejecutarse
+      manualmente antes de cerrar la tanda:
   - [ ] Crear un perfil nuevo, agregarle una página, colocar 3+ botones de
         distinto destino (artículo, familia, función) y guardar con éxito.
   - [ ] Arrastrar un botón fuera de los límites de la rejilla y guardar:
@@ -284,13 +287,20 @@ Secuencial, un solo desarrollador (no paraleliza con nada de esta tanda).
 
 ### Tarea 8 — Checkpoint final
 
-- [ ] `make test` completo en verde — confirmar que el trabajo de frontend
-      (solo HTML/JS) no rompió ningún test de backend.
-- [ ] `make arch` en verde.
+- [x] `make test` completo en verde — confirmar que el trabajo de frontend
+      (solo HTML/JS) no rompió ningún test de backend. **348 passed, 0
+      failed** (`.venv/Scripts/python -m pytest -q`).
+- [x] `make arch` en verde. **3 contratos KEPT, 0 broken**
+      (`.venv/Scripts/lint-imports.exe`).
 - [ ] Checklist manual de la Tarea 7 ejecutado y sin pendientes abiertos.
+      **PENDIENTE**: requiere ejecución humana en navegador (ver Tarea 7).
 - [ ] Confirmar que `GET /tpv/api/botonera` sigue sin cambios de forma tras
       el uso real del editor (no solo en test, también inspección manual de
-      la respuesta JSON).
+      la respuesta JSON). El test automático de contrato
+      (`tests/test_tpv_api.py::test_botonera_refleja_layout_editado_por_el_editor`,
+      Tanda 1) sigue en verde y ya cubre esto vía `ServicioBotonera`; la
+      inspección manual del JSON tras uso real del editor en navegador
+      **queda pendiente** junto con el checklist de la Tarea 7.
 
 ---
 
