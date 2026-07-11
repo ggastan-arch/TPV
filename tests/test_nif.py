@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.dominio.servicios.validadores import validar_documento
+from app.dominio.servicios.validadores import normalizar_documento, validar_documento
 
 
 @pytest.mark.parametrize(
@@ -39,3 +39,15 @@ def test_documentos_invalidos(valor):
 
 def test_normaliza_espacios_y_guiones():
     assert validar_documento(" 12345678-z ") is True
+
+
+@pytest.mark.parametrize(
+    "entrada,esperado",
+    [
+        (" 12345678-z ", "12345678Z"),
+        ("x1234567l", "X1234567L"),
+        ("A58818501", "A58818501"),
+    ],
+)
+def test_normalizar_documento(entrada, esperado):
+    assert normalizar_documento(entrada) == esperado

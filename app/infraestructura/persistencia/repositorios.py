@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.persistencia.modelos import (
     Articulo,
+    Cliente,
     CodigoBarras,
     Familia,
     LogAuditoria,
@@ -99,6 +100,23 @@ class RepositorioAuditoriaSQL:
         self._s.add(LogAuditoria(
             fecha_hora_huso=ahora_huso(), usuario_id=usuario_id, accion=accion,
             entidad=entidad, entidad_id=entidad_id, detalle=detalle, origen=origen))
+
+
+class RepositorioClientesSQL:
+    def __init__(self, session: Session):
+        self._s = session
+
+    def buscar(self, cliente_id: int) -> Cliente | None:
+        return self._s.get(Cliente, cliente_id)
+
+    def agregar(self, cliente: Cliente) -> None:
+        self._s.add(cliente)
+
+    def listar(self, incluir_inactivos: bool = True) -> list[Cliente]:
+        stmt = select(Cliente).order_by(Cliente.nombre)
+        if not incluir_inactivos:
+            stmt = stmt.where(Cliente.activo.is_(True))
+        return list(self._s.execute(stmt).scalars())
 
 
 class RepositorioVentasSQL:

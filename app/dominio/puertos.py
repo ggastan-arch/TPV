@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
-    from app.infraestructura.persistencia.modelos.maestros import Articulo, Familia, TipoIVA
+    from app.infraestructura.persistencia.modelos.maestros import Articulo, Cliente, Familia, TipoIVA
     from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
     from app.infraestructura.persistencia.modelos.operacion import Usuario
     from app.infraestructura.persistencia.modelos.venta import Venta
@@ -42,6 +42,12 @@ class RepositorioFamilias(Protocol):
     def agregar(self, familia: "Familia") -> None: ...
     def listar(self, incluir_inactivos: bool = True) -> list["Familia"]: ...
     def hijos(self, familia_id: int, solo_activos: bool = False) -> list["Familia"]: ...
+
+
+class RepositorioClientes(Protocol):
+    def buscar(self, cliente_id: int) -> "Cliente | None": ...
+    def agregar(self, cliente: "Cliente") -> None: ...
+    def listar(self, incluir_inactivos: bool = True) -> list["Cliente"]: ...
 
 
 class RepositorioVentas(Protocol):
@@ -88,6 +94,7 @@ class UnidadDeTrabajo(Protocol):
     articulos: RepositorioArticulos
     tipos_iva: RepositorioTiposIva
     familias: RepositorioFamilias
+    clientes: RepositorioClientes
     ventas: RepositorioVentas
     usuarios: RepositorioUsuarios
     registros: RepositorioRegistros

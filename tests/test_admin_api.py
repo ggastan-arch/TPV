@@ -215,3 +215,32 @@ def test_desactivar_familia_con_hijos_devuelve_409(cliente, admin, datos_base):
     cliente.post("/admin/api/maestros/familias", json={"nombre": "Ciclidos", "parent_id": padre})
     r = cliente.post(f"/admin/api/maestros/familias/{padre}/desactivar")
     assert r.status_code == 409
+
+
+# --- Maestros: clientes --------------------------------------------------------
+def test_crear_cliente_exige_sesion(cliente, datos_base):
+    assert cliente.post("/admin/api/maestros/clientes",
+                        json={"nombre": "Cliente"}).status_code == 401
+
+
+def test_crear_cliente_ok(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/clientes",
+                     json={"nombre": "Acuario S.L.", "nif": "a58818501"})
+    assert r.status_code == 201
+    nuevo_id = r.json()["id"]
+    clientes = cliente.get("/admin/api/maestros/clientes").json()
+    assert any(c["id"] == nuevo_id and c["nif"] == "A58818501" for c in clientes)
+
+
+def test_crear_cliente_nif_invalido(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/clientes",
+                     json={"nombre": "Malo", "nif": "12345678A"})
+    assert r.status_code == 422
+
+
+def test_actualizar_cliente_inexistente(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.put("/admin/api/maestros/clientes/999999", json={"nombre": "X"})
+    assert r.status_code == 404

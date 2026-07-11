@@ -29,6 +29,14 @@ def _validar_nie(v: str) -> bool:
     return _letra_dni(int(numero)) == v[8]
 
 
+def normalizar_documento(valor: str) -> str:
+    """Forma canonica del documento: mayusculas, sin espacios ni guiones.
+
+    Regla unica de normalizacion reutilizada por `validar_documento` y por la capa de
+    aplicacion para almacenar el NIF siempre del mismo modo."""
+    return valor.strip().upper().replace("-", "").replace(" ", "")
+
+
 def _validar_cif(v: str) -> bool:
     digitos = v[1:8]
     suma_pares = sum(int(digitos[i]) for i in (1, 3, 5))
@@ -51,7 +59,7 @@ def validar_documento(valor: str | None) -> bool:
     """True si el valor es un NIF, NIE o CIF con control correcto."""
     if not valor:
         return False
-    v = valor.strip().upper().replace("-", "").replace(" ", "")
+    v = normalizar_documento(valor)
     if _RE_DNI.match(v):
         return _validar_dni(v)
     if _RE_NIE.match(v):

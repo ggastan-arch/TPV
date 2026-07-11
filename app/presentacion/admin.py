@@ -23,6 +23,12 @@ from app.aplicacion.articulos import (
     ServicioArticulos,
     TipoIvaNoExiste,
 )
+from app.aplicacion.clientes import (
+    ClienteNoEncontrado,
+    DatosCliente,
+    NifInvalido,
+    ServicioClientes,
+)
 from app.aplicacion.familias import (
     CicloEnFamilia,
     DatosFamilia,
@@ -44,6 +50,7 @@ from app.infraestructura.seguridad import verificar_pin
 from app.infraestructura.fiscal.engine import NullEngine
 from app.infraestructura.persistencia.modelos import (
     Articulo,
+    Cliente,
     Familia,
     LogAuditoria,
     TipoIVA,
@@ -88,6 +95,15 @@ class FamiliaReq(BaseModel):
     orden: int = 0
     color: str | None = None
     imagen: str | None = None
+
+
+class ClienteReq(BaseModel):
+    nombre: str
+    nif: str | None = None
+    domicilio: str | None = None
+    email: str | None = None
+    telefono: str | None = None
+    rgpd_consentimiento: bool = False
 
 
 def _origen(request: Request) -> str:
@@ -237,6 +253,14 @@ def maestros_usuarios(_: int = Depends(require_admin), s: Session = Depends(get_
             for u in s.execute(select(Usuario).order_by(Usuario.nombre)).scalars()]
 
 
+@router.get("/api/maestros/clientes")
+def maestros_clientes(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> list[dict]:
+    return [{"id": c.id, "nombre": c.nombre, "nif": c.nif, "domicilio": c.domicilio,
+             "email": c.email, "telefono": c.telefono,
+             "rgpd_consentimiento": c.rgpd_consentimiento, "activo": c.activo}
+            for c in s.execute(select(Cliente).order_by(Cliente.nombre)).scalars()]
+
+
 # --- Maestros: articulos (escritura) -------------------------------------------
 def _servicio_articulos(request: Request, usuario_id: int, uow) -> ServicioArticulos:
     return ServicioArticulos(uow, usuario_id=usuario_id, origen=_origen(request))
@@ -383,4 +407,51 @@ def activar_familia(familia_id: int, request: Request,
         _servicio_familias(request, usuario_id, uow).activar(familia_id)
     except FamiliaNoEncontrada:
         raise HTTPException(404, "Familia no encontrada")
+    return {"ok": True}
+
+
+# --- Maestros: clientes (escritura) --------------------------------------------
+def _servicio_clientes(request: Request, usuario_id: int, uow) -> ServicioClientes:
+    return ServicioClientes(uow, usuario_id=usuario_id, origen=_origen(request))
+
+
+@router.post("/api/maestros/clientes", status_code=201)
+def crear_cliente(req: ClienteReq, request: Request,
+                  usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        nuevo_id = _servicio_clientes(request, usuario_id, uow).crear(DatosCliente(**req.model_dump()))
+    except NifInvalido:
+        raise HTTPException(422, "El NIF/NIE/CIF indicado no es valido")
+    return {"id": nuevo_id}
+
+
+@router.put("/api/maestros/clientes/{cliente_id}")
+def actualizar_cliente(cliente_id: int, req: ClienteReq, request: Request,
+                       usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_clientes(request, usuario_id, uow).actualizar(cliente_id, DatosCliente(**req.model_dump()))
+    except ClienteNoEncontrado:
+        raise HTTPException(404, "Cliente no encontrado")
+    except NifInvalido:
+        raise HTTPException(422, "El NIF/NIE/CIF indicado no es valido")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/clientes/{cliente_id}/desactivar")
+def desactivar_cliente(cliente_id: int, request: Request,
+                       usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_clientes(request, usuario_id, uow).desactivar(cliente_id)
+    except ClienteNoEncontrado:
+        raise HTTPException(404, "Cliente no encontrado")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/clientes/{cliente_id}/activar")
+def activar_cliente(cliente_id: int, request: Request,
+                    usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_clientes(request, usuario_id, uow).activar(cliente_id)
+    except ClienteNoEncontrado:
+        raise HTTPException(404, "Cliente no encontrado")
     return {"ok": True}
