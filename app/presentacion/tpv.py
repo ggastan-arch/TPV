@@ -44,6 +44,17 @@ _UI = Path(__file__).resolve().parents[1] / "ui" / "tpv.html"
 router = APIRouter(prefix="/tpv", tags=["tpv"])
 
 
+def require_pin(pin: str | None = None, uow=Depends(get_uow)) -> int:
+    """Dependencia: exige el PIN de un usuario activo (patron kiosco, sin sesion
+    de servidor). Reutiliza el `uow` de la peticion (evita abrir una segunda
+    conexion/transaccion SQLite en modo BEGIN IMMEDIATE). Devuelve el usuario_id."""
+    if pin:
+        for usuario in uow.usuarios.listar(incluir_inactivos=False):
+            if verificar_pin(pin, usuario.pin_hash):
+                return usuario.id
+    raise HTTPException(401, "PIN incorrecto")
+
+
 # --- esquemas de entrada -------------------------------------------------------
 class ItemVenta(BaseModel):
     articulo_id: int
@@ -214,6 +225,16 @@ def cobrar(
         "fecha": resultado.fecha,
         "total": resultado.total,
         "cambio": resultado.cambio,
+    }
+
+
+@router.get("/api/stock/alarma")
+def stock_alarma(_: int = Depends(require_pin), uow=Depends(get_uow)) -> dict:
+    """Senal informativa de stock negativo; NUNCA bloquea el cobro (CLAUDE.md)."""
+    negativos = uow.stock.rastreados_en_negativo()
+    return {
+        "control_activo": uow.configuracion.control_stock_activo(),
+        "articulos_en_negativo": len(negativos),
     }
 
 

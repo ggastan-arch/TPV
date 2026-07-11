@@ -54,12 +54,12 @@ Nota: este repo no usa PRs (commit directo a `main`). "Chained PRs" se traduce a
 
 ## Phase 5: Endpoints
 
-- [ ] 5.1 RED: `/admin` — POST `/api/stock/ajuste`, POST `/api/stock/entrada`, POST `/api/stock/merma`, GET `/api/stock`, GET `/api/stock/{id}/movimientos`, GET `/api/stock/estado`; incl. 401 sin sesión — nuevo `tests/test_stock_admin_api.py`
-- [ ] 5.2 GREEN: endpoints en `app/presentacion/admin.py` (auditados, rol administración, `_origen`)
-- [ ] 5.3 RED: `/tpv` GET `/api/stock/alarma` → `{control_activo, articulos_en_negativo}`, informativa, con PIN — `tests/test_tpv_api.py`
-- [ ] 5.4 GREEN: endpoint en `app/presentacion/tpv.py` (patrón alarma de cola de remisión)
+- [x] 5.1 RED: `/admin` — POST `/api/stock/ajuste`, POST `/api/stock/entrada`, POST `/api/stock/merma`, GET `/api/stock`, GET `/api/stock/{id}/movimientos`, GET `/api/stock/estado`; incl. 401 sin sesión — nuevo `tests/test_stock_admin_api.py`
+- [x] 5.2 GREEN: endpoints en `app/presentacion/admin.py` (auditados, rol administración, `_origen`)
+- [x] 5.3 RED: `/tpv` GET `/api/stock/alarma` → `{control_activo, articulos_en_negativo}`, informativa, con PIN — `tests/test_tpv_api.py`
+- [x] 5.4 GREEN: endpoint en `app/presentacion/tpv.py` (dependencia `require_pin`, reutiliza el `uow` de la petición para evitar doble `BEGIN IMMEDIATE`)
 
 ## Phase 6: Verificación final
 
-- [ ] 6.1 Suite completa verde: `.venv/Scripts/python -m pytest` (219 previos + nuevos, sin regresión)
-- [ ] 6.2 `make arch` verde (dominio sin import de ORM/FastAPI)
+- [x] 6.1 Suite completa verde: `.venv/Scripts/python -m pytest` (239 previos + 13 nuevos = 252, sin regresión)
+- [x] 6.2 `lint-imports` verde (3 contratos KEPT, dominio sin import de ORM/FastAPI)

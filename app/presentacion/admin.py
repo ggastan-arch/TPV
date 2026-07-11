@@ -47,6 +47,14 @@ from app.aplicacion.familias import (
     ServicioFamilias,
 )
 from app.aplicacion.generar_cierre_z import GenerarCierreZ
+from app.aplicacion.stock import (
+    ArticuloNoRastreado,
+    CantidadInvalida,
+    ConsultarStock,
+    MotivoRequerido,
+    RegistrarEntrada,
+    RegistrarMerma,
+)
 from app.aplicacion.tipos_iva import (
     DatosTipoIva,
     PorcentajeInvalido,
@@ -129,6 +137,21 @@ class UsuarioActualizarReq(BaseModel):
 
 class PinReq(BaseModel):
     pin: str
+
+
+class AjusteStockReq(BaseModel):
+    activo: bool
+
+
+class EntradaStockReq(BaseModel):
+    articulo_id: int
+    cantidad: Decimal
+
+
+class MermaStockReq(BaseModel):
+    articulo_id: int
+    cantidad: Decimal
+    motivo: str
 
 
 def _origen(request: Request) -> str:
@@ -551,6 +574,82 @@ def activar_usuario(usuario_objetivo_id: int, request: Request,
     except UsuarioNoEncontrado:
         raise HTTPException(404, "Usuario no encontrado")
     return {"ok": True}
+
+
+# --- Stock informativo (ajuste, entrada, merma, listado, alarma) ---------------
+@router.post("/api/stock/ajuste")
+def ajustar_control_stock(req: AjusteStockReq, request: Request,
+                          usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    uow.configuracion.fijar_control_stock(req.activo)
+    uow.session.add(LogAuditoria(fecha_hora_huso=ahora_huso(), usuario_id=usuario_id,
+                                 accion="ajustar_control_stock", entidad="configuracion_empresa",
+                                 entidad_id="1", detalle=str(req.activo), origen=_origen(request)))
+    uow.commit()
+    return {"control_activo": req.activo}
+
+
+@router.post("/api/stock/entrada", status_code=201)
+def registrar_entrada_stock(req: EntradaStockReq, request: Request,
+                           usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        movimiento_id = RegistrarEntrada(uow).ejecutar(
+            articulo_id=req.articulo_id, cantidad=req.cantidad,
+            usuario_id=usuario_id, origen=_origen(request))
+    except ArticuloNoRastreado:
+        raise HTTPException(422, "El articulo no existe o no tiene control de stock activado")
+    except CantidadInvalida:
+        raise HTTPException(422, "La cantidad debe ser mayor que cero")
+    return {"id": movimiento_id}
+
+
+@router.post("/api/stock/merma", status_code=201)
+def registrar_merma_stock(req: MermaStockReq, request: Request,
+                         usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        movimiento_id = RegistrarMerma(uow).ejecutar(
+            articulo_id=req.articulo_id, cantidad=req.cantidad, motivo=req.motivo,
+            usuario_id=usuario_id, origen=_origen(request))
+    except ArticuloNoRastreado:
+        raise HTTPException(422, "El articulo no existe o no tiene control de stock activado")
+    except CantidadInvalida:
+        raise HTTPException(422, "La cantidad debe ser mayor que cero")
+    except MotivoRequerido:
+        raise HTTPException(422, "La merma exige un motivo")
+    return {"id": movimiento_id}
+
+
+@router.get("/api/stock")
+def listar_stock(_: int = Depends(require_admin), uow=Depends(get_uow)) -> list[dict]:
+    consulta = ConsultarStock(uow)
+    articulos = uow.session.execute(
+        select(Articulo).where(Articulo.control_stock.is_(True)).order_by(Articulo.nombre)
+    ).scalars()
+    return [{"id": a.id, "nombre": a.nombre, "activo": a.activo,
+             "stock_actual": str(consulta.stock_de(a.id))}
+            for a in articulos]
+
+
+@router.get("/api/stock/{articulo_id}/movimientos")
+def movimientos_stock(articulo_id: int, _: int = Depends(require_admin),
+                      uow=Depends(get_uow)) -> list[dict]:
+    if uow.articulos.buscar(articulo_id) is None:
+        raise HTTPException(404, "Articulo no encontrado")
+    return [
+        {"id": m.id, "tipo": m.tipo, "cantidad": str(m.cantidad), "motivo": m.motivo,
+         "venta_id": m.venta_id, "usuario_id": m.usuario_id,
+         "fecha_hora_huso": m.fecha_hora_huso}
+        for m in uow.stock.movimientos(articulo_id)
+    ]
+
+
+@router.get("/api/stock/estado")
+def estado_stock(_: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    negativos = uow.stock.rastreados_en_negativo()
+    return {
+        "control_activo": uow.configuracion.control_stock_activo(),
+        "articulos_en_negativo": len(negativos),
+        "detalle": [{"articulo_id": aid, "stock_actual": str(saldo)} for aid, saldo in negativos],
+    }
 
 
 # --- Maestros: cierres Z (informe Z inmutable) ---------------------------------

@@ -144,3 +144,32 @@ def test_cobrar_ticket_vacio_rechaza(cliente, datos_tpv):
     r = cliente.post("/tpv/api/cobrar",
                      json={"usuario_id": login["usuario_id"], "items": [], "pagos": []})
     assert r.status_code == 400
+
+
+# --- Alarma de stock (informativa, nunca bloquea el cobro) ---------------------
+def test_stock_alarma_exige_pin(cliente, datos_tpv):
+    assert cliente.get("/tpv/api/stock/alarma").status_code == 401
+    assert cliente.get("/tpv/api/stock/alarma?pin=9999").status_code == 401
+
+
+def test_stock_alarma_sin_sobreventa(cliente, datos_tpv):
+    r = cliente.get("/tpv/api/stock/alarma?pin=0000")
+    assert r.status_code == 200
+    assert r.json() == {"control_activo": False, "articulos_en_negativo": 0}
+
+
+def test_stock_alarma_refleja_sobreventa(cliente, crear_sesion, datos_tpv):
+    from app.infraestructura.persistencia.modelos import MovimientoStock
+    from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
+
+    with crear_sesion() as s:
+        uow = UnidadDeTrabajoSQL(s)
+        uow.configuracion.fijar_control_stock(True)
+        uow.stock.agregar(MovimientoStock(
+            articulo_id=datos_tpv["neon_id"], tipo="venta", cantidad=Decimal("4"),
+            fecha_hora_huso="2026-07-11T00:00:00+02:00"))
+        s.commit()
+
+    r = cliente.get("/tpv/api/stock/alarma?pin=0000")
+    assert r.status_code == 200
+    assert r.json() == {"control_activo": True, "articulos_en_negativo": 1}
