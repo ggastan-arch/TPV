@@ -244,3 +244,35 @@ def test_actualizar_cliente_inexistente(cliente, admin, datos_base):
     _login(cliente, admin)
     r = cliente.put("/admin/api/maestros/clientes/999999", json={"nombre": "X"})
     assert r.status_code == 404
+
+
+# --- Maestros: usuarios --------------------------------------------------------
+def test_crear_usuario_exige_sesion(cliente, datos_base):
+    assert cliente.post("/admin/api/maestros/usuarios",
+                        json={"nombre": "cajera", "rol": "venta", "pin": "1234"}).status_code == 401
+
+
+def test_crear_usuario_ok_sin_exponer_hash(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/usuarios",
+                     json={"nombre": "cajera", "rol": "venta", "pin": "1234"})
+    assert r.status_code == 201
+    nuevo_id = r.json()["id"]
+    usuarios = cliente.get("/admin/api/maestros/usuarios").json()
+    fila = next(u for u in usuarios if u["id"] == nuevo_id)
+    assert fila["rol"] == "venta"
+    assert "pin_hash" not in fila and "pin" not in fila
+
+
+def test_crear_usuario_rol_invalido(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/usuarios",
+                     json={"nombre": "x", "rol": "jefe", "pin": "1234"})
+    assert r.status_code == 422
+
+
+def test_desactivar_ultimo_admin_devuelve_409(cliente, admin, datos_base):
+    # 'admin' (jefa) es el unico administrador activo: no puede autodesactivarse.
+    _login(cliente, admin)
+    r = cliente.post(f"/admin/api/maestros/usuarios/{admin['usuario_id']}/desactivar")
+    assert r.status_code == 409

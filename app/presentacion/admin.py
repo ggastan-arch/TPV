@@ -29,6 +29,15 @@ from app.aplicacion.clientes import (
     NifInvalido,
     ServicioClientes,
 )
+from app.aplicacion.usuarios import (
+    DatosUsuario,
+    NombreDuplicado,
+    PinInvalido,
+    RolInvalido,
+    ServicioUsuarios,
+    UltimoAdministrador,
+    UsuarioNoEncontrado,
+)
 from app.aplicacion.familias import (
     CicloEnFamilia,
     DatosFamilia,
@@ -104,6 +113,21 @@ class ClienteReq(BaseModel):
     email: str | None = None
     telefono: str | None = None
     rgpd_consentimiento: bool = False
+
+
+class UsuarioCrearReq(BaseModel):
+    nombre: str
+    rol: str
+    pin: str
+
+
+class UsuarioActualizarReq(BaseModel):
+    nombre: str
+    rol: str
+
+
+class PinReq(BaseModel):
+    pin: str
 
 
 def _origen(request: Request) -> str:
@@ -454,4 +478,75 @@ def activar_cliente(cliente_id: int, request: Request,
         _servicio_clientes(request, usuario_id, uow).activar(cliente_id)
     except ClienteNoEncontrado:
         raise HTTPException(404, "Cliente no encontrado")
+    return {"ok": True}
+
+
+# --- Maestros: usuarios (escritura) --------------------------------------------
+def _servicio_usuarios(request: Request, usuario_id: int, uow) -> ServicioUsuarios:
+    return ServicioUsuarios(uow, usuario_id=usuario_id, origen=_origen(request))
+
+
+@router.post("/api/maestros/usuarios", status_code=201)
+def crear_usuario(req: UsuarioCrearReq, request: Request,
+                  usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        nuevo_id = _servicio_usuarios(request, usuario_id, uow).crear(
+            DatosUsuario(nombre=req.nombre, rol=req.rol, pin=req.pin))
+    except NombreDuplicado:
+        raise HTTPException(409, "Ya existe un usuario con ese nombre")
+    except RolInvalido:
+        raise HTTPException(422, "Rol invalido (venta | administracion)")
+    except PinInvalido:
+        raise HTTPException(422, "El PIN no es valido (minimo 4 caracteres)")
+    return {"id": nuevo_id}
+
+
+@router.put("/api/maestros/usuarios/{usuario_objetivo_id}")
+def actualizar_usuario(usuario_objetivo_id: int, req: UsuarioActualizarReq, request: Request,
+                       usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_usuarios(request, usuario_id, uow).actualizar(
+            usuario_objetivo_id, DatosUsuario(nombre=req.nombre, rol=req.rol))
+    except UsuarioNoEncontrado:
+        raise HTTPException(404, "Usuario no encontrado")
+    except NombreDuplicado:
+        raise HTTPException(409, "Ya existe un usuario con ese nombre")
+    except RolInvalido:
+        raise HTTPException(422, "Rol invalido (venta | administracion)")
+    except UltimoAdministrador:
+        raise HTTPException(409, "No se puede dejar el sistema sin un administrador activo")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/usuarios/{usuario_objetivo_id}/pin")
+def cambiar_pin_usuario(usuario_objetivo_id: int, req: PinReq, request: Request,
+                        usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_usuarios(request, usuario_id, uow).cambiar_pin(usuario_objetivo_id, req.pin)
+    except UsuarioNoEncontrado:
+        raise HTTPException(404, "Usuario no encontrado")
+    except PinInvalido:
+        raise HTTPException(422, "El PIN no es valido (minimo 4 caracteres)")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/usuarios/{usuario_objetivo_id}/desactivar")
+def desactivar_usuario(usuario_objetivo_id: int, request: Request,
+                       usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_usuarios(request, usuario_id, uow).desactivar(usuario_objetivo_id)
+    except UsuarioNoEncontrado:
+        raise HTTPException(404, "Usuario no encontrado")
+    except UltimoAdministrador:
+        raise HTTPException(409, "No se puede dejar el sistema sin un administrador activo")
+    return {"ok": True}
+
+
+@router.post("/api/maestros/usuarios/{usuario_objetivo_id}/activar")
+def activar_usuario(usuario_objetivo_id: int, request: Request,
+                    usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    try:
+        _servicio_usuarios(request, usuario_id, uow).activar(usuario_objetivo_id)
+    except UsuarioNoEncontrado:
+        raise HTTPException(404, "Usuario no encontrado")
     return {"ok": True}

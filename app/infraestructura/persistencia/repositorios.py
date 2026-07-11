@@ -137,6 +137,27 @@ class RepositorioUsuariosSQL:
     def buscar(self, usuario_id: int) -> Usuario | None:
         return self._s.get(Usuario, usuario_id)
 
+    def buscar_por_nombre(self, nombre: str) -> Usuario | None:
+        return self._s.execute(
+            select(Usuario).where(Usuario.nombre == nombre)
+        ).scalars().first()
+
+    def agregar(self, usuario: Usuario) -> None:
+        self._s.add(usuario)
+
+    def listar(self, incluir_inactivos: bool = True) -> list[Usuario]:
+        stmt = select(Usuario).order_by(Usuario.nombre)
+        if not incluir_inactivos:
+            stmt = stmt.where(Usuario.activo.is_(True))
+        return list(self._s.execute(stmt).scalars())
+
+    def contar_administradores_activos(self, excluir_id: int | None = None) -> int:
+        stmt = select(func.count()).select_from(Usuario).where(
+            Usuario.rol == "administracion", Usuario.activo.is_(True))
+        if excluir_id is not None:
+            stmt = stmt.where(Usuario.id != excluir_id)
+        return self._s.execute(stmt).scalar_one()
+
 
 class RepositorioRegistrosSQL:
     def __init__(self, session: Session):

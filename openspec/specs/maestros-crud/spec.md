@@ -169,13 +169,35 @@ artículo, tipo de IVA, familia y cliente, con `entidad`, `entidad_id` y `usuari
 `tests/test_clientes.py::test_actualizar_cliente_ok_y_audita`;
 `tests/test_tipos_iva.py::test_crear_tipo_iva_persiste_y_audita`
 
+### Requirement: Gestión de usuarios/operadores con salvaguarda de administrador
+
+El sistema MUST permitir crear/editar/activar/desactivar operadores del TPV con rol
+`venta` o `administracion`; MUST almacenar el PIN hasheado (nunca en claro ni en el log
+de auditoría); MUST garantizar nombre único; y MUST NOT dejar el sistema sin ningún
+administrador activo (ni por baja ni por degradación de rol).
+
+#### Scenario: No se puede desactivar/degradar al último administrador activo
+- GIVEN un único administrador activo en el sistema
+- WHEN se intenta desactivarlo o cambiar su rol a `venta`
+- THEN se lanza `UltimoAdministrador` (409 vía API) y el administrador permanece activo
+
+#### Scenario: El cambio de PIN no expone el PIN
+- WHEN se cambia el PIN de un usuario
+- THEN el nuevo PIN queda hasheado y no aparece en ninguna entrada del log de auditoría
+
+**Tests**: `tests/test_usuarios.py::test_crear_usuario_hashea_pin_y_audita`,
+`::test_no_desactivar_ultimo_administrador`, `::test_no_degradar_a_venta_al_ultimo_administrador`,
+`::test_cambiar_pin_no_expone_el_pin`; `tests/test_admin_api.py::test_desactivar_ultimo_admin_devuelve_409`
+
 ## Constraints (no debilitar)
 
-- Nunca `DELETE`/hard-delete sobre artículos, familias, tipos de IVA o clientes.
+- Nunca `DELETE`/hard-delete sobre artículos, familias, tipos de IVA, clientes ni usuarios.
 - Log de auditoría append-only para todo cambio de maestro (invariante 4).
 - El porcentaje de IVA congelado en línea de venta nunca se reescribe.
+- El PIN de usuario nunca se almacena ni se registra en claro; el sistema nunca queda sin administrador activo.
 
 ## Out of Scope
 
-CRUD de USUARIOS (alta/edición de operadores y roles): trabajo futuro, no
-entregado — documentado como pendiente en el proposal.
+Ninguno pendiente en esta capacidad: el CRUD de usuarios quedó entregado (ver requisito
+"Gestión de usuarios/operadores"). La remisión real a la AEAT sigue siendo trabajo futuro
+del motor fiscal, no de los maestros.
