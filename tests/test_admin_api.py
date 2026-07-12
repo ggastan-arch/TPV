@@ -154,6 +154,42 @@ def test_desactivar_articulo(cliente, admin, datos_base):
     assert any(a["id"] == nuevo_id and a["activo"] is False for a in articulos)
 
 
+def test_listado_articulos_expone_campos_editables_sin_extra(cliente, admin, datos_base):
+    # CRITICAL (verify modos-precio): el modal de edicion perdia familia/coste/color/icono
+    # porque el DTO de lectura no los exponia. Caso sin datos opcionales -> null.
+    _login(cliente, admin)
+    nuevo_id = cliente.post("/admin/api/maestros/articulos",
+                            json=_nuevo_articulo(datos_base)).json()["id"]
+    articulo = next(a for a in cliente.get("/admin/api/maestros/articulos").json()
+                    if a["id"] == nuevo_id)
+    assert articulo["nombre_corto"] == "Neon"
+    assert articulo["tipo_iva_id"] == datos_base["iva21_id"]
+    assert articulo["familia_id"] is None
+    assert articulo["coste"] is None
+    assert articulo["color_boton"] is None
+    assert articulo["icono"] is None
+
+
+def test_listado_articulos_expone_campos_editables_completos(cliente, admin, datos_base):
+    # Caso con todos los campos opcionales completados -> el DTO debe conservarlos
+    # (sin esto, el modal de edicion los pisa a null/hardcodeado al guardar).
+    _login(cliente, admin)
+    familia_id = cliente.post("/admin/api/maestros/familias", json={"nombre": "Peces"}).json()["id"]
+    nuevo_id = cliente.post(
+        "/admin/api/maestros/articulos",
+        json=_nuevo_articulo(datos_base, nombre_corto="Neon-c", familia_id=familia_id,
+                             coste="1.20", color_boton="#ff0000", icono="pez.svg"),
+    ).json()["id"]
+    articulo = next(a for a in cliente.get("/admin/api/maestros/articulos").json()
+                    if a["id"] == nuevo_id)
+    assert articulo["nombre_corto"] == "Neon-c"
+    assert articulo["tipo_iva_id"] == datos_base["iva21_id"]
+    assert articulo["familia_id"] == familia_id
+    assert articulo["coste"] == "1.20"
+    assert articulo["color_boton"] == "#ff0000"
+    assert articulo["icono"] == "pez.svg"
+
+
 # --- Maestros: tipos de IVA ----------------------------------------------------
 def test_crear_tipo_iva_exige_sesion(cliente, datos_base):
     assert cliente.post("/admin/api/maestros/tipos-iva",

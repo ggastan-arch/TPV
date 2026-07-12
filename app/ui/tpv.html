@@ -88,7 +88,7 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 let usuario = null;
-let carrito = [];      // {articulo_id, nombre_corto, cantidad, pvp?, descripcion?, editado}
+let carrito = [];      // {articulo_id, nombre_corto, modo_precio, cantidad, pvp?, descripcion?, editado}
 let ultimoCalculo = null;
 
 async function api(path, opts = {}) {
@@ -102,6 +102,8 @@ async function api(path, opts = {}) {
 const eur = (s) => (s ?? "0.00").toString().replace(".", ",") + " €";
 // Imagen del destino (articulo/familia); "" cuando no hay -> el boton conserva su aspecto actual.
 const imgBoton = (ruta) => ruta ? `<img class="b-img" src="${ruta}" alt="">` : "";
+// Precio a mostrar en el boton: "/kg" cuando el articulo se vende al peso.
+const precioBoton = (a) => eur(a.pvp) + (a.modo_precio === "al_peso" ? "/kg" : "");
 
 /* ---------- LOGIN ---------- */
 function pantallaLogin() {
@@ -148,7 +150,7 @@ async function irInicio() {
     btn.style.gridRow = `${b.fila + 1} / span ${b.alto}`;
     if (b.color) btn.style.background = b.color;
     if (b.tipo === "articulo") {
-      btn.innerHTML = `${imgBoton(b.articulo.imagen)}<span>${b.articulo.nombre_corto}</span><span class="b-precio">${eur(b.articulo.pvp)}</span>`;
+      btn.innerHTML = `${imgBoton(b.articulo.imagen)}<span>${b.articulo.nombre_corto}</span><span class="b-precio">${precioBoton(b.articulo)}</span>`;
       btn.onclick = () => anadir(b.articulo);
     } else if (b.tipo === "familia") {
       btn.innerHTML = `${imgBoton(b.familia.imagen)}<span>${b.texto || b.familia.nombre}</span>`;
@@ -176,7 +178,7 @@ async function abrirFamilia(id) {
   for (const a of fam.articulos) {
     const b = document.createElement("button");
     b.className = "btn b-articulo";
-    b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${eur(a.pvp)}</span>`;
+    b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${precioBoton(a)}</span>`;
     b.onclick = () => anadir(a); grid.appendChild(b);
   }
 }
@@ -200,7 +202,7 @@ async function buscar(q) {
   for (const a of resultados) {
     const b = document.createElement("button");
     b.className = "btn b-articulo";
-    b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${eur(a.pvp)}</span>`;
+    b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${precioBoton(a)}</span>`;
     b.onclick = () => anadir(a);
     grid.appendChild(b);
   }
@@ -215,19 +217,40 @@ function ejecutarFuncion(f) {
 
 /* ---------- CARRITO ---------- */
 function anadir(articulo) {
-  let pvp = articulo.pvp;
-  if (articulo.precio_libre) {
+  const modo = articulo.modo_precio;
+  if (articulo.requiere_cites) alert("⚠ " + articulo.nombre_corto + " requiere documentacion CITES.");
+
+  // Modo libre: el backend exige precio Y descripcion al cobrar (DescripcionRequerida);
+  // se piden ambos ya al tocar el boton. Cada toque crea su propia linea (no se fusiona).
+  if (modo === "libre") {
     const v = prompt("Precio (con IVA) para " + articulo.nombre_corto + ":", articulo.pvp);
     if (v === null) return;
-    pvp = v.replace(",", ".");
+    const desc = prompt("Descripcion para " + articulo.nombre_corto + ":", "");
+    if (desc === null) return;
+    carrito.push({ articulo_id: articulo.id, nombre_corto: articulo.nombre_corto, modo_precio: modo,
+                   cantidad: 1, pvp: v.replace(",", "."), descripcion: desc.trim() || null, editado: true });
+    recalcular();
+    return;
   }
-  if (articulo.requiere_cites) alert("⚠ " + articulo.nombre_corto + " requiere documentacion CITES.");
-  // Una linea editada (precio o descripcion) no se fusiona: el nuevo toque crea linea propia.
-  const ex = carrito.find((l) => l.articulo_id === articulo.id && !articulo.precio_libre && !l.editado);
+
+  // Modo al_peso: el pvp del articulo es €/kg (ya viene en el DTO); se pide el peso y se
+  // envia como "cantidad" (misma formula cantidad x pvp_unitario). No se fusiona con otras lineas.
+  if (modo === "al_peso") {
+    const v = prompt("Peso (kg) para " + articulo.nombre_corto + ":", "1");
+    if (v === null) return;
+    const peso = parseFloat(String(v).replace(",", "."));
+    if (!isFinite(peso) || peso <= 0) { alert("Peso no valido."); return; }
+    carrito.push({ articulo_id: articulo.id, nombre_corto: articulo.nombre_corto, modo_precio: modo,
+                   cantidad: peso, pvp: null, descripcion: null, editado: false });
+    recalcular();
+    return;
+  }
+
+  // Modo fijo: comportamiento actual (fusiona con la linea existente si no fue editada).
+  const ex = carrito.find((l) => l.articulo_id === articulo.id && !l.editado);
   if (ex) ex.cantidad += 1;
-  else carrito.push({ articulo_id: articulo.id, nombre_corto: articulo.nombre_corto,
-                      cantidad: 1, pvp: articulo.precio_libre ? pvp : null,
-                      descripcion: null, editado: false });
+  else carrito.push({ articulo_id: articulo.id, nombre_corto: articulo.nombre_corto, modo_precio: modo,
+                      cantidad: 1, pvp: null, descripcion: null, editado: false });
   recalcular();
 }
 
@@ -276,9 +299,10 @@ function render() {
   const lineas = ultimoCalculo ? ultimoCalculo.lineas : [];
   lineas.forEach((ln, i) => {
     const div = document.createElement("div"); div.className = "linea";
+    const esAlPeso = carrito[i].modo_precio === "al_peso";
     div.innerHTML = `<div class="desc"><span class="editable" data-accion="descripcion">${ln.descripcion}</span>
-        <div class="cant"><span class="editable" data-accion="cantidad">${carrito[i].cantidad}</span> ×
-        <span class="editable" data-accion="precio">${eur(ln.pvp)}</span>
+        <div class="cant"><span class="editable" data-accion="cantidad">${carrito[i].cantidad}${esAlPeso ? " kg" : ""}</span> ×
+        <span class="editable" data-accion="precio">${eur(ln.pvp)}${esAlPeso ? "/kg" : ""}</span>
         &middot; IVA ${ln.tipo_iva.replace(".",",")}%</div></div>
       <div class="tot">${eur(ln.total)}</div>`;
     div.querySelector('[data-accion="descripcion"]').onclick = () => editarDescripcion(i);

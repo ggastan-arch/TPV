@@ -227,22 +227,119 @@ function activarSubidaImagenes() {
   });
 }
 
+// Cache en memoria de tipos de IVA/familias del ultimo pintado: los usa el modal de
+// alta/edicion de articulo sin volver a pedirlos al servidor.
+let maIvasCache = [];
+let maFamiliasCache = [];
+const MODO_PRECIO_LABEL = { fijo: "Fijo", libre: "Libre", al_peso: "Al peso (€/kg)" };
+
 async function pintarMaestros() {
   const [arts, ivas, fams, users] = await Promise.all([
     api("/admin/api/maestros/articulos"), api("/admin/api/maestros/tipos-iva"),
     api("/admin/api/maestros/familias"), api("/admin/api/maestros/usuarios")]);
+  maIvasCache = ivas;
+  maFamiliasCache = fams;
   const tabla = (t, cols, rows) => `<div class="card"><h2>${t}</h2><table>
     <thead><tr>${cols.map(c=>`<th>${c[0]}</th>`).join("")}</tr></thead>
     <tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   $("#main").innerHTML =
+    `<div class="card" style="display:flex;justify-content:flex-end">
+      <button class="accion" id="maNuevoArticulo">+ Nuevo artículo</button>
+    </div>` +
     tabla("Artículos", [["Nombre",r=>r.nombre],["PVP",r=>eur(r.pvp)],["IVA",r=>r.tipo_iva+"%"],
+      ["Modo de precio",r=>MODO_PRECIO_LABEL[r.modo_precio] || r.modo_precio],
       ["CITES",r=>r.requiere_cites?"sí":""],["Activo",r=>r.activo?"sí":"no"],
-      ["Imagen",r=>celdaImagen("articulos", r)]], arts) +
+      ["Imagen",r=>celdaImagen("articulos", r)],
+      ["",r=>`<button class="accion" data-editar-articulo="${r.id}">Editar</button>`]], arts) +
     tabla("Tipos de IVA", [["Nombre",r=>r.nombre],["%",r=>r.porcentaje],["Activo",r=>r.activo?"sí":"no"]], ivas) +
     tabla("Familias", [["Nombre",r=>r.nombre],["Padre",r=>r.parent_id??"—"],
       ["Imagen",r=>celdaImagen("familias", r)]], fams) +
     tabla("Usuarios", [["Nombre",r=>r.nombre],["Rol",r=>r.rol],["Activo",r=>r.activo?"sí":"no"]], users);
   activarSubidaImagenes();
+  $("#maNuevoArticulo").onclick = () => modalArticulo(null);
+  document.querySelectorAll("[data-editar-articulo]").forEach((btn) => {
+    const art = arts.find((a) => a.id === Number(btn.dataset.editarArticulo));
+    btn.onclick = () => modalArticulo(art);
+  });
+}
+
+/* -- alta / edicion de articulo (modo_precio: fijo|libre|al_peso) -- */
+// El listado GET /admin/api/maestros/articulos expone TODOS los campos editables
+// (nombre_corto, tipo_iva_id, familia_id, coste, color_boton, icono ademas de lo
+// basico), asi que el modal de edicion precarga la ficha completa y "Guardar" sin
+// tocar nada conserva los valores existentes (el PUT reemplaza la ficha completa,
+// pero ahora el formulario siempre parte de los datos reales del articulo).
+const COLOR_BOTON_DEFAULT = "#0369a1";
+
+function modalArticulo(articulo) {
+  const editando = !!articulo;
+  const opcionesIva = maIvasCache.map((i) =>
+    `<option value="${i.id}" ${editando && articulo.tipo_iva_id === i.id ? "selected" : ""}>${i.nombre} (${i.porcentaje}%)</option>`
+  ).join("");
+  const opcionesFamilia = `<option value="">— sin familia —</option>` +
+    maFamiliasCache.map((f) =>
+      `<option value="${f.id}" ${editando && articulo.familia_id === f.id ? "selected" : ""}>${f.nombre}</option>`
+    ).join("");
+  const modos = ["fijo", "libre", "al_peso"];
+  const opcionesModo = modos.map((m) =>
+    `<option value="${m}" ${editando && articulo.modo_precio === m ? "selected" : ""}>${MODO_PRECIO_LABEL[m]}</option>`
+  ).join("");
+
+  const ov = document.createElement("div");
+  ov.className = "overlay";
+  ov.innerHTML = `<div class="modal">
+    <h2>${editando ? "Editar artículo" : "Nuevo artículo"}</h2>
+    <label>Nombre<input id="maNombre" value="${editando ? (articulo.nombre || "").replace(/"/g, "&quot;") : ""}"></label>
+    <label>Nombre corto<input id="maNombreCorto" value="${editando ? (articulo.nombre_corto || "").replace(/"/g, "&quot;") : ""}"></label>
+    <label>Tipo de IVA<select id="maTipoIva">${opcionesIva}</select></label>
+    <label id="maLabelPvp">PVP (con IVA)<input id="maPvp" inputmode="decimal" value="${editando ? articulo.pvp : ""}"></label>
+    <label>Familia<select id="maFamilia">${opcionesFamilia}</select></label>
+    <label>Coste<input id="maCoste" inputmode="decimal" value="${editando && articulo.coste != null ? articulo.coste : ""}"></label>
+    <label>Modo de precio<select id="maModoPrecio">${opcionesModo}</select></label>
+    <label><input id="maControlStock" type="checkbox" style="width:auto" ${editando && articulo.control_stock ? "checked" : ""}> Control de stock</label>
+    <label><input id="maCites" type="checkbox" style="width:auto" ${editando && articulo.requiere_cites ? "checked" : ""}> Requiere CITES</label>
+    <label>Color del botón<input id="maColor" type="color" value="${editando ? (articulo.color_boton || COLOR_BOTON_DEFAULT) : COLOR_BOTON_DEFAULT}"></label>
+    <label>Icono (emoji o texto corto)<input id="maIcono" value="${editando ? (articulo.icono || "").replace(/"/g, "&quot;") : ""}"></label>
+    <div class="msg-error" id="maError"></div>
+    <div class="fila-modal">
+      <button class="accion" id="maCancelar" style="background:#475569">Cancelar</button>
+      <button class="accion" id="maGuardar">Guardar</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+
+  const actualizarLabelPvp = () => {
+    $("#maLabelPvp", ov).firstChild.textContent =
+      $("#maModoPrecio", ov).value === "al_peso" ? "PVP (€/kg)" : "PVP (con IVA)";
+  };
+  $("#maModoPrecio", ov).onchange = actualizarLabelPvp;
+  actualizarLabelPvp();
+
+  $("#maCancelar", ov).onclick = () => ov.remove();
+  $("#maGuardar", ov).onclick = async () => {
+    const datos = {
+      nombre: $("#maNombre", ov).value,
+      nombre_corto: $("#maNombreCorto", ov).value,
+      tipo_iva_id: Number($("#maTipoIva", ov).value),
+      pvp: $("#maPvp", ov).value.replace(",", "."),
+      familia_id: $("#maFamilia", ov).value ? Number($("#maFamilia", ov).value) : null,
+      coste: $("#maCoste", ov).value ? $("#maCoste", ov).value.replace(",", ".") : null,
+      control_stock: $("#maControlStock", ov).checked,
+      modo_precio: $("#maModoPrecio", ov).value,
+      requiere_cites: $("#maCites", ov).checked,
+      color_boton: $("#maColor", ov).value || null,
+      icono: $("#maIcono", ov).value || null,
+      codigos: [],
+    };
+    try {
+      if (editando) {
+        await api(`/admin/api/maestros/articulos/${articulo.id}`, { method: "PUT", body: JSON.stringify(datos) });
+      } else {
+        await api("/admin/api/maestros/articulos", { method: "POST", body: JSON.stringify(datos) });
+      }
+      ov.remove();
+      await pintarMaestros();
+    } catch (e) { $("#maError", ov).textContent = e.message; }
+  };
 }
 
 /* ---- BOTONERAS (editor drag & drop) ---- */

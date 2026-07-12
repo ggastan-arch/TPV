@@ -344,10 +344,16 @@ def maestros_familias(_: int = Depends(require_admin), s: Session = Depends(get_
 
 @router.get("/api/maestros/articulos")
 def maestros_articulos(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> list[dict]:
-    return [{"id": a.id, "nombre": a.nombre, "pvp": str(a.pvp),
-             "tipo_iva": str(a.tipo_iva.porcentaje), "control_stock": a.control_stock,
-             "modo_precio": a.modo_precio,
-             "requiere_cites": a.requiere_cites, "activo": a.activo, "imagen": a.imagen}
+    # DTO de lectura: expone TODOS los campos editables del formulario de alta/edicion
+    # (ver ArticuloReq) para que el modal de edicion pueda precargarlos sin perderlos
+    # al guardar (reemplazo completo en ServicioArticulos.actualizar).
+    return [{"id": a.id, "nombre": a.nombre, "nombre_corto": a.nombre_corto,
+             "tipo_iva_id": a.tipo_iva_id, "pvp": str(a.pvp),
+             "tipo_iva": str(a.tipo_iva.porcentaje), "familia_id": a.familia_id,
+             "coste": str(a.coste) if a.coste is not None else None,
+             "control_stock": a.control_stock, "modo_precio": a.modo_precio,
+             "requiere_cites": a.requiere_cites, "color_boton": a.color_boton,
+             "icono": a.icono, "activo": a.activo, "imagen": a.imagen}
             for a in s.execute(select(Articulo).order_by(Articulo.nombre)).scalars()]
 
 

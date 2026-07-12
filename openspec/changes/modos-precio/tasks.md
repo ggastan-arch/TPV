@@ -74,12 +74,31 @@ Chain strategy: pending
 ## Tanda 2 — Frontend (manual, sin tests automáticos)
 
 ### Fase 8: UI — selección de modo + entrada de peso/precio+descripción
-- [ ] 8.1 `app/ui/admin.html` — CRUD de artículo: selector de `modo_precio` (fijo/libre/al_peso); etiquetar el campo `pvp` como "€/kg" cuando `modo_precio == al_peso`
-- [ ] 8.2 `app/ui/tpv.html::anadir()` — rama por `modo_precio`: `libre` pide precio + descripción; `al_peso` pide peso (mapea a `cantidad`); `fijo` sin cambios
-- [ ] 8.3 Checklist manual: crear artículo en cada modo desde `admin.html` y verificar persistencia
-- [ ] 8.4 Checklist manual: vender un artículo `al_peso` (ingresar peso, verificar total en ticket) y un artículo `libre` (precio+descripción, con y sin descripción → debe bloquear al cobrar)
+- [x] 8.1 `app/ui/admin.html` — CRUD de artículo: selector de `modo_precio` (fijo/libre/al_peso); etiquetar el campo `pvp` como "€/kg" cuando `modo_precio == al_peso`. Se añadió modal de alta ("+ Nuevo artículo") y edición (botón "Editar" por fila) en la tabla de Artículos, más columna "Modo de precio".
+- [x] 8.1.1 **CRITICAL (verify) resuelto**: `GET /admin/api/maestros/articulos` (`maestros_articulos` en `app/presentacion/admin.py`) ahora expone también `nombre_corto`, `tipo_iva_id`, `familia_id`, `coste` (string decimal o `null`), `color_boton` e `icono` — cambio aditivo, cubierto por `tests/test_admin_api.py::test_listado_articulos_expone_campos_editables_sin_extra` y `::test_listado_articulos_expone_campos_editables_completos`. El modal de edición precarga TODOS los campos desde el DTO ampliado (`tipo_iva_id` exacto en vez de coincidencia por porcentaje, `familia_id`, `coste`, `color_boton`, `icono`, `nombre_corto` real) y se quitó el `value="#0369a1"` hardcodeado del input de color (en edición usa `articulo.color_boton`; en alta, el default explícito `COLOR_BOTON_DEFAULT`). Ya NO se pierden datos al editar y guardar sin tocar esos campos.
+- [x] 8.2 `app/ui/tpv.html::anadir()` — rama por `modo_precio`: `libre` pide precio + descripción (ambos, ya que el backend rechaza sin descripción al cobrar); `al_peso` pide peso (mapea a `cantidad`, muestra "kg"/"€/kg" en botón y línea de carrito); `fijo` sin cambios (fusiona línea existente como antes). Se reemplazó toda referencia a `articulo.precio_libre` (ya `undefined` en el DTO) por `articulo.modo_precio`.
+- [ ] 8.3 Checklist manual: crear artículo en cada modo desde `admin.html` y verificar persistencia — **PENDIENTE, requiere ejecución humana en navegador** (ver checklist detallado más abajo)
+- [ ] 8.4 Checklist manual: vender un artículo `al_peso` (ingresar peso, verificar total en ticket) y un artículo `libre` (precio+descripción, con y sin descripción → debe bloquear al cobrar) — **PENDIENTE, requiere ejecución humana en navegador** (ver checklist detallado más abajo)
 
 ### Fase 9: Checkpoint Tanda 2
-- [ ] 9.1 Ejecutar suite completa — sigue en verde (el frontend no debe romper tests de backend)
-- [ ] 9.2 Ejecutar `make arch`
-- [ ] 9.3 Checklist manual completo (8.3-8.4) firmado antes de cerrar PR 2
+- [x] 9.1 Ejecutar suite completa — sigue en verde (el frontend no debe romper tests de backend): **434 passed** (sin regresión; el frontend no toca tests de backend)
+- [x] 9.2 Ejecutar `lint-imports` (arquitectura hexagonal): **3 kept, 0 broken**
+- [ ] 9.3 Checklist manual completo (8.3-8.4) firmado antes de cerrar PR 2 — **PENDIENTE de firma humana**
+
+### Checklist manual detallado (8.3 / 8.4 / 9.3 — ejecutar en navegador antes de cerrar PR 2)
+
+**Alta de artículos (admin.html → Maestros → "+ Nuevo artículo")**
+- [ ] Crear un artículo `modo_precio = fijo` (p. ej. IVA 21%, PVP 5,00 €) → aparece en la tabla con "Modo de precio: Fijo" y el PVP correcto
+- [ ] Crear un artículo `modo_precio = libre` (PVP nominal, p. ej. 0,00 €) → aparece como "Libre"
+- [ ] Crear un artículo `modo_precio = al_peso` (PVP como €/kg, p. ej. 18,00) → al elegir "Al peso" en el modal, la etiqueta del campo PVP cambia a "PVP (€/kg)"; aparece como "Al peso (€/kg)" en la tabla
+- [ ] Editar el artículo `al_peso` recién creado (botón "Editar") y confirmar que el `modo_precio` se precarga correctamente en el selector
+- [ ] **(CRITICAL resuelto)** Editar un artículo con familia, coste, color de botón e icono ya definidos, y "Guardar" SIN tocar ninguno de esos campos → al recargar la tabla y reabrir "Editar", la familia, el coste, el color y el icono deben seguir siendo los mismos (ya no se pierden/pisan)
+
+**Venta en el TPV (tpv.html)**
+- [ ] Tocar el botón del artículo `al_peso`: debe pedir "Peso (kg)"; ingresar p. ej. `1,25` → la línea del carrito muestra "1.25 kg × 18,00 €/kg" y el total = peso × PVP (redondeo half-up)
+- [ ] Tocar el botón del artículo `libre`: debe pedir PRECIO y luego DESCRIPCIÓN; si se cancela cualquiera de los dos prompts, no se agrega línea
+- [ ] Cobrar un ticket con una línea `libre` que tenga descripción → debe cobrar sin error
+- [ ] Forzar una línea `libre` sin descripción (cancelar el segundo prompt debería impedir agregarla; si se logra dejar una línea libre con descripción vacía vía edición manual de línea) y cobrar → el backend debe rechazar con 422 y el mensaje de error debe verse en el modal de cobro
+- [ ] Vender un artículo `fijo` normal (sin cambios de comportamiento): tocar varias veces debe sumar cantidad en la misma línea
+
+**Firma**: una vez verificados todos los puntos anteriores, marcar 8.3, 8.4 y 9.3 como `[x]` y cerrar PR 2.
