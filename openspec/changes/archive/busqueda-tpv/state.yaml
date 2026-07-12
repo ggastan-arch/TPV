@@ -1,0 +1,45 @@
+---
+# Archive state for busqueda-tpv
+change_name: busqueda-tpv
+status: archived
+archived_date: 2026-07-12
+description: "Búsqueda incremental por nombre en el TPV"
+
+# Phases completed
+phases:
+  proposal: completed
+  spec: completed
+  design: completed
+  tasks: completed
+  apply: completed
+  verify: completed
+  archive: completed
+
+# Verification summary
+verification:
+  test_count: 405
+  test_status: all_passed
+  import_linter_contracts_kept: 3
+  import_linter_contracts_broken: 0
+  migration_required: false
+
+# Implementation commit
+implementation_commit: a684c37
+
+# Pending items (non-blocking)
+pending_items:
+  - "Manual checklist verification on tactile device (scenarios from 3.3 of tasks.md)"
+
+# Delta specs merged into main specs
+specs_merged:
+  - domain: tpv-venta
+    action: added_requirements
+    requirements:
+      - "Búsqueda incremental de artículos por nombre"
+      - "Longitud mínima de consulta y límite de resultados"
+
+# Notes
+notes: |
+  Change archived with all implementation tasks completed. Manual verification
+  (keyboard input debounce, suggestion rendering, drawer integration) pending
+  end-user validation. Does not block code closure.
