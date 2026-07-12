@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
@@ -20,6 +21,7 @@ from app.aplicacion.articulos import (
     ArticuloNoEncontrado,
     DatosArticulo,
     FamiliaNoExiste,
+    ModoPrecioInvalido,
     ServicioArticulos,
     TipoIvaNoExiste,
 )
@@ -112,7 +114,7 @@ class ArticuloReq(BaseModel):
     familia_id: int | None = None
     coste: Decimal | None = None
     control_stock: bool = False
-    precio_libre: bool = False
+    modo_precio: Literal["fijo", "libre", "al_peso"] = "fijo"
     requiere_cites: bool = False
     color_boton: str | None = None
     icono: str | None = None
@@ -344,6 +346,7 @@ def maestros_familias(_: int = Depends(require_admin), s: Session = Depends(get_
 def maestros_articulos(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> list[dict]:
     return [{"id": a.id, "nombre": a.nombre, "pvp": str(a.pvp),
              "tipo_iva": str(a.tipo_iva.porcentaje), "control_stock": a.control_stock,
+             "modo_precio": a.modo_precio,
              "requiere_cites": a.requiere_cites, "activo": a.activo, "imagen": a.imagen}
             for a in s.execute(select(Articulo).order_by(Articulo.nombre)).scalars()]
 
@@ -377,6 +380,8 @@ def crear_articulo(req: ArticuloReq, request: Request,
         raise HTTPException(422, "El tipo de IVA indicado no existe")
     except FamiliaNoExiste:
         raise HTTPException(422, "La familia indicada no existe")
+    except ModoPrecioInvalido:
+        raise HTTPException(422, "El modo de precio indicado no es valido (fijo|libre|al_peso)")
     return {"id": nuevo_id}
 
 
@@ -391,6 +396,8 @@ def actualizar_articulo(articulo_id: int, req: ArticuloReq, request: Request,
         raise HTTPException(422, "El tipo de IVA indicado no existe")
     except FamiliaNoExiste:
         raise HTTPException(422, "La familia indicada no existe")
+    except ModoPrecioInvalido:
+        raise HTTPException(422, "El modo de precio indicado no es valido (fijo|libre|al_peso)")
     return {"ok": True}
 
 

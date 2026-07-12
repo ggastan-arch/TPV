@@ -54,7 +54,8 @@ def _sembrar_catalogo_base(s: Session, ejercicio: int) -> None:
 
     peces = Familia(nombre="Peces tropicales", orden=1)
     plantas = Familia(nombre="Plantas vivas", orden=2)
-    s.add_all([peces, plantas])
+    material = Familia(nombre="Material", orden=3)
+    s.add_all([peces, plantas, material])
     s.flush()
     corales = Familia(nombre="Corales", orden=1, parent_id=peces.id)
     s.add(corales)
@@ -70,10 +71,33 @@ def _sembrar_catalogo_base(s: Session, ejercicio: int) -> None:
     )
     tridacna = Articulo(
         nombre="Tridacna maxima", nombre_corto="Tridacna", familia_id=corales.id,
-        tipo_iva_id=iva_general.id, pvp=Decimal("45.00"), precio_libre=True,
+        tipo_iva_id=iva_general.id, pvp=Decimal("45.00"), modo_precio="libre",
         requiere_cites=True, control_stock=True,
     )
-    s.add_all([neon, anubias, tridacna])
+    # Genericos (modo libre, PVP 0): fuerzan precio + descripcion al vender
+    # (un ejemplar sin ficha propia en catalogo, ver spec "Descripcion obligatoria
+    # en modo libre al emitir").
+    generico_pez = Articulo(
+        nombre="Generico pez", nombre_corto="Gen.pez", familia_id=peces.id,
+        tipo_iva_id=iva_general.id, pvp=Decimal("0.00"), modo_precio="libre",
+    )
+    generico_planta = Articulo(
+        nombre="Generico planta", nombre_corto="Gen.planta", familia_id=plantas.id,
+        tipo_iva_id=iva_reducido.id, pvp=Decimal("0.00"), modo_precio="libre",
+    )
+    generico_material = Articulo(
+        nombre="Generico material", nombre_corto="Gen.material", familia_id=material.id,
+        tipo_iva_id=iva_general.id, pvp=Decimal("0.00"), modo_precio="libre",
+    )
+    # Material al peso de ejemplo: pvp = precio/kg de catalogo.
+    madera_al_peso = Articulo(
+        nombre="Madera flotante (al peso)", nombre_corto="Madera", familia_id=material.id,
+        tipo_iva_id=iva_general.id, pvp=Decimal("18.00"), modo_precio="al_peso",
+    )
+    s.add_all([
+        neon, anubias, tridacna,
+        generico_pez, generico_planta, generico_material, madera_al_peso,
+    ])
 
     s.add(Usuario(nombre="admin", pin_hash=hash_pin("1234"), rol="administracion"))
     s.add(Usuario(nombre="dependiente", pin_hash=hash_pin("0000"), rol="venta"))

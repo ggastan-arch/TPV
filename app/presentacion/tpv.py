@@ -21,7 +21,7 @@ from app.aplicacion.emitir_venta import (
     TicketVacio,
     UsuarioNoValido,
 )
-from app.aplicacion.lineas import ArticuloNoExiste
+from app.aplicacion.lineas import ArticuloNoExiste, DescripcionRequerida
 from app.aplicacion.lineas import ItemVenta as ItemAplicacion
 from app.aplicacion.lineas import resolver_items
 from app.presentacion.deps import get_motor, get_session, get_uow
@@ -95,7 +95,7 @@ def _articulo_dto(a: Articulo) -> dict:
         "nombre_corto": a.nombre_corto,
         "pvp": str(a.pvp),
         "tipo_iva": str(a.tipo_iva.porcentaje),
-        "precio_libre": a.precio_libre,
+        "modo_precio": a.modo_precio,
         "requiere_cites": a.requiere_cites,
         "color": a.color_boton,
         "imagen": a.imagen,
@@ -231,6 +231,8 @@ def cobrar(
         raise HTTPException(401, "Usuario no valido") from exc
     except ArticuloNoExiste as exc:
         raise HTTPException(404, str(exc)) from exc
+    except DescripcionRequerida as exc:
+        raise HTTPException(422, str(exc)) from exc
 
     _imprimir_ticket_seguro(resultado.venta_id)
     return {

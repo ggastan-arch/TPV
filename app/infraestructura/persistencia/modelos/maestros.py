@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infraestructura.tipos import Dinero, Porcentaje
@@ -59,10 +59,13 @@ class Articulo(Base):
     tipo_iva_id: Mapped[int] = mapped_column(
         ForeignKey("tipo_iva.id", ondelete="RESTRICT"), nullable=False
     )
-    pvp: Mapped[Decimal] = mapped_column(Dinero(), nullable=False)  # PVP con IVA incluido
+    pvp: Mapped[Decimal] = mapped_column(Dinero(), nullable=False)  # PVP con IVA incluido (o €/kg si modo_precio == "al_peso")
     coste: Mapped[Decimal | None] = mapped_column(Dinero(), nullable=True)
     control_stock: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    precio_libre: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Modo de precio excluyente: "fijo" (PVP de catalogo), "libre" (se ingresa precio Y
+    # descripcion al vender, nunca audita precio manual) o "al_peso" (pvp = precio/kg;
+    # la cantidad de la linea es el peso ingresado; SI audita si difiere del catalogo).
+    modo_precio: Mapped[str] = mapped_column(String, nullable=False, default="fijo")
     requiere_cites: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     color_boton: Mapped[str | None] = mapped_column(String, nullable=True)
     icono: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -76,6 +79,12 @@ class Articulo(Base):
     familia: Mapped[Familia | None] = relationship()
     codigos: Mapped[list["CodigoBarras"]] = relationship(
         back_populates="articulo", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "modo_precio IN ('fijo','libre','al_peso')", name="ck_articulo_modo_precio"
+        ),
     )
 
 

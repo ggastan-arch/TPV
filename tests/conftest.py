@@ -26,11 +26,19 @@ ALEMBIC_INI = RAIZ / "alembic.ini"
 EJERCICIO = datetime.now().astimezone().year
 
 
-def _aplicar_migraciones(url: str) -> None:
+def _config_alembic(url: str) -> Config:
     cfg = Config(str(ALEMBIC_INI))
     cfg.set_main_option("script_location", str(RAIZ / "migrations"))
     cfg.set_main_option("sqlalchemy.url", url)
-    command.upgrade(cfg, "head")
+    return cfg
+
+
+def _aplicar_migraciones(url: str, revision: str = "head") -> None:
+    command.upgrade(_config_alembic(url), revision)
+
+
+def _bajar_migraciones(url: str, revision: str) -> None:
+    command.downgrade(_config_alembic(url), revision)
 
 
 @pytest.fixture
@@ -60,6 +68,18 @@ def session(crear_sesion):
 @pytest.fixture
 def motor():
     return NullEngine(id_emisor="00000000T", nombre_emisor="Bizkaitropik")
+
+
+@pytest.fixture
+def aplicar_migraciones():
+    """Aplica migraciones hasta `revision` (por defecto `head`) sobre una URL dada."""
+    return _aplicar_migraciones
+
+
+@pytest.fixture
+def bajar_migraciones():
+    """Baja (downgrade) migraciones hasta `revision` sobre una URL dada."""
+    return _bajar_migraciones
 
 
 @pytest.fixture

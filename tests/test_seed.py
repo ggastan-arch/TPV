@@ -7,6 +7,8 @@ bootstrap real de tpv_demo.db usa Alembic (`make demo`, Fase 6), nunca
 """
 from __future__ import annotations
 
+from decimal import Decimal
+
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
@@ -33,6 +35,22 @@ def test_sembrar_demo_sobre_bd_vacia_crea_catalogo_y_cliente(monkeypatch):
         clientes = s.execute(select(Cliente)).scalars().all()
         assert len(clientes) == 1
         assert clientes[0].nombre
+
+
+def test_sembrar_demo_incluye_genericos_libres_y_material_al_peso(monkeypatch):
+    Sesion = _sesion_en_memoria(monkeypatch)
+
+    seed_module.sembrar_demo()
+
+    with Sesion() as s:
+        articulos = s.execute(select(Articulo)).scalars().all()
+
+    genericos_libres = [a for a in articulos if a.modo_precio == "libre" and a.pvp == Decimal("0.00")]
+    materiales_al_peso = [a for a in articulos if a.modo_precio == "al_peso"]
+
+    assert len(genericos_libres) >= 3  # peces, plantas, material
+    assert len(materiales_al_peso) >= 1
+    assert all(m.pvp > Decimal("0.00") for m in materiales_al_peso)
 
 
 def test_sembrar_demo_dos_veces_no_duplica(monkeypatch):

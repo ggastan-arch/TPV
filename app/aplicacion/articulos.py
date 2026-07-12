@@ -12,6 +12,9 @@ from app.dominio.puertos import UnidadDeTrabajo
 from app.infraestructura.persistencia.modelos import Articulo, CodigoBarras
 
 
+MODOS_PRECIO = ("fijo", "libre", "al_peso")
+
+
 @dataclass
 class DatosArticulo:
     nombre: str
@@ -21,7 +24,7 @@ class DatosArticulo:
     familia_id: int | None = None
     coste: Decimal | None = None
     control_stock: bool = False
-    precio_libre: bool = False
+    modo_precio: str = "fijo"  # "fijo" | "libre" | "al_peso" (sustituye a precio_libre)
     requiere_cites: bool = False
     color_boton: str | None = None
     icono: str | None = None
@@ -40,6 +43,10 @@ class ArticuloNoEncontrado(Exception):
     pass
 
 
+class ModoPrecioInvalido(Exception):
+    pass
+
+
 class ServicioArticulos:
     def __init__(self, uow: UnidadDeTrabajo, *, usuario_id: int | None = None, origen: str = "local"):
         self.uow = uow
@@ -48,12 +55,13 @@ class ServicioArticulos:
 
     def crear(self, datos: DatosArticulo) -> int:
         self._validar_refs(datos)
+        self._validar_modo_precio(datos)
         articulo = Articulo(
             nombre=datos.nombre, nombre_corto=datos.nombre_corto,
             familia_id=datos.familia_id, tipo_iva_id=datos.tipo_iva_id,
             pvp=Decimal(datos.pvp),
             coste=Decimal(datos.coste) if datos.coste is not None else None,
-            control_stock=datos.control_stock, precio_libre=datos.precio_libre,
+            control_stock=datos.control_stock, modo_precio=datos.modo_precio,
             requiere_cites=datos.requiere_cites, color_boton=datos.color_boton,
             icono=datos.icono,
         )
@@ -70,6 +78,7 @@ class ServicioArticulos:
         if articulo is None:
             raise ArticuloNoEncontrado(articulo_id)
         self._validar_refs(datos)
+        self._validar_modo_precio(datos)
 
         precio_anterior = articulo.pvp
         nuevo_precio = Decimal(datos.pvp)
@@ -80,7 +89,7 @@ class ServicioArticulos:
         articulo.pvp = nuevo_precio
         articulo.coste = Decimal(datos.coste) if datos.coste is not None else None
         articulo.control_stock = datos.control_stock
-        articulo.precio_libre = datos.precio_libre
+        articulo.modo_precio = datos.modo_precio
         articulo.requiere_cites = datos.requiere_cites
         articulo.color_boton = datos.color_boton
         articulo.icono = datos.icono
@@ -124,6 +133,10 @@ class ServicioArticulos:
             raise TipoIvaNoExiste(datos.tipo_iva_id)
         if datos.familia_id is not None and self.uow.familias.buscar(datos.familia_id) is None:
             raise FamiliaNoExiste(datos.familia_id)
+
+    def _validar_modo_precio(self, datos: DatosArticulo) -> None:
+        if datos.modo_precio not in MODOS_PRECIO:
+            raise ModoPrecioInvalido(datos.modo_precio)
 
     def _auditar(self, accion: str, articulo_id: int, detalle: str | None = None) -> None:
         self.uow.auditoria.registrar(

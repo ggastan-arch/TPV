@@ -31,7 +31,7 @@ def datos_tpv(session, datos_base):
                     tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("2.50"), control_stock=True)
     tridacna = Articulo(nombre="Tridacna maxima", nombre_corto="Tridacna", familia_id=fam.id,
                         tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("45.00"),
-                        precio_libre=True, requiere_cites=True)
+                        modo_precio="libre", requiere_cites=True)
     session.add_all([neon, tridacna])
     session.flush()
     session.add(CodigoBarras(articulo_id=neon.id, codigo="8412345678905", principal=True))
@@ -149,7 +149,7 @@ def test_calcular_totales_en_servidor(cliente, datos_tpv):
     assert r.json()["total"] == "5.00"  # 2 x 2,50
 
 
-def test_calcular_precio_libre(cliente, datos_tpv):
+def test_calcular_modo_libre(cliente, datos_tpv):
     r = cliente.post("/tpv/api/calcular", json={"items": [
         {"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1", "pvp": "50.00"}]})
     assert r.json()["total"] == "50.00"
@@ -157,14 +157,31 @@ def test_calcular_precio_libre(cliente, datos_tpv):
 
 
 # --- Edicion de linea: override de precio/descripcion (cualquier articulo) -----
-def test_calcular_override_pvp_articulo_no_precio_libre(cliente, datos_tpv):
-    """El override de `pvp` aplica a CUALQUIER articulo, no solo `precio_libre`
-    (antes se ignoraba en silencio para el `neon`, que no es `precio_libre`)."""
+def test_calcular_override_pvp_articulo_modo_fijo(cliente, datos_tpv):
+    """El override de `pvp` aplica a CUALQUIER articulo, no solo a los de `modo_precio`
+    "libre" (antes se ignoraba en silencio para el `neon`, que es `modo_precio` "fijo")."""
     r = cliente.post("/tpv/api/calcular", json={"items": [
         {"articulo_id": datos_tpv["neon_id"], "cantidad": "1", "pvp": "1.00"}]})
     assert r.status_code == 200
     assert r.json()["lineas"][0]["pvp"] == "1.00"
     assert r.json()["total"] == "1.00"
+
+
+def test_calcular_modo_al_peso_con_peso_decimal(cliente, crear_sesion, datos_base):
+    """Al peso reutiliza la formula existente (cantidad x pvp_unitario): `pvp` es el
+    precio/kg de catalogo y `cantidad` es el peso ingresado en la venta."""
+    with crear_sesion() as s:
+        madera = Articulo(nombre="Madera flotante", nombre_corto="Madera",
+                          tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("4.50"),
+                          modo_precio="al_peso")
+        s.add(madera)
+        s.commit()
+        madera_id = madera.id
+
+    r = cliente.post("/tpv/api/calcular",
+                     json={"items": [{"articulo_id": madera_id, "cantidad": "1.250"}]})
+    assert r.status_code == 200
+    assert r.json()["total"] == "5.63"  # 4.50 x 1.250, half-up
 
 
 def test_calcular_sin_override_usa_pvp_catalogo(cliente, datos_tpv):
@@ -226,6 +243,25 @@ def test_cobrar_acepta_pvp_y_descripcion_override(cliente, crear_sesion, datos_t
         venta = s.get(Venta, datos["venta_id"])
         assert venta.lineas[0].pvp_unitario == Decimal("1.00")
         assert venta.lineas[0].descripcion == "Promo verano"
+
+
+def test_calcular_modo_libre_sin_descripcion_no_bloquea(cliente, datos_tpv):
+    """El preview (`/calcular`) NUNCA bloquea por descripcion vacia en modo libre;
+    la validacion solo aplica al emitir (Fase 4)."""
+    r = cliente.post("/tpv/api/calcular", json={"items": [
+        {"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1", "pvp": "50.00"}]})
+    assert r.status_code == 200
+    assert r.json()["total"] == "50.00"
+
+
+def test_cobrar_modo_libre_sin_descripcion_devuelve_422(cliente, datos_tpv):
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1", "pvp": "50.00"}],
+        "pagos": [{"medio": "efectivo", "importe": "50.00"}],
+    })
+    assert r.status_code == 422
 
 
 def test_cobrar_ticket_vacio_rechaza(cliente, datos_tpv):
@@ -412,7 +448,7 @@ def test_buscar_coincide_por_nombre_case_insensitive(cliente, crear_sesion, dato
     assert [a["nombre"] for a in cuerpo] == ["Betta Splendens Macho"]
     assert set(cuerpo[0].keys()) == {
         "id", "nombre", "nombre_corto", "pvp", "tipo_iva",
-        "precio_libre", "requiere_cites", "color", "imagen",
+        "modo_precio", "requiere_cites", "color", "imagen",
     }
 
 

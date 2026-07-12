@@ -6,9 +6,13 @@ son TEXT a nivel fisico.)
 """
 from __future__ import annotations
 
-from sqlalchemy import inspect
+from decimal import Decimal
 
-from app.infraestructura.persistencia.modelos import Base
+import pytest
+from sqlalchemy import inspect
+from sqlalchemy.exc import IntegrityError
+
+from app.infraestructura.persistencia.modelos import Articulo, Base
 
 
 def test_todas_las_tablas_y_columnas_del_modelo_existen(engine):
@@ -49,3 +53,46 @@ def test_triggers_de_inmutabilidad_instalados(engine):
         "trg_cierre_z_desglose_pago_no_delete",
     }
     assert esperados <= nombres, f"Faltan triggers: {esperados - nombres}"
+
+
+# --- modo_precio: sustituye a precio_libre (fijo | libre | al_peso) -----------
+
+
+def test_articulo_modo_precio_default_fijo(session, datos_base):
+    articulo = Articulo(
+        nombre="Articulo de prueba", nombre_corto="Prueba",
+        tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("1.00"),
+    )
+    session.add(articulo)
+    session.commit()
+
+    session.refresh(articulo)
+    assert articulo.modo_precio == "fijo"
+
+
+def test_articulo_modo_precio_admite_libre_y_al_peso(session, datos_base):
+    libre = Articulo(
+        nombre="Generico libre", nombre_corto="Libre",
+        tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("0.00"), modo_precio="libre",
+    )
+    al_peso = Articulo(
+        nombre="Madera flotante", nombre_corto="Madera",
+        tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("12.00"), modo_precio="al_peso",
+    )
+    session.add_all([libre, al_peso])
+    session.commit()
+
+    session.refresh(libre)
+    session.refresh(al_peso)
+    assert libre.modo_precio == "libre"
+    assert al_peso.modo_precio == "al_peso"
+
+
+def test_articulo_modo_precio_rechaza_valor_fuera_del_enum(session, datos_base):
+    articulo = Articulo(
+        nombre="Articulo invalido", nombre_corto="Invalido",
+        tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("1.00"), modo_precio="otro",
+    )
+    session.add(articulo)
+    with pytest.raises(IntegrityError):
+        session.commit()

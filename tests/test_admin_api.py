@@ -132,6 +132,13 @@ def test_crear_articulo_tipo_iva_inexistente(cliente, admin, datos_base):
     assert r.status_code == 422
 
 
+def test_crear_articulo_modo_precio_invalido(cliente, admin, datos_base):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/articulos",
+                     json=_nuevo_articulo(datos_base, modo_precio="otro"))
+    assert r.status_code == 422
+
+
 def test_actualizar_articulo_inexistente(cliente, admin, datos_base):
     _login(cliente, admin)
     r = cliente.put("/admin/api/maestros/articulos/999999", json=_nuevo_articulo(datos_base))

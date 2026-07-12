@@ -11,7 +11,7 @@ from app.aplicacion.emitir_venta import (
     TicketVacio,
     UsuarioNoValido,
 )
-from app.aplicacion.lineas import ArticuloNoExiste, ItemVenta
+from app.aplicacion.lineas import ArticuloNoExiste, DescripcionRequerida, ItemVenta
 from app.infraestructura.persistencia.repositorios import RepositorioStockSQL
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.infraestructura.persistencia.modelos import (
@@ -37,10 +37,10 @@ def articulo_neon(session, datos_base):
 
 
 def _crear_articulo(
-    session, datos_base, *, control_stock: bool, nombre: str, precio_libre: bool = False
+    session, datos_base, *, control_stock: bool, nombre: str, modo_precio: str = "fijo"
 ) -> int:
     a = Articulo(nombre=nombre, nombre_corto=nombre, tipo_iva_id=datos_base["iva21_id"],
-                 pvp=Decimal("3.00"), control_stock=control_stock, precio_libre=precio_libre)
+                 pvp=Decimal("3.00"), control_stock=control_stock, modo_precio=modo_precio)
     session.add(a)
     session.commit()
     return a.id
@@ -195,7 +195,7 @@ def test_efecto_stock_sobreventa_deja_saldo_negativo_y_alarma_lo_cuenta(
 # --- Edicion de linea: congelado y auditoria de precio manual (invariante 4) ---------
 
 
-def test_emitir_venta_congela_pvp_override_no_precio_libre(
+def test_emitir_venta_congela_pvp_override_modo_fijo(
     crear_sesion, motor, datos_base, articulo_neon
 ):
     with crear_sesion() as s:
@@ -239,7 +239,7 @@ def test_emitir_venta_congela_cantidad_editada(crear_sesion, motor, datos_base, 
         assert venta.lineas[0].cantidad == Decimal("3")
 
 
-def test_emitir_venta_registra_auditoria_precio_manual(
+def test_emitir_venta_registra_auditoria_precio_manual_modo_fijo(
     crear_sesion, motor, datos_base, articulo_neon
 ):
     with crear_sesion() as s:
@@ -268,16 +268,107 @@ def test_emitir_venta_sin_diferencia_precio_no_registra_auditoria(
     assert _auditorias(crear_sesion, "precio_manual_venta") == []
 
 
-def test_emitir_venta_precio_libre_no_registra_auditoria(crear_sesion, motor, datos_base):
+def test_emitir_venta_registra_auditoria_precio_manual_modo_al_peso(
+    crear_sesion, motor, datos_base
+):
+    """`al_peso` audita igual que `fijo`: solo `libre` esta exento (invariante 4)."""
     with crear_sesion() as s:
-        articulo_id = _crear_articulo(
-            s, datos_base, control_stock=False, nombre="Tridacna", precio_libre=True)
+        madera = Articulo(nombre="Madera flotante", nombre_corto="Madera",
+                          tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("4.50"),
+                          modo_precio="al_peso")
+        s.add(madera)
+        s.commit()
+        madera_id = madera.id
 
     with crear_sesion() as s:
         _uc(s, motor).ejecutar(
             usuario_id=datos_base["usuario_id"],
-            items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"), pvp=Decimal("50.00"))],
+            items=[ItemVenta(articulo_id=madera_id, cantidad=Decimal("1.000"),
+                             pvp=Decimal("5.00"))],
+            pagos=[PagoVenta("efectivo", Decimal("5.00"))],
+        )
+
+    logs = _auditorias(crear_sesion, "precio_manual_venta")
+    assert len(logs) == 1
+    assert logs[0].detalle == f"articulo {madera_id}: catalogo 4.50 -> cobrado 5.00"
+
+
+def test_emitir_venta_modo_libre_no_registra_auditoria(crear_sesion, motor, datos_base):
+    with crear_sesion() as s:
+        articulo_id = _crear_articulo(
+            s, datos_base, control_stock=False, nombre="Tridacna", modo_precio="libre")
+
+    with crear_sesion() as s:
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"), pvp=Decimal("50.00"),
+                             descripcion="Tridacna maxima - ejemplar unico")],
             pagos=[PagoVenta("efectivo", Decimal("50.00"))],
         )
+
+    assert _auditorias(crear_sesion, "precio_manual_venta") == []
+
+
+# --- Fase 4: modo libre exige descripcion al EMITIR (no en /calcular) ---------
+
+
+@pytest.mark.parametrize("descripcion", [None, "   "])
+def test_emitir_venta_modo_libre_sin_descripcion_rechaza(
+    crear_sesion, motor, datos_base, descripcion
+):
+    with crear_sesion() as s:
+        articulo_id = _crear_articulo(
+            s, datos_base, control_stock=False, nombre="Generico", modo_precio="libre")
+
+    with crear_sesion() as s, pytest.raises(DescripcionRequerida):
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"), pvp=Decimal("10.00"),
+                             descripcion=descripcion)],
+            pagos=[PagoVenta("efectivo", Decimal("10.00"))],
+        )
+
+    with crear_sesion() as s:
+        assert s.query(Venta).count() == 0
+        assert s.query(RegistroFiscal).count() == 0
+
+
+def test_emitir_venta_modo_libre_con_descripcion_ok(crear_sesion, motor, datos_base):
+    with crear_sesion() as s:
+        articulo_id = _crear_articulo(
+            s, datos_base, control_stock=False, nombre="Generico", modo_precio="libre")
+
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"), pvp=Decimal("10.00"),
+                             descripcion="Roca decorativa 2kg")],
+            pagos=[PagoVenta("efectivo", Decimal("10.00"))],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.lineas[0].descripcion == "Roca decorativa 2kg"
+
+
+def test_emitir_venta_articulo_migrado_modo_libre_no_regresion(crear_sesion, motor, datos_base):
+    """Articulo que ANTES de la migracion 0007 tenia `precio_libre=True`: tras migrar
+    a `modo_precio='libre'`, se emite igual que antes (con descripcion) y sin auditoria."""
+    with crear_sesion() as s:
+        articulo_id = _crear_articulo(
+            s, datos_base, control_stock=False, nombre="Tridacna migrada", modo_precio="libre")
+
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"), pvp=Decimal("50.00"),
+                             descripcion="Tridacna maxima - ejemplar unico")],
+            pagos=[PagoVenta("efectivo", Decimal("50.00"))],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.estado == "cobrada"
+        assert venta.lineas[0].pvp_unitario == Decimal("50.00")
 
     assert _auditorias(crear_sesion, "precio_manual_venta") == []

@@ -38,8 +38,17 @@ class ArticuloNoExiste(Exception):
         self.articulo_id = articulo_id
 
 
+class DescripcionRequerida(Exception):
+    """Modo `libre`: exige descripcion (precio + descripcion) SOLO al emitir; el
+    preview `/calcular` nunca bloquea por esto (ver design.md)."""
+
+    def __init__(self, articulo_id: int):
+        super().__init__(f"El articulo {articulo_id} (modo libre) exige descripcion al emitir")
+        self.articulo_id = articulo_id
+
+
 def resolver_items(
-    articulos: "RepositorioArticulos", items
+    articulos: "RepositorioArticulos", items, *, exigir_descripcion_libre: bool = False
 ) -> tuple[list[LineaResuelta], Totales]:
     resueltas: list[LineaResuelta] = []
     calculos: list[Linea] = []
@@ -47,10 +56,13 @@ def resolver_items(
         articulo = articulos.buscar(it.articulo_id)
         if articulo is None:
             raise ArticuloNoExiste(it.articulo_id)
-        # El override de pvp aplica a CUALQUIER articulo (no solo precio_libre):
+        # El override de pvp aplica a CUALQUIER articulo (no solo modo_precio == "libre"):
         # el hecho fiscal auditable es "precio cobrado != catalogo" (ver EmitirVenta).
         pvp = it.pvp if it.pvp is not None else articulo.pvp
-        descripcion = (getattr(it, "descripcion", None) or "").strip() or articulo.nombre
+        descripcion_override = (getattr(it, "descripcion", None) or "").strip()
+        if exigir_descripcion_libre and articulo.modo_precio == "libre" and not descripcion_override:
+            raise DescripcionRequerida(articulo.id)
+        descripcion = descripcion_override or articulo.nombre
         calculo = calcular_linea(
             Decimal(pvp), Decimal(it.cantidad), Decimal(articulo.tipo_iva.porcentaje)
         )

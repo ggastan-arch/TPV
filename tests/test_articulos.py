@@ -7,11 +7,13 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import create_engine, inspect, text
 
 from app.aplicacion.articulos import (
     ArticuloNoEncontrado,
     DatosArticulo,
     FamiliaNoExiste,
+    ModoPrecioInvalido,
     ServicioArticulos,
     TipoIvaNoExiste,
 )
@@ -163,3 +165,98 @@ def test_listar_puede_excluir_inactivos(crear_sesion, datos_base):
         assert id_activo in ids_visibles
         assert id_inactivo not in ids_visibles
         assert len(uow.articulos.listar(incluir_inactivos=True)) == 2
+
+
+# --- Migracion 0007: precio_libre (bool) -> modo_precio (fijo|libre|al_peso) ---
+
+
+def _insertar_articulo_pre_migracion(conn, *, id_: int, precio_libre: int) -> None:
+    conn.execute(text(
+        "INSERT INTO articulo (id, nombre, nombre_corto, tipo_iva_id, pvp, control_stock, "
+        "precio_libre, requiere_cites, activo) "
+        "VALUES (:id, :nombre, :nombre, 1, '10.00', 0, :precio_libre, 0, 1)"
+    ), {"id": id_, "nombre": f"Articulo {id_}", "precio_libre": precio_libre})
+
+
+def test_migracion_precio_libre_a_modo_precio(tmp_path, aplicar_migraciones, bajar_migraciones):
+    db = tmp_path / "migracion_modo_precio.db"
+    url = f"sqlite:///{db}"
+
+    aplicar_migraciones(url, "0006_articulo_imagen")
+
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "INSERT INTO tipo_iva (id, nombre, porcentaje, calificacion, activo) "
+            "VALUES (1, 'General', '21.00', 'S1', 1)"
+        ))
+        _insertar_articulo_pre_migracion(conn, id_=1, precio_libre=1)
+        _insertar_articulo_pre_migracion(conn, id_=2, precio_libre=0)
+
+    aplicar_migraciones(url, "0007_modo_precio_articulo")
+
+    with engine.connect() as conn:
+        filas = dict(conn.execute(text("SELECT id, modo_precio FROM articulo ORDER BY id")).all())
+    assert filas == {1: "libre", 2: "fijo"}
+
+    columnas = {c["name"] for c in inspect(engine).get_columns("articulo")}
+    assert "precio_libre" not in columnas
+    assert "modo_precio" in columnas
+    engine.dispose()
+
+    bajar_migraciones(url, "0006_articulo_imagen")
+
+    engine = create_engine(url)
+    with engine.connect() as conn:
+        filas = dict(conn.execute(text("SELECT id, precio_libre FROM articulo ORDER BY id")).all())
+    assert filas == {1: 1, 2: 0}
+
+    columnas = {c["name"] for c in inspect(engine).get_columns("articulo")}
+    assert "modo_precio" not in columnas
+    assert "precio_libre" in columnas
+    engine.dispose()
+
+
+# --- CRUD: modo_precio editable, validado y auditado ---------------------------
+
+
+def test_crear_articulo_sin_modo_precio_usa_default_fijo(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        articulo_id = _svc(s, datos_base).crear(_datos(datos_base))
+
+    with crear_sesion() as s:
+        assert s.get(Articulo, articulo_id).modo_precio == "fijo"
+
+
+def test_crear_articulo_modo_al_peso(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        articulo_id = _svc(s, datos_base).crear(
+            _datos(datos_base, modo_precio="al_peso", pvp=Decimal("12.00")))
+
+    with crear_sesion() as s:
+        articulo = s.get(Articulo, articulo_id)
+        assert articulo.modo_precio == "al_peso"
+        assert articulo.pvp == Decimal("12.00")
+
+
+def test_actualizar_modo_precio_y_audita(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        articulo_id = _svc(s, datos_base).crear(_datos(datos_base))
+    with crear_sesion() as s:
+        _svc(s, datos_base).actualizar(articulo_id, _datos(datos_base, modo_precio="libre"))
+
+    with crear_sesion() as s:
+        assert s.get(Articulo, articulo_id).modo_precio == "libre"
+
+    logs = _auditorias(crear_sesion, "actualizar_articulo")
+    assert len(logs) == 1
+    assert logs[0].entidad_id == str(articulo_id)
+
+
+def test_modo_precio_invalido_falla_y_no_persiste(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        with pytest.raises(ModoPrecioInvalido):
+            _svc(s, datos_base).crear(_datos(datos_base, modo_precio="otro"))
+
+    with crear_sesion() as s:
+        assert s.query(Articulo).count() == 0
