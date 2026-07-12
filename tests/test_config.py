@@ -35,13 +35,13 @@ def test_perfil_demo_explicito_resuelve_db_y_emisor_demo(monkeypatch):
 
 def test_sin_tpv_profile_resuelve_produccion(monkeypatch):
     monkeypatch.delenv("TPV_PROFILE", raising=False)
-    monkeypatch.setenv("TPV_NOMBRE_EMISOR", "Bizkaitropik Real")
+    monkeypatch.setenv("TPV_NOMBRE_EMISOR", "AcuaTPV Real")
 
     s = Settings(_env_file=None)
 
     assert s.perfil == "produccion"
     assert s.db_path == DB_PATH_PRODUCCION
-    assert s.nombre_emisor == "Bizkaitropik Real"
+    assert s.nombre_emisor == "AcuaTPV Real"
 
 
 def test_perfil_invalido_rechaza_arranque(monkeypatch):

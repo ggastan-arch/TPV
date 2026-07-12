@@ -113,6 +113,6 @@ destinatario según tipo.
 
 ## Out of Scope
 
-Remisión PRODUCTIVA a la AEAT pendiente del certificado electrónico de la titular (nunca
+Remisión PRODUCTIVA a la AEAT pendiente del certificado electrónico de la persona titular (nunca
 sale del servidor). Verificado: generación, encadenamiento, XML/XSD, QR, sobre SOAP y
 cliente, con transporte inyectado.

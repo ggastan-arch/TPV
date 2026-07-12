@@ -132,5 +132,5 @@ borrarlos no afecta la cadena fiscal ni ventas/registros. Sin backfill.
       validadas y evitar que un admin inyecte una ruta arbitraria? (riesgo bajo: admin confiable).
 - [ ] ¿`MEDIA_DIR` debe moverse a `Settings` para diferenciar perfil demo/producción? No exigido
       (las imágenes no son datos fiscales); por ahora un directorio compartido es aceptable.
-- [ ] Límite de 3 MB y set JPEG/PNG/WebP: confirmar con la titular si alguna cámara/formato de la
+- [ ] Límite de 3 MB y set JPEG/PNG/WebP: confirmar con la persona titular si alguna cámara/formato de la
       tienda queda fuera.

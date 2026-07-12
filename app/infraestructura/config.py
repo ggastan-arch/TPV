@@ -18,7 +18,7 @@ DB_PATH_PRODUCCION = "tpv.db"
 # (invariante 7). Vease docs/adr/0009-perfil-de-arranque-demo.md.
 DEMO_DB_PATH = "tpv_demo.db"
 DEMO_NIF = "00000000T"
-DEMO_NOMBRE = "Bizkaitropik DEMO (documento de prueba)"
+DEMO_NOMBRE = "AcuaTPV DEMO (documento de prueba)"
 
 
 class Settings(BaseSettings):
@@ -38,16 +38,16 @@ class Settings(BaseSettings):
     busy_timeout_ms: int = 10_000
 
     # Identificacion del SIF y del obligado a expedir (para el registro fiscal).
-    # 00000000T es un NIF de prueba valido; sustituir por el de la titular.
+    # 00000000T es un NIF de prueba valido; sustituir por el de la persona titular.
     nif_emisor: str = "00000000T"
-    nombre_emisor: str = "Bizkaitropik"
+    nombre_emisor: str = "AcuaTPV"
 
     # Bloque SistemaInformatico: identifica al PRODUCTOR del software (el
-    # desarrollador), no a la titular. Debe coincidir con la declaracion responsable.
-    nombre_productor: str = "Bizkaitropik Dev"
+    # desarrollador), no a la persona titular. Debe coincidir con la declaracion responsable.
+    nombre_productor: str = "AcuaTPV Dev"
     nif_productor: str = "00000000T"
-    nombre_sistema: str = "TPV Bizkaitropik"  # NombreSistemaInformatico (max 30)
-    id_sistema: str = "BZ"                     # IdSistemaInformatico (max 2!)
+    nombre_sistema: str = "TPV AcuaTPV"  # NombreSistemaInformatico (max 30)
+    id_sistema: str = "AT"                     # IdSistemaInformatico (max 2!)
     version_sistema: str = "0.1.0"             # Version (max 50)
     numero_instalacion: str = "1"              # NumeroInstalacion (max 100)
 
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # Entorno de la AEAT para la URL del QR y los servicios web de remision.
     entorno_aeat: str = "pruebas"  # 'pruebas' | 'produccion'
 
-    # Certificado de la titular para la remision SOAP (mutual-TLS). El certificado
+    # Certificado de la persona titular para la remision SOAP (mutual-TLS). El certificado
     # NUNCA sale del servidor. Sin el, el cliente SOAP queda listo pero no puede remitir.
     certificado_cert_path: str | None = None  # PEM (certificado, o cert+clave juntos)
     certificado_key_path: str | None = None   # PEM de la clave privada (si va aparte)

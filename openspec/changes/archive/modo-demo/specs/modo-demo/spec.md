@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Perfil de arranque aislado para exhibir el TPV sin exponer datos reales de la titular ni
+Perfil de arranque aislado para exhibir el TPV sin exponer datos reales de la persona titular ni
 remitir registros a la AEAT. Aditivo, gated por `TPV_PROFILE`; no modifica el
 comportamiento de producción (perfil por defecto).
 
@@ -67,12 +67,12 @@ NOT cargar ni leer el certificado electrónico.
 ### Requirement: Empresa emisora ficticia en modo demo
 
 El sistema MUST usar, bajo perfil `demo`, un emisor ficticio con NIF `00000000T` y MUST
-NOT exponer los datos fiscales de la titular real bajo ese perfil.
+NOT exponer los datos fiscales de la persona titular real bajo ese perfil.
 
 #### Scenario: Emisión de ticket en modo demo
 - GIVEN que el perfil resuelto es `demo`
 - WHEN se consulta el emisor para expedir un ticket
-- THEN el NIF del emisor es `00000000T` y no aparece la razón social real de la titular
+- THEN el NIF del emisor es `00000000T` y no aparece la razón social real de la persona titular
 
 ### Requirement: Seed demo idempotente
 

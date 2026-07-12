@@ -1,6 +1,6 @@
-# TPV Bizkaitropik — Consideraciones previas al desarrollo (v2)
+# TPV AcuaTPV — Consideraciones previas al desarrollo (v2)
 
-Documento de análisis previo, actualizado: la titular tiene su domicilio fiscal en **Cantabria (territorio común, AEAT)**. No aplica TicketBAI/Batuz; el sistema de referencia es **VeriFactu (RRSIF)**. Pensado para servir de contexto/requisitos a Claude Code.
+Documento de análisis previo, actualizado: la persona titular tiene su domicilio fiscal en **Cantabria (territorio común, AEAT)**. No aplica TicketBAI/Batuz; el sistema de referencia es **VeriFactu (RRSIF)**. Pensado para servir de contexto/requisitos a Claude Code.
 
 ---
 
@@ -9,12 +9,12 @@ Documento de análisis previo, actualizado: la titular tiene su domicilio fiscal
 ### 1.1. Calendario y normas de referencia
 
 - **RD 1007/2023** (Reglamento de requisitos de los sistemas informáticos de facturación, RRSIF) y **Orden HAC/1177/2024** (especificaciones técnicas: registro de facturación, huella, QR, remisión).
-- **Obligatoriedad aplazada por el RDL 15/2025**: 1/1/2027 para contribuyentes de IS; **1/7/2027 para autónomos y resto** (caso de la titular). El periodo anterior es, según nota de la AEAT, un periodo de pruebas.
+- **Obligatoriedad aplazada por el RDL 15/2025**: 1/1/2027 para contribuyentes de IS; **1/7/2027 para autónomos y resto** (caso de la persona titular). El periodo anterior es, según nota de la AEAT, un periodo de pruebas.
 - **Vigente YA, sin aplazamiento**: la prohibición de software de doble uso del **art. 29.2.j) LGT** y el régimen sancionador del **art. 201 bis LGT** (Ley 11/2021, en vigor desde 11/10/2021). Es decir: aunque VeriFactu no sea aún exigible, el TPV **no puede permitir** desde el primer día ocultar, borrar o alterar registros de ventas. Sanciones del 201 bis: 50.000 €/ejercicio para el usuario que tenga software no certificado cuando sea exigible; 150.000 €/ejercicio para fabricantes.
 
-### 1.2. Régimen de la titular y decisión adoptada (DEFINITIVA)
+### 1.2. Régimen de la persona titular y decisión adoptada (DEFINITIVA)
 
-La titular tributa en **IRPF por estimación objetiva (módulos)** y en **recargo de equivalencia** en IVA. Aunque el art. 3.1.b) del ROF (RD 1619/2012, redacción del RD 1073/2014) la exime de expedir factura por las ventas minoristas, **se opta deliberadamente por que todos los tickets sean facturas simplificadas**:
+La persona titular tributa en **IRPF por estimación objetiva (módulos)** y en **recargo de equivalencia** en IVA. Aunque el art. 3.1.b) del ROF (RD 1619/2012, redacción del RD 1073/2014) la exime de expedir factura por las ventas minoristas, **se opta deliberadamente por que todos los tickets sean facturas simplificadas**:
 
 1. **Todos los tickets del TPV son facturas simplificadas** (arts. 4 y 7 ROF). El TPV es, por tanto, un **SIF sujeto al RRSIF**, con obligación de estar adaptado el 1/7/2027.
 2. **Anticipación voluntaria en modalidad VERI*FACTU**: el art. 16 RRSIF permite remitir voluntariamente todos los registros de facturación a la AEAT ("Sistemas de emisión de facturas verificables"). Ventajas: se **presume que cumplen por diseño** los requisitos de inalterabilidad, quedan **dispensados de conservar copia de los registros** (obran en poder de la AEAT), y **no exigen firma electrónica de los registros ni registro de eventos** formal — las tres piezas técnicamente más costosas del modo NO VERI*FACTU. Las facturas llevan la leyenda "Factura verificable en la sede electrónica de la AEAT" / "VERI*FACTU".
@@ -58,7 +58,7 @@ Aislar el cumplimiento tras una interfaz **`FiscalEngine`** con tres implementac
   - Plantas vivas de carácter ornamental: **10%** (art. 91.Uno.1.8º LIVA).
   - Alimentos para animales de compañía: **21%** (excluidos del reducido).
   - Acuarios, equipamiento y complementos: **21%**.
-  - Desglose de base y cuota por tipo en el ticket. Nota: en RE la titular no liquida IVA de sus ventas, pero el ticket/factura debe repercutir el IVA normalmente.
+  - Desglose de base y cuota por tipo en el ticket. Nota: en RE la persona titular no liquida IVA de sus ventas, pero el ticket/factura debe repercutir el IVA normalmente.
 - Precios **con IVA incluido** (PVP): almacenar PVP y derivar la base con una regla de redondeo única y testeada (los descuadres de céntimos son el bug clásico de TPV).
 
 ---
@@ -87,7 +87,7 @@ Aislar el cumplimiento tras una interfaz **`FiscalEngine`** con tres implementac
 - **Lector de código de barras** modo teclado (keyboard wedge): captura global en el TPV; configurar prefijo/sufijo o detectar por velocidad de tecleo para distinguirlo del teclado en pantalla.
 - **Pantalla táctil** ≥ 15", resolución fija conocida.
 - **Datáfono**: empezar independiente (el TPV solo registra "pago con tarjeta"); la integración es proyecto aparte.
-- **Certificado electrónico**: para la remisión VERI*FACTU a la AEAT hará falta certificado de la titular (o apoderamiento); decidir custodia. No se necesita firmar cada registro en esta modalidad.
+- **Certificado electrónico**: para la remisión VERI*FACTU a la AEAT hará falta certificado de la persona titular (o apoderamiento); decidir custodia. No se necesita firmar cada registro en esta modalidad.
 
 ### 3.3. Copias de seguridad
 
@@ -151,7 +151,7 @@ Aislar el cumplimiento tras una interfaz **`FiscalEngine`** con tres implementac
 - **Garantías de vivos** (pez muerto en 24-48 h): flujo propio de devolución = rectificativa/devolución con rastro + merma.
 - **CITES**: corales duros, *Tridacna* y otras especies requieren documentación en la compraventa. Flag "requiere doc. CITES" en el artículo, con aviso al vender y campo para nº de documento (trazabilidad ante Seprona).
 - **Núcleo zoológico**: obligación administrativa del establecimiento (en Cantabria, registro autonómico), ajena al software; solo checklist de negocio.
-- **Web bizkaitropik.com**: aunque no entre en v1, diseñar (a) API o export programado de artículos/precios/stock y (b) tener presente que las ventas online con factura también quedarán bajo VeriFactu cuando sea exigible.
+- **Web acuatpv.com**: aunque no entre en v1, diseñar (a) API o export programado de artículos/precios/stock y (b) tener presente que las ventas online con factura también quedarán bajo VeriFactu cuando sea exigible.
 
 ---
 

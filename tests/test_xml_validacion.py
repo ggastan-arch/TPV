@@ -11,7 +11,7 @@ from app.infraestructura.fiscal.xml import (
 from app.infraestructura.persistencia.modelos import RegistroFacturaSustituida, RegistroFiscal
 
 SISTEMA = sistema_desde_settings()
-EMISOR = "Bizkaitropik"
+EMISOR = "AcuaTPV"
 
 
 def _emitir(crear_sesion, motor, usuario_id, lineas, **kw) -> int:

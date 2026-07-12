@@ -3,7 +3,7 @@
 ## Intent
 
 Hoy el precio de un artículo solo puede ser fijo (PVP de catálogo) o `precio_libre`
-(bool: se ingresa el importe al vender). Faltan dos necesidades de la titular:
+(bool: se ingresa el importe al vender). Faltan dos necesidades de la persona titular:
 - **Al peso**: material como maderas y rocas se cobra precio/kg × peso ingresado en la
   venta. Según el artículo, puede ser al peso O libre.
 - **Artículos genéricos** (uno de peces, uno de plantas, uno de material), PVP 0 en modo
@@ -95,7 +95,7 @@ inverso `libre → True`, resto `False`). Sin datos fiscales afectados.
    nullable con sentido en un solo modo y NO cambia la matemática de línea. Confirmado:
    `cantidad` (Decimal, 3 decimales) soporta el peso.
 3. **Libre fuerza descripción**: ¿validación (rechaza emitir sin descripción) o solo
-   prompt? *Recomendación:* validación server-side (la titular dijo "fuerza") + prompt
+   prompt? *Recomendación:* validación server-side (la persona titular dijo "fuerza") + prompt
    obligatorio en la UI.
 4. **Auditoría (invariante 4)**: preservar "modo libre nunca audita precio manual" tras
    el refactor (`modo=='libre'` reemplaza a `precio_libre` en `_auditar_precios_manuales`).

@@ -5,7 +5,7 @@
 
 ## Contexto
 
-La titular tributa en IRPF por estimación objetiva y en recargo de equivalencia, con
+La persona titular tributa en IRPF por estimación objetiva y en recargo de equivalencia, con
 domicilio fiscal en territorio común (AEAT). El ROF la eximiría de expedir factura por las
 ventas minoristas, pero se decide lo contrario por control y transparencia.
 
@@ -23,5 +23,5 @@ ventas minoristas, pero se decide lo contrario por control y transparencia.
 
 - (+) Modelo técnico más simple (sin firma XAdES ni log de eventos formal).
 - (−) Requiere conectividad para remitir (mitigado con cola + reintentos).
-- (−) Requiere certificado de la titular para la remisión real (aún no aportado).
+- (−) Requiere certificado de la persona titular para la remisión real (aún no aportado).
 - Límite de la simplificada: 3.000 € IVA incl.; por encima, factura completa (validado).

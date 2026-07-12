@@ -70,7 +70,7 @@ def cliente(crear_sesion):
 
     app.dependency_overrides[get_session] = _get_session
     app.dependency_overrides[get_uow] = _get_uow
-    app.dependency_overrides[get_motor] = lambda: NullEngine("00000000T", "Bizkaitropik")
+    app.dependency_overrides[get_motor] = lambda: NullEngine("00000000T", "AcuaTPV")
     return TestClient(app)
 
 
@@ -78,7 +78,7 @@ def test_pagina_tpv_sirve_html(cliente):
     r = cliente.get("/tpv/")
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
-    assert "TPV Bizkaitropik" in r.text
+    assert "TPV AcuaTPV" in r.text
 
 
 def test_login_ok_y_ko(cliente, datos_tpv):

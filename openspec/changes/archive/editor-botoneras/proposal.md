@@ -4,7 +4,7 @@
 
 La botonera (perfil → página → rejilla de botones) ya está modelada y el TPV la
 renderiza vía `GET /tpv/api/botonera`, pero HOY solo se puede configurar por seed o
-SQL manual. La titular necesita crear y editar botoneras desde la consola de
+SQL manual. La persona titular necesita crear y editar botoneras desde la consola de
 administración con un editor visual drag & drop. Motivación: autonomía operativa
 (cambiar la venta según temporada/stock) sin intervención técnica ni riesgo de dejar
 la botonera del TPV en estado inválido.

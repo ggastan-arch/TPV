@@ -1,4 +1,4 @@
-# Tasks: Sistema TPV Bizkaitropik (VERI*FACTU)
+# Tasks: Sistema TPV AcuaTPV (VERI*FACTU)
 
 > **Naturaleza**: SDD **retrospectivo**. Este documento NO es un plan de trabajo pendiente:
 > es un **ledger de trazabilidad** del proceso incremental ya ejecutado (161 tests en verde,

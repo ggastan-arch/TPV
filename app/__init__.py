@@ -1,1 +1,1 @@
-"""TPV Bizkaitropik - SIF preparado para VERI*FACTU."""
+"""TPV AcuaTPV - SIF preparado para VERI*FACTU."""

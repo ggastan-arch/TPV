@@ -36,7 +36,7 @@ invariants_do_not_weaken:
 authoritative_docs:
   - CLAUDE.md
   - docs/ARCHITECTURE.md
-  - docs/TPV_BIZKAITROPIK_consideraciones.md
+  - docs/TPV_ACUATPV_consideraciones.md
   - docs/VERIFACTU_ESQUEMAS_HAC1177.md
   - docs/adr/0001-arquitectura-hexagonal-pragmatica.md
   - docs/adr/0002-importes-decimal-en-texto.md

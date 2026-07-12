@@ -1,10 +1,10 @@
-# TPV Bizkaitropik
+# TPV AcuaTPV
 
 TPV táctil monopuesto para tienda de acuariofilia. Sistema Informático de Facturación
 (SIF) sujeto al RD 1007/2023 (RRSIF) y la Orden HAC/1177/2024, preparado para operar en
 modalidad **VERI\*FACTU**. Todos los tickets se expiden como **facturas simplificadas**.
 
-> Contexto y decisiones: `docs/TPV_BIZKAITROPIK_consideraciones.md`,
+> Contexto y decisiones: `docs/TPV_ACUATPV_consideraciones.md`,
 > `docs/VERIFACTU_ESQUEMAS_HAC1177.md` y `CLAUDE.md`.
 > Arquitectura y decisiones técnicas: `docs/ARCHITECTURE.md` y los ADR en `docs/adr/`.
 
@@ -12,7 +12,7 @@ modalidad **VERI\*FACTU**. Todos los tickets se expiden como **facturas simplifi
 
 Este repositorio es **público**. NUNCA se debe subir:
 
-- **El certificado electrónico** de la titular (`*.pfx`, `*.p12`, `*.pem`, `*.key`, …).
+- **El certificado electrónico** de la persona titular (`*.pfx`, `*.p12`, `*.pem`, `*.key`, …).
   El certificado **nunca sale del servidor de la tienda** (invariante 7). Está cubierto
   por `.gitignore`, pero verificá `git status` antes de cada push.
 - **La base de datos** (`tpv.db*`): contiene la cadena de registros fiscales y datos
@@ -45,9 +45,9 @@ Copiar a un `.env` local (no se versiona). Principales:
 | Variable | Por defecto | Descripción |
 |---|---|---|
 | `TPV_DB_PATH` | `tpv.db` | Ruta de la BD SQLite |
-| `TPV_NIF_EMISOR` / `TPV_NOMBRE_EMISOR` | `00000000T` / `Bizkaitropik` | Obligado a expedir |
+| `TPV_NIF_EMISOR` / `TPV_NOMBRE_EMISOR` | `00000000T` / `AcuaTPV` | Obligado a expedir |
 | `TPV_NIF_PRODUCTOR` / `TPV_NOMBRE_PRODUCTOR` | — | Productor del software (SistemaInformatico) |
-| `TPV_ID_SISTEMA` | `BZ` | IdSistemaInformatico (máx. 2 chars) |
+| `TPV_ID_SISTEMA` | `AT` | IdSistemaInformatico (máx. 2 chars) |
 | `TPV_ENTORNO_AEAT` | `pruebas` | `pruebas` \| `produccion` |
 | `TPV_CERTIFICADO_CERT_PATH` / `_KEY_PATH` | — | Certificado (rutas locales, **fuera del repo**) |
 | `TPV_IMPRESORA_TIPO` | `dummy` | `dummy` \| `network` |

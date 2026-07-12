@@ -5,7 +5,7 @@ SistemaFacturacion.wsdl. El cuerpo SOAP es directamente el sobre
 RegFactuSistemaFacturacion (ya construido y validado por app.infraestructura.fiscal.xml). La respuesta
 es RespuestaRegFactuSistemaFacturacion (RespuestaSuministro.xsd).
 
-El certificado de la titular (mutual-TLS) y el envio HTTP son INYECTABLES:
+El certificado de la persona titular (mutual-TLS) y el envio HTTP son INYECTABLES:
 - `cert`: lo que acepte requests (ruta a PEM, o (cert, key)). Nunca sale del servidor.
 - `poster`: callable(url, headers, body) -> (status, body_bytes). Por defecto usa
   requests; en tests se inyecta uno simulado y NO hace falta ni red ni certificado.

@@ -1,6 +1,6 @@
-# CLAUDE.md — TPV Bizkaitropik
+# CLAUDE.md — TPV AcuaTPV
 
-Contexto operativo para Claude Code. Leer también `docs/TPV_BIZKAITROPIK_consideraciones.md`
+Contexto operativo para Claude Code. Leer también `docs/TPV_ACUATPV_consideraciones.md`
 (decisiones de negocio y marco normativo) y `docs/VERIFACTU_ESQUEMAS_HAC1177.md`
 (especificación técnica del motor fiscal). Ante conflicto, ese orden de prevalencia:
 normativa > consideraciones > este fichero.
@@ -9,7 +9,7 @@ normativa > consideraciones > este fichero.
 
 TPV táctil monousuario para una tienda de acuariofilia (peces tropicales, plantas,
 complementos) en territorio común (AEAT). Un puesto de venta físico + consola de
-administración web accesible en remoto vía Tailscale. La titular tributa en IRPF por
+administración web accesible en remoto vía Tailscale. La persona titular tributa en IRPF por
 estimación objetiva y en recargo de equivalencia de IVA.
 
 **Decisión fiscal cerrada (no reabrir):** todos los tickets se expiden como FACTURAS

@@ -1,4 +1,4 @@
-# Proposal: Sistema TPV Bizkaitropik (VERI*FACTU) — marco global retrospectivo
+# Proposal: Sistema TPV AcuaTPV (VERI*FACTU) — marco global retrospectivo
 
 > **Naturaleza**: SDD **retrospectivo**. El sistema ya está construido y verificado
 > (161 tests en verde, `make arch` en verde). Este proposal NO finge que la especificación
@@ -9,7 +9,7 @@
 
 Una tienda física de acuariofilia debe, **por obligación legal** (RD 1007/2023 RRSIF +
 Orden HAC/1177/2024, con art. 29.2.j LGT ya vigente), emitir sus tickets mediante un
-Sistema Informático de Facturación (SIF). La titular tributa en IRPF por estimación
+Sistema Informático de Facturación (SIF). La persona titular tributa en IRPF por estimación
 objetiva y en recargo de equivalencia de IVA. **Decisión fiscal cerrada**: todos los
 tickets se expiden como facturas simplificadas, y el sistema opera en modalidad
 **VERI\*FACTU** (remisión voluntaria anticipada a la AEAT; ADR-0008), que dispensa de firma
@@ -92,9 +92,9 @@ Riesgo operativo nulo sobre el sistema en producción.
 
 ## Dependencies
 
-- Docs autoritativos: `CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/TPV_BIZKAITROPIK_consideraciones.md`,
+- Docs autoritativos: `CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/TPV_ACUATPV_consideraciones.md`,
   `docs/VERIFACTU_ESQUEMAS_HAC1177.md`, `docs/adr/0001..0008`.
-- Para el trabajo futuro de remisión real: **certificado electrónico** de la titular (custodia en el servidor).
+- Para el trabajo futuro de remisión real: **certificado electrónico** de la persona titular (custodia en el servidor).
 
 ## Success Criteria
 

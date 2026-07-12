@@ -2,7 +2,7 @@
 
 ## Intent
 
-Hoy no existe forma de decidir qué familias aparecen en el TPV táctil. La titular
+Hoy no existe forma de decidir qué familias aparecen en el TPV táctil. La persona titular
 necesita un control **manual por familia**: las familias cuyos artículos se venden por
 escaneo de código de barras no deben ocupar sitio en la botonera; las que **no** tienen
 código de barras (peces, plantas) es imprescindible que estén, porque no hay otra forma

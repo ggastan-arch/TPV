@@ -3,7 +3,7 @@
 ## Intent
 
 En la botonera táctil, peces y plantas se distinguen mal por texto/color y hoy no
-hay forma de subir una foto. La titular necesita reconocerlos visualmente al vender.
+hay forma de subir una foto. La persona titular necesita reconocerlos visualmente al vender.
 Objetivo: subir una imagen a cada artículo y familia desde la consola y que el botón
 del TPV la muestre. La imagen se sube UNA vez al artículo/familia y la reutiliza
 cualquier botón que lo apunte.

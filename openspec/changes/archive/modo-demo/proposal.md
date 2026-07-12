@@ -3,7 +3,7 @@
 ## Intent
 
 Necesitamos mostrar el TPV en la defensa del máster sin exponer datos reales de la
-titular (RGPD, identidad fiscal) ni remitir registros a la AEAT (no existe certificado
+persona titular (RGPD, identidad fiscal) ni remitir registros a la AEAT (no existe certificado
 demo). Hoy no hay forma segura de hacerlo: arrancar el sistema usa `tpv.db`, el emisor
 real y la cadena de huellas de producción.
 
@@ -20,7 +20,7 @@ prueba, de modo que jamás se presenta un ticket demo como factura del SIF real.
 - Ajuste `TPV_PROFILE` (`produccion` | `demo`), **default `produccion`**: la demo se pide a propósito.
 - BD demo aislada `tpv_demo.db`; jamás la real `tpv.db`.
 - `NullEngine` forzado en demo (genera cadena, no remite), aun cuando exista `VerifactuEngine`.
-- Empresa demo: emisor ficticio (NIF de prueba + nombre "Demo"), nunca la titular real.
+- Empresa demo: emisor ficticio (NIF de prueba + nombre "Demo"), nunca la persona titular real.
 - Seed demo idempotente (empresa + clientes + artículos), reutilizando `app/seed.py`.
 - Marca inequívoca en ticket y consola: "DOCUMENTO DE PRUEBA — SIN VALIDEZ FISCAL", sin QR de cotejo real de la AEAT.
 - Salvaguarda de arranque: rechazar si el perfil demo resolviera hacia la BD de producción.

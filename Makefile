@@ -1,4 +1,4 @@
-# TPV Bizkaitropik - comandos de desarrollo
+# TPV AcuaTPV - comandos de desarrollo
 # En Windows usar Git Bash o `make` de GnuWin/choco. PYTHON se puede sobreescribir:
 #   make test PYTHON=.venv/Scripts/python
 

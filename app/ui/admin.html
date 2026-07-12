@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Consola · TPV Bizkaitropik</title>
+<title>Consola · TPV AcuaTPV</title>
 <style>
   :root { --bg:#0b1220; --panel:#111c30; --line:#243247; --txt:#e2e8f0; --accent:#0ea5e9;
           --ok:#16a34a; --warn:#d97706; --err:#dc2626; }
@@ -111,7 +111,7 @@ let pestanaActual = "fiscal";
 async function dashboard() {
   const me = await api("/admin/api/me");
   $("#root").innerHTML = `
-    <header><h1>TPV Bizkaitropik · Administración</h1>
+    <header><h1>TPV AcuaTPV · Administración</h1>
       <span>${me.nombre}</span>
       <button class="accion" id="salir">Salir</button></header>
     <div class="tabs">

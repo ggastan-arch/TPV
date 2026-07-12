@@ -67,7 +67,7 @@ def session(crear_sesion):
 
 @pytest.fixture
 def motor():
-    return NullEngine(id_emisor="00000000T", nombre_emisor="Bizkaitropik")
+    return NullEngine(id_emisor="00000000T", nombre_emisor="AcuaTPV")
 
 
 @pytest.fixture

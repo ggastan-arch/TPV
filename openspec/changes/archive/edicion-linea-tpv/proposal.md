@@ -2,7 +2,7 @@
 
 ## Intent
 
-La titular quiere ajustar FÁCIL una línea del ticket antes de cobrar: cambiar
+La persona titular quiere ajustar FÁCIL una línea del ticket antes de cobrar: cambiar
 **precio unitario**, **cantidad** y **descripción**. Hoy la única edición en el carrito
 es sumar +1 (al re-agregar) o quitar la línea entera; el override de precio solo existe
 para artículos `precio_libre` (prompt en `anadir`) y se ignora en silencio en el resto;
@@ -81,7 +81,7 @@ actual. No hay datos persistidos nuevos que limpiar.
    descuento (columna `descuento` dormida)?
 2. **Auditoría (invariante 4)**: ¿un cambio de precio manual se registra en
    `LogAuditoria`? El invariante 4 cita "cambios de precio" y "descuentos"; que la
-   titular sea única operadora NO exime la traza.
+   persona titular sea única operadora NO exime la traza.
 3. **Descripción override**: cómo se persiste (`VentaLinea.descripcion` ya existe; hoy
    viene de `articulo.nombre`).
 4. **Cantidad**: formalizar el editor en la UI (la API ya acepta `cantidad` arbitraria;

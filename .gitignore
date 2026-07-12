@@ -27,7 +27,7 @@ tpv_demo.db*
 .env.*
 !.env.example
 
-# Certificados y claves: el certificado de la titular NUNCA sale del servidor
+# Certificados y claves: el certificado de la persona titular NUNCA sale del servidor
 # (invariante 7). Prohibido versionarlos en ningun caso.
 *.pfx
 *.p12

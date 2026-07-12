@@ -1,4 +1,4 @@
-# Design: Sistema TPV Bizkaitropik (VERI*FACTU) — arquitectura transversal
+# Design: Sistema TPV AcuaTPV (VERI*FACTU) — arquitectura transversal
 
 > **SDD retrospectivo.** Este documento DOCUMENTA la arquitectura ya construida y
 > verificada (161 tests en verde, `make arch` en verde) y la traza a los ADR
@@ -110,7 +110,7 @@ ni feature flags.
 ## Preguntas abiertas
 
 - [ ] **Remisión productiva a la AEAT**: pendiente del certificado electrónico de la
-      titular (custodia en el servidor, nunca sale ni se loguea). Bloquea `VerifactuEngine`
+      persona titular (custodia en el servidor, nunca sale ni se loguea). Bloquea `VerifactuEngine`
       en producción, no la cadena de huellas local.
 - [ ] Flujo "Convertir en factura" (F3, sustitución de simplificadas): ADR pendiente si se
       detalla (ADR-0008).

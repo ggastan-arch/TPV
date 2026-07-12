@@ -96,7 +96,7 @@ def _remitir(crear_sesion, poster):
     with crear_sesion() as s:
         rem = RemitenteVerifactu(endpoint=endpoint_verifactu("pruebas"), poster=poster)
         return RemitirLote(UnidadDeTrabajoSQL(s), rem).ejecutar(
-            nombre_emisor="Bizkaitropik", nif_obligado="00000000T",
+            nombre_emisor="AcuaTPV", nif_obligado="00000000T",
             sistema=sistema_desde_settings())
 
 

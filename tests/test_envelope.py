@@ -15,7 +15,7 @@ from app.infraestructura.fiscal.xml import (
 from app.infraestructura.persistencia.modelos import RegistroFiscal
 
 SISTEMA = sistema_desde_settings()
-EMISOR = "Bizkaitropik"
+EMISOR = "AcuaTPV"
 CABECERA = Cabecera(nombre_obligado=EMISOR, nif_obligado="00000000T")
 
 

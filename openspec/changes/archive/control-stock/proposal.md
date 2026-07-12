@@ -4,7 +4,7 @@
 
 El modelo ya contempla stock (`Articulo.control_stock`, `MovimientoStock` append-only con
 tipos `entrada|venta|merma`), pero **falta la lógica de negocio**: nada descuenta, registra
-entradas/mermas ni calcula existencias. La titular quiere control de existencias y mermas
+entradas/mermas ni calcula existencias. La persona titular quiere control de existencias y mermas
 justificadas, PERO conservando la libertad de **operar sin stock** si lo prefiere.
 
 ## Restricción rectora

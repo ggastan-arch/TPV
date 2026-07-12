@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tpv-bizkaitropik"
+name = "tpv-acuatpv"
 version = "0.1.0"
 description = "TPV tactil monopuesto para acuariofilia; SIF sujeto al RRSIF, preparado para VERI*FACTU."
 requires-python = ">=3.12"

@@ -6,10 +6,10 @@
 ## Contexto
 
 El TPV necesita poder exhibirse (ferias, demostraciones comerciales, pruebas internas) sin
-exponer datos reales de la titular ni remitir registros de facturación a la AEAT. El sistema
+exponer datos reales de la persona titular ni remitir registros de facturación a la AEAT. El sistema
 es un SIF sujeto al RD 1007/2023 (RRSIF): el invariante 5 (CLAUDE.md) prohíbe cualquier "modo
 formación" que imprima tickets no contabilizados, y el invariante 7 exige que el certificado
-electrónico de la titular nunca salga del servidor ni se cargue fuera de los flujos de
+electrónico de la persona titular nunca salga del servidor ni se cargue fuera de los flujos de
 producción reales.
 
 La demo no puede ser una vía paralela que "simule" facturación sin dejar rastro: eso sería
@@ -25,7 +25,7 @@ completamente aislados de la operación real, con cada documento marcado sin amb
   creen los singletons `engine`/`SessionLocal`) fuerza de forma incondicional:
   - `db_path = tpv_demo.db` (nunca `tpv.db`; sin posibilidad de override por variable de
     entorno — el aislamiento no es negociable).
-  - Emisor ficticio: NIF `00000000T`, nombre "Bizkaitropik DEMO (documento de prueba)".
+  - Emisor ficticio: NIF `00000000T`, nombre "AcuaTPV DEMO (documento de prueba)".
   - `certificado_cert_path` / `certificado_key_path` anulados a `None`: el certificado de la
     titular NUNCA se carga en modo demo (invariante 7).
 - Salvaguarda de arranque independiente (`_verificar_aislamiento_demo` en `app/main.py`):
