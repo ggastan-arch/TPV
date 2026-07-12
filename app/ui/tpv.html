@@ -33,6 +33,8 @@
   .linea .cant { color:#94a3b8; font-size:14px; }
   .linea .tot { font-variant-numeric:tabular-nums; font-weight:700; }
   .linea .quita { background:#7f1d1d; border:none; color:#fff; border-radius:8px; width:38px; height:38px; font-size:20px; }
+  .linea .editable { border-bottom:1px dashed #64748b; cursor:pointer; padding:0 2px; }
+  .linea .editable:active { background:#334155; border-radius:4px; }
   .total { padding:14px; font-size:30px; font-weight:800; display:flex; justify-content:space-between; border-top:2px solid var(--line); font-variant-numeric:tabular-nums; }
   .acciones { display:flex; gap:10px; padding:10px; }
   .acciones .btn { flex:1; min-height:70px; }
@@ -86,7 +88,7 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 let usuario = null;
-let carrito = [];      // {articulo_id, nombre_corto, cantidad, pvp?, requiere_cites, precio_libre}
+let carrito = [];      // {articulo_id, nombre_corto, cantidad, pvp?, descripcion?, editado}
 let ultimoCalculo = null;
 
 async function api(path, opts = {}) {
@@ -220,17 +222,50 @@ function anadir(articulo) {
     pvp = v.replace(",", ".");
   }
   if (articulo.requiere_cites) alert("⚠ " + articulo.nombre_corto + " requiere documentacion CITES.");
-  const ex = carrito.find((l) => l.articulo_id === articulo.id && !articulo.precio_libre);
+  // Una linea editada (precio o descripcion) no se fusiona: el nuevo toque crea linea propia.
+  const ex = carrito.find((l) => l.articulo_id === articulo.id && !articulo.precio_libre && !l.editado);
   if (ex) ex.cantidad += 1;
   else carrito.push({ articulo_id: articulo.id, nombre_corto: articulo.nombre_corto,
-                      cantidad: 1, pvp: articulo.precio_libre ? pvp : null });
+                      cantidad: 1, pvp: articulo.precio_libre ? pvp : null,
+                      descripcion: null, editado: false });
+  recalcular();
+}
+
+/* ---------- EDICION DE LINEA (cantidad / precio / descripcion) ---------- */
+function editarCantidad(i) {
+  const ln = ultimoCalculo.lineas[i];
+  const v = prompt("Cantidad para " + ln.descripcion + ":", carrito[i].cantidad);
+  if (v === null) return;
+  const n = parseFloat(String(v).replace(",", "."));
+  if (!isFinite(n) || n <= 0) { alert("Cantidad no valida."); return; }
+  carrito[i].cantidad = n;
+  recalcular();
+}
+
+function editarPrecio(i) {
+  const ln = ultimoCalculo.lineas[i];
+  const v = prompt("Precio (con IVA) para " + ln.descripcion + ":", ln.pvp);
+  if (v === null) return;
+  const texto = String(v).replace(",", ".");
+  if (!texto || isNaN(parseFloat(texto))) { alert("Precio no valido."); return; }
+  carrito[i].pvp = texto;
+  carrito[i].editado = true;
+  recalcular();
+}
+
+function editarDescripcion(i) {
+  const ln = ultimoCalculo.lineas[i];
+  const v = prompt("Descripcion de la linea:", ln.descripcion);
+  if (v === null) return;
+  carrito[i].descripcion = v.trim() || null;
+  carrito[i].editado = true;
   recalcular();
 }
 
 async function recalcular() {
   if (!carrito.length) { ultimoCalculo = null; $("total").innerHTML = "0,00 &euro;"; render(); return; }
   const items = carrito.map((l) => ({ articulo_id: l.articulo_id, cantidad: String(l.cantidad),
-                                      pvp: l.pvp }));
+                                      pvp: l.pvp, descripcion: l.descripcion }));
   ultimoCalculo = await api("/tpv/api/calcular", { method:"POST", body:JSON.stringify({ items }) });
   $("total").textContent = eur(ultimoCalculo.total);
   render();
@@ -241,9 +276,14 @@ function render() {
   const lineas = ultimoCalculo ? ultimoCalculo.lineas : [];
   lineas.forEach((ln, i) => {
     const div = document.createElement("div"); div.className = "linea";
-    div.innerHTML = `<div class="desc">${ln.descripcion}
-        <div class="cant">${carrito[i].cantidad} × ${eur(ln.pvp)} &middot; IVA ${ln.tipo_iva.replace(".",",")}%</div></div>
+    div.innerHTML = `<div class="desc"><span class="editable" data-accion="descripcion">${ln.descripcion}</span>
+        <div class="cant"><span class="editable" data-accion="cantidad">${carrito[i].cantidad}</span> ×
+        <span class="editable" data-accion="precio">${eur(ln.pvp)}</span>
+        &middot; IVA ${ln.tipo_iva.replace(".",",")}%</div></div>
       <div class="tot">${eur(ln.total)}</div>`;
+    div.querySelector('[data-accion="descripcion"]').onclick = () => editarDescripcion(i);
+    div.querySelector('[data-accion="cantidad"]').onclick = () => editarCantidad(i);
+    div.querySelector('[data-accion="precio"]').onclick = () => editarPrecio(i);
     const quita = document.createElement("button");
     quita.className = "quita"; quita.textContent = "×";
     quita.onclick = () => { carrito.splice(i, 1); recalcular(); };
@@ -277,7 +317,8 @@ function abrirCobro() {
 
 async function cobrar(ov, medio) {
   const importe = ($("efectivo").value || "0").replace(",", ".");
-  const items = carrito.map((l) => ({ articulo_id: l.articulo_id, cantidad: String(l.cantidad), pvp: l.pvp }));
+  const items = carrito.map((l) => ({ articulo_id: l.articulo_id, cantidad: String(l.cantidad),
+                                      pvp: l.pvp, descripcion: l.descripcion }));
   try {
     const r = await api("/tpv/api/cobrar", { method:"POST", body: JSON.stringify({
       usuario_id: usuario.usuario_id, items, pagos: [{ medio, importe }] }) });

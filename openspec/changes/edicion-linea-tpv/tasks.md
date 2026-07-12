@@ -76,20 +76,54 @@ texto de `spec.md` para alinear.
 
 ## Phase 4: Frontend — editor de línea en `tpv.html` (sin tests automáticos)
 
-- [ ] 4.1 UI para editar cantidad, precio unitario y descripción de una línea del
-  carrito (pre-emisión)
-- [ ] 4.2 Enviar los overrides de la línea editada en el payload de `/api/calcular` y
-  `/api/cobrar`
-- [ ] 4.3 Una línea con precio/descripción editados NO se fusiona (+1) al retocar el
-  mismo artículo; crea línea nueva
-- [ ] 4.4 Checklist manual: editar cantidad recalcula el total; editar precio en
-  artículo no `precio_libre` se refleja en el ticket; editar descripción aparece en el
-  ticket impreso; retocar artículo tras editar no fusiona la línea
+- [x] 4.1 UI para editar cantidad, precio unitario y descripción de una línea del
+  carrito (pre-emisión) — `editarCantidad`/`editarPrecio`/`editarDescripcion` en
+  `app/ui/tpv.html`, invocados desde spans `.editable` en `render()` (mismo patrón
+  `prompt()` que ya usaba `anadir()` para `precio_libre`)
+- [x] 4.2 Enviar los overrides de la línea editada en el payload de `/api/calcular` y
+  `/api/cobrar` — `descripcion` añadido al mapeo de `items` en `recalcular()` y
+  `cobrar()` (junto a `pvp` y `cantidad`, que ya se enviaban)
+- [x] 4.3 Una línea con precio/descripción editados NO se fusiona (+1) al retocar el
+  mismo artículo; crea línea nueva — nuevo flag `carrito[i].editado` (se activa en
+  `editarPrecio`/`editarDescripcion`, NO en `editarCantidad`); condición de fusión en
+  `anadir()` pasa de `!articulo.precio_libre` a `!articulo.precio_libre && !l.editado`
+- [x] 4.4 Checklist manual: ver sección "Checklist de Verificación Manual (Phase 4)"
+  abajo — pendiente de ejecución por el usuario en el TPV real/navegador antes de
+  mergear
 
 ## Phase 5: Checkpoint
 
 - [x] 5.1 `make test` en verde (suite completa) — 415 passed (baseline 405 + 10 nuevos
   de esta tanda backend)
 - [x] 5.2 `make arch` (import-linter) sin violaciones — 3 kept, 0 broken
-- [ ] 5.3 Checklist manual de Phase 4 completado y documentado (pendiente: Phase 4
-  frontend es la tanda 2)
+- [x] 5.3 Checklist manual de Phase 4 documentado abajo (ejecución pendiente por el
+  usuario; no hay infraestructura de tests JS en este proyecto)
+
+## Checklist de Verificación Manual (Phase 4)
+
+Ejecutar en el navegador (o en el TPV real) tras levantar `make dev`, con al menos un
+artículo `precio_libre=false` y otro `precio_libre=true` disponibles en la botonera:
+
+- [ ] Tocar un artículo dos veces seguidas SIN editar nada: la línea se fusiona
+  (cantidad pasa de 1 a 2), como antes de este cambio (no regresión).
+- [ ] Tocar el número de cantidad de una línea (span subrayado): se abre un `prompt`,
+  cambiar a un valor distinto (p. ej. 3) y confirmar que el total de la línea y el
+  TOTAL general se recalculan correctamente.
+- [ ] Tocar el precio de una línea de un artículo NO `precio_libre` (span subrayado):
+  cambiar el precio y confirmar que el total de la línea, el desglose de IVA y el
+  TOTAL general reflejan el nuevo precio.
+- [ ] Tocar la descripción de una línea (span subrayado): cambiar el texto y confirmar
+  que se refleja en el carrito.
+- [ ] Cobrar un ticket con al menos una línea con precio y/o descripción editados:
+  confirmar que la venta se emite sin error y que el ticket impreso / QR corresponden
+  a esa venta (el detalle exacto de precio/descripción congelados ya está cubierto por
+  tests de backend en `tests/test_emitir_venta.py` y `tests/test_tpv_api.py`).
+- [ ] Tras editar precio o descripción de una línea, volver a tocar el MISMO artículo
+  en la botonera: debe crear una línea NUEVA (no sumar +1 a la línea editada); la línea
+  editada conserva sus valores propios.
+- [ ] Tras editar solo la CANTIDAD de una línea (sin tocar precio/descripción), volver
+  a tocar el mismo artículo: debe fusionarse (+1) sobre esa línea, igual que antes
+  (cantidad no bloquea la fusión).
+- [ ] La lupa (`#buscarInput`, búsqueda incremental) y el flujo de venta general
+  (añadir artículos por botonera/familia, vaciar carrito, cobrar) siguen funcionando
+  sin errores en consola.
