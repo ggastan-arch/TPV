@@ -62,14 +62,14 @@ Chain strategy: pending
 ## Fase 2: Frontend (verificación manual, sin tests automáticos)
 
 ### 7. Subida/preview en consola + render en TPV
-- [ ] 7.1 `app/ui/admin.html` — input de archivo + preview en la ficha de artículo; sube al endpoint de 4.8 y refresca la imagen mostrada.
-- [ ] 7.2 `app/ui/admin.html` — ídem en la ficha de familia.
-- [ ] 7.3 `app/ui/tpv.html` — el botón renderiza `<img src>` con la imagen del destino cuando existe; conserva el aspecto actual cuando es `null`.
-- [ ] 7.4 Ejecutar el checklist de verificación manual (abajo).
+- [x] 7.1 `app/ui/admin.html` — input de archivo + preview en la ficha de artículo; sube al endpoint de 4.8 y refresca la imagen mostrada.
+- [x] 7.2 `app/ui/admin.html` — ídem en la ficha de familia.
+- [x] 7.3 `app/ui/tpv.html` — el botón renderiza `<img src>` con la imagen del destino cuando existe; conserva el aspecto actual cuando es `null`.
+- [ ] 7.4 Ejecutar el checklist de verificación manual (abajo). **Pendiente**: requiere un navegador real; el agente implementó el código y confirmó el contrato backend↔frontend leyendo `app/presentacion/admin.py`/`tpv.py` y la suite de tests existente (`tests/test_admin_api.py`, `tests/test_tpv_api.py`), pero no puede abrir un navegador. Queda a cargo de un humano antes de mergear.
 
 ### 8. Checkpoint final
-- [ ] 8.1 `make test` en verde (sin regresión).
-- [ ] 8.2 `make arch` en verde.
+- [x] 8.1 `make test` en verde (sin regresión) — 392 passed.
+- [x] 8.2 `make arch` en verde — 3 kept, 0 broken.
 
 ### Checklist de verificación manual (Fase 2)
 - Subir JPEG a un artículo → preview visible sin recargar.

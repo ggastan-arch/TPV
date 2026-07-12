@@ -24,6 +24,7 @@
   .b-funcion { background:#475569; }
   .b-inicio { background:#0891b2; }
   .b-precio { font-size:14px; opacity:.85; font-weight:400; }
+  .b-img { width:56px; height:56px; object-fit:cover; border-radius:8px; }
   .cites { font-size:12px; background:#b45309; border-radius:6px; padding:1px 6px; }
   /* carrito */
   .carrito-lineas { flex:1; overflow-y:auto; padding:10px; }
@@ -88,6 +89,8 @@ async function api(path, opts = {}) {
   return r.json();
 }
 const eur = (s) => (s ?? "0.00").toString().replace(".", ",") + " €";
+// Imagen del destino (articulo/familia); "" cuando no hay -> el boton conserva su aspecto actual.
+const imgBoton = (ruta) => ruta ? `<img class="b-img" src="${ruta}" alt="">` : "";
 
 /* ---------- LOGIN ---------- */
 function pantallaLogin() {
@@ -133,10 +136,10 @@ async function irInicio() {
     btn.style.gridRow = `${b.fila + 1} / span ${b.alto}`;
     if (b.color) btn.style.background = b.color;
     if (b.tipo === "articulo") {
-      btn.innerHTML = `<span>${b.articulo.nombre_corto}</span><span class="b-precio">${eur(b.articulo.pvp)}</span>`;
+      btn.innerHTML = `${imgBoton(b.articulo.imagen)}<span>${b.articulo.nombre_corto}</span><span class="b-precio">${eur(b.articulo.pvp)}</span>`;
       btn.onclick = () => anadir(b.articulo);
     } else if (b.tipo === "familia") {
-      btn.textContent = b.texto || b.familia.nombre;
+      btn.innerHTML = `${imgBoton(b.familia.imagen)}<span>${b.texto || b.familia.nombre}</span>`;
       btn.onclick = () => abrirFamilia(b.familia.id);
     } else {
       btn.textContent = b.texto || b.funcion;
@@ -154,13 +157,14 @@ async function abrirFamilia(id) {
   grid.innerHTML = "";
   for (const sf of fam.subfamilias) {
     const b = document.createElement("button");
-    b.className = "btn b-familia"; b.textContent = sf.nombre;
+    b.className = "btn b-familia";
+    b.innerHTML = `${imgBoton(sf.imagen)}<span>${sf.nombre}</span>`;
     b.onclick = () => abrirFamilia(sf.id); grid.appendChild(b);
   }
   for (const a of fam.articulos) {
     const b = document.createElement("button");
     b.className = "btn b-articulo";
-    b.innerHTML = `<span>${a.nombre_corto}</span><span class="b-precio">${eur(a.pvp)}</span>`;
+    b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${eur(a.pvp)}</span>`;
     b.onclick = () => anadir(a); grid.appendChild(b);
   }
 }

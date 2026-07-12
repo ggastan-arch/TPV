@@ -28,6 +28,13 @@
                   padding:10px 16px; font-weight:700; cursor:pointer; }
   .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
   .dato b { display:block; color:#94a3b8; font-weight:500; font-size:13px; }
+  /* imagen de articulo/familia (subida + preview) */
+  .img-cell { display:flex; align-items:center; gap:8px; }
+  .thumb-imagen { width:40px; height:40px; object-fit:cover; border-radius:6px; border:1px solid var(--line); }
+  .thumb-vacio { font-size:12px; color:#94a3b8; }
+  .btn-subir-imagen { background:var(--accent); color:#01121f; border:none; border-radius:6px;
+                      padding:4px 8px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .msg-imagen { font-size:12px; color:#fca5a5; min-width:120px; }
   /* login */
   .login { max-width:360px; margin:12vh auto; }
   .login input { width:100%; padding:12px; margin:8px 0; border-radius:8px; border:1px solid var(--line);
@@ -179,6 +186,47 @@ async function pintarDia() {
 }
 
 /* ---- MAESTROS ---- */
+// Imagen de articulo/familia: se sube al endpoint multipart dedicado (nunca por el
+// PUT JSON de la ficha) y se previsualiza desde la ruta /media/... que devuelve el
+// backend en el listado de maestros.
+function celdaImagen(tipo, r) {
+  return `<div class="img-cell" data-tipo="${tipo}" data-id="${r.id}">
+      ${r.imagen ? `<img src="${r.imagen}" class="thumb-imagen" alt="Imagen de ${r.nombre}">`
+                  : `<span class="thumb-vacio">Sin imagen</span>`}
+      <label class="btn-subir-imagen">Subir<input type="file" accept="image/*" class="input-imagen" hidden></label>
+      <span class="msg-imagen"></span>
+    </div>`;
+}
+
+async function subirImagenMaestro(tipo, id, archivo) {
+  const datos = new FormData();
+  datos.append("archivo", archivo);
+  // Multipart: NO se usa el helper `api()` (fija Content-Type: application/json);
+  // el navegador debe fijar el boundary del multipart automaticamente.
+  const r = await fetch(`/admin/api/maestros/${tipo}/${id}/imagen`, { method: "POST", body: datos });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || ("Error " + r.status));
+  return r.json();
+}
+
+function activarSubidaImagenes() {
+  document.querySelectorAll(".img-cell").forEach((celda) => {
+    const input = celda.querySelector(".input-imagen");
+    const msg = celda.querySelector(".msg-imagen");
+    input.onchange = async () => {
+      const archivo = input.files[0];
+      if (!archivo) return;
+      msg.textContent = "";
+      try {
+        await subirImagenMaestro(celda.dataset.tipo, celda.dataset.id, archivo);
+        await pintarMaestros();
+      } catch (e) {
+        msg.textContent = e.message;
+        input.value = "";
+      }
+    };
+  });
+}
+
 async function pintarMaestros() {
   const [arts, ivas, fams, users] = await Promise.all([
     api("/admin/api/maestros/articulos"), api("/admin/api/maestros/tipos-iva"),
@@ -188,10 +236,13 @@ async function pintarMaestros() {
     <tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   $("#main").innerHTML =
     tabla("Artículos", [["Nombre",r=>r.nombre],["PVP",r=>eur(r.pvp)],["IVA",r=>r.tipo_iva+"%"],
-      ["CITES",r=>r.requiere_cites?"sí":""],["Activo",r=>r.activo?"sí":"no"]], arts) +
+      ["CITES",r=>r.requiere_cites?"sí":""],["Activo",r=>r.activo?"sí":"no"],
+      ["Imagen",r=>celdaImagen("articulos", r)]], arts) +
     tabla("Tipos de IVA", [["Nombre",r=>r.nombre],["%",r=>r.porcentaje],["Activo",r=>r.activo?"sí":"no"]], ivas) +
-    tabla("Familias", [["Nombre",r=>r.nombre],["Padre",r=>r.parent_id??"—"]], fams) +
+    tabla("Familias", [["Nombre",r=>r.nombre],["Padre",r=>r.parent_id??"—"],
+      ["Imagen",r=>celdaImagen("familias", r)]], fams) +
     tabla("Usuarios", [["Nombre",r=>r.nombre],["Rol",r=>r.rol],["Activo",r=>r.activo?"sí":"no"]], users);
+  activarSubidaImagenes();
 }
 
 /* ---- BOTONERAS (editor drag & drop) ---- */
