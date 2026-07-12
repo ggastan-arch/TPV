@@ -1,0 +1,83 @@
+change_name: modos-precio
+status: archived
+archived_date: "2026-07-12"
+
+# Change metadata
+scope: |-
+  Refactor fiscal-adyacente: enum `modo_precio` (fijo|libre|al_peso) reemplaza el bool
+  `precio_libre` en `Articulo`; al_peso reutiliza `cantidad` como peso (kg) y `pvp` como
+  €/kg; modo libre exige descripción al emitir; genéricos sembrados (peces/plantas/material)
+  con modo libre y PVP 0.
+
+# Implementation summary
+implementation:
+  commits:
+    - hash: da729f3
+      message: "Tanda 1: Backend + migración 0007 + seed (strict TDD)"
+    - hash: 711dab0
+      message: "Tanda 2: Frontend + fix CRITICAL (DTO ampliado, modal sin hardcode)"
+
+  verification:
+    tests: "436 passed, 0 failed"
+    architecture: "3 kept, 0 broken (hexagonal boundaries intact)"
+    migration_0007: "up/down verified independently in scratch DB"
+    critical_resolved: "yes (article-edit data-loss risk fixed in 711dab0)"
+
+  pending_human:
+    - "8.3: Create articles (fijo|libre|al_peso) via admin.html + verify persistence"
+    - "8.4: Sell articles (al_peso: enter weight; libre: price+description) + verify totals"
+    - "9.3: Full manual checklist signature before closing PR 2"
+
+# Specs consolidated
+specs_merged:
+  - domain: maestros-crud
+    action: added
+    requirement: "Modo de precio del artículo (fijo | libre | al peso)"
+
+  - domain: tpv-venta
+    action: modified
+    requirement: "Cálculo de líneas en servidor con precio e IVA congelados"
+    change: "Added al_peso scenario and updated modo_precio references"
+
+  - domain: tpv-venta
+    action: modified
+    requirement: "Congelado de línea editada y auditoría de precio manual al emitir"
+    change: "Updated precio_libre → modo_precio; clarified al_peso audits like fijo"
+
+  - domain: tpv-venta
+    action: added
+    requirement: "Descripción obligatoria en modo libre al emitir"
+
+# Artifacts archived
+artifacts:
+  proposal: sdd/modos-precio/proposal
+  specs:
+    - maestros-crud/spec.md
+    - tpv-venta/spec.md
+  design: sdd/modos-precio/design
+  tasks: sdd/modos-precio/tasks
+  verify_report: sdd/modos-precio/verify-report
+
+# Risk assessment
+risks:
+  - item: "Manual checklist gates (8.3/8.4/9.3) unchecked in tasks.md"
+    severity: "informational"
+    note: "Expected per Strict TDD scope (frontend excluded from automation); require human execution in browser before PR 2 merge"
+  - item: "Downgrade of al_peso migrations (0007 downgrade) loses 'al_peso' modality"
+    severity: "low"
+    note: "Al_peso data maps to precio_libre=False; no fiscal data affected, historical accuracy preserved"
+
+# Constraints preserved
+constraints:
+  - "ADR-0003: No UPDATE/DELETE on emitted sales or fiscal records — maintained"
+  - "ADR-0004: Correlative numbering in same transaction — maintained"
+  - "ADR-0002/0005: Decimal arithmetic, single rounding function — maintained"
+  - "Invariant 4: Audit log append-only — maintained"
+  - "No-regresion: precio_libre=True articles behave identical post-migration — verified"
+
+# Next phase
+next_recommended: none
+
+# Archive metadata
+archived_by: sdd-archive
+archive_report_engram_id: "to_be_filled"
