@@ -198,6 +198,75 @@ def test_stock_alarma_sin_sobreventa(cliente, datos_tpv):
     assert r.json() == {"control_activo": False, "articulos_en_negativo": 0}
 
 
+# --- Drill-down de familias: filtro de visibilidad tactil ---------------------
+def test_familia_excluye_subfamilias_no_visibles_en_tactil(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        raiz = Familia(nombre="Peces", orden=1)
+        s.add(raiz)
+        s.flush()
+        visible = Familia(nombre="Ciclidos", parent_id=raiz.id, visible_en_tactil=True)
+        no_visible = Familia(nombre="Peces escaneo", parent_id=raiz.id, visible_en_tactil=False)
+        s.add_all([visible, no_visible])
+        s.commit()
+        raiz_id, visible_id = raiz.id, visible.id
+
+    r = cliente.get(f"/tpv/api/familia/{raiz_id}")
+    assert r.status_code == 200
+    ids = {sub["id"] for sub in r.json()["subfamilias"]}
+    assert ids == {visible_id}
+
+
+def test_familia_incluye_subfamilias_visibles_y_activas(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        raiz = Familia(nombre="Peces", orden=1)
+        s.add(raiz)
+        s.flush()
+        h1 = Familia(nombre="Ciclidos", parent_id=raiz.id)
+        h2 = Familia(nombre="Tetras", parent_id=raiz.id)
+        s.add_all([h1, h2])
+        s.commit()
+        raiz_id, h1_id, h2_id = raiz.id, h1.id, h2.id
+
+    r = cliente.get(f"/tpv/api/familia/{raiz_id}")
+    assert r.status_code == 200
+    ids = {sub["id"] for sub in r.json()["subfamilias"]}
+    assert ids == {h1_id, h2_id}
+
+
+def test_familia_excluye_subfamilia_inactiva_aunque_visible_en_tactil(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        raiz = Familia(nombre="Peces", orden=1)
+        s.add(raiz)
+        s.flush()
+        activa = Familia(nombre="Ciclidos", parent_id=raiz.id)
+        inactiva = Familia(nombre="Descontinuada", parent_id=raiz.id, activo=False)
+        s.add_all([activa, inactiva])
+        s.commit()
+        raiz_id, activa_id = raiz.id, activa.id
+
+    r = cliente.get(f"/tpv/api/familia/{raiz_id}")
+    assert r.status_code == 200
+    ids = {sub["id"] for sub in r.json()["subfamilias"]}
+    assert ids == {activa_id}
+
+
+def test_botonera_respeta_boton_explicito_a_familia_no_visible(cliente, crear_sesion, datos_tpv):
+    with crear_sesion() as s:
+        pagina = s.query(PaginaBotonera).one()
+        no_visible = Familia(nombre="Trastienda", visible_en_tactil=False)
+        s.add(no_visible)
+        s.flush()
+        s.add(Boton(pagina_id=pagina.id, fila=2, columna=2, texto="Trastienda",
+                    familia_id=no_visible.id))
+        s.commit()
+        no_visible_id = no_visible.id
+
+    r = cliente.get("/tpv/api/botonera")
+    assert r.status_code == 200
+    familias_en_botones = [b["familia"]["id"] for b in r.json()["botones"] if b["tipo"] == "familia"]
+    assert no_visible_id in familias_en_botones
+
+
 def test_stock_alarma_refleja_sobreventa(cliente, crear_sesion, datos_tpv):
     from app.infraestructura.persistencia.modelos import MovimientoStock
     from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL

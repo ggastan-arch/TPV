@@ -153,7 +153,8 @@ def familia(familia_id: int, s: Session = Depends(get_session)) -> dict:
     if fam is None:
         raise HTTPException(404, "Familia no encontrada")
     subs = s.execute(
-        select(Familia).where(Familia.parent_id == familia_id, Familia.activo.is_(True))
+        select(Familia).where(Familia.parent_id == familia_id, Familia.activo.is_(True),
+                              Familia.visible_en_tactil.is_(True))
         .order_by(Familia.orden)
     ).scalars().all()
     arts = s.execute(

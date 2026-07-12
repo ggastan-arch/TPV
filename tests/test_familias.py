@@ -29,6 +29,13 @@ def _auditorias(crear_sesion, accion):
         return s.query(LogAuditoria).filter_by(accion=accion).all()
 
 
+def test_visible_en_tactil_default_true_a_nivel_modelo(session):
+    fam = Familia(nombre="Peces")
+    session.add(fam)
+    session.flush()
+    assert fam.visible_en_tactil is True
+
+
 def test_crear_familia_raiz_persiste_y_audita(crear_sesion, datos_base):
     with crear_sesion() as s:
         nuevo_id = _svc(s, datos_base).crear(DatosFamilia(nombre="Peces"))
@@ -38,6 +45,35 @@ def test_crear_familia_raiz_persiste_y_audita(crear_sesion, datos_base):
         assert fam is not None and fam.parent_id is None and fam.activo is True
     logs = _auditorias(crear_sesion, "crear_familia")
     assert len(logs) == 1 and logs[0].entidad == "familia"
+
+
+def test_crear_familia_sin_flag_usa_default_true(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        nuevo_id = _svc(s, datos_base).crear(DatosFamilia(nombre="Peces"))
+    with crear_sesion() as s:
+        assert s.get(Familia, nuevo_id).visible_en_tactil is True
+
+
+def test_crear_familia_no_visible_en_tactil_y_audita(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        nuevo_id = _svc(s, datos_base).crear(
+            DatosFamilia(nombre="Peces escaneo", visible_en_tactil=False))
+    with crear_sesion() as s:
+        assert s.get(Familia, nuevo_id).visible_en_tactil is False
+    logs = _auditorias(crear_sesion, "crear_familia")
+    assert len(logs) == 1 and logs[0].entidad_id == str(nuevo_id)
+
+
+def test_actualizar_flag_visible_en_tactil_y_audita(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        fam_id = _svc(s, datos_base).crear(DatosFamilia(nombre="Peces"))
+    with crear_sesion() as s:
+        _svc(s, datos_base).actualizar(
+            fam_id, DatosFamilia(nombre="Peces", visible_en_tactil=False))
+    with crear_sesion() as s:
+        assert s.get(Familia, fam_id).visible_en_tactil is False
+    logs = _auditorias(crear_sesion, "actualizar_familia")
+    assert len(logs) == 1 and logs[0].entidad_id == str(fam_id)
 
 
 def test_crear_familia_hija(crear_sesion, datos_base):

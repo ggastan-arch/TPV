@@ -37,6 +37,9 @@ class Familia(Base):
     color: Mapped[str | None] = mapped_column(String, nullable=True)
     imagen: Mapped[str | None] = mapped_column(String, nullable=True)
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Gobierna solo la navegacion por familias del TPV (drill-down); no afecta
+    # a botones explicitos de la botonera que apunten a esta familia.
+    visible_en_tactil: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     padre: Mapped["Familia | None"] = relationship(
         remote_side="Familia.id", back_populates="hijos"

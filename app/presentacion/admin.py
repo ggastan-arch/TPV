@@ -124,6 +124,7 @@ class FamiliaReq(BaseModel):
     orden: int = 0
     color: str | None = None
     imagen: str | None = None
+    visible_en_tactil: bool = True
 
 
 class ClienteReq(BaseModel):
@@ -324,7 +325,8 @@ def maestros_iva(_: int = Depends(require_admin), s: Session = Depends(get_sessi
 
 @router.get("/api/maestros/familias")
 def maestros_familias(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> list[dict]:
-    return [{"id": f.id, "nombre": f.nombre, "parent_id": f.parent_id, "activo": f.activo}
+    return [{"id": f.id, "nombre": f.nombre, "parent_id": f.parent_id, "activo": f.activo,
+             "visible_en_tactil": f.visible_en_tactil}
             for f in s.execute(select(Familia).order_by(Familia.orden)).scalars()]
 
 

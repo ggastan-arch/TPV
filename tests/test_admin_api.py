@@ -217,6 +217,21 @@ def test_desactivar_familia_con_hijos_devuelve_409(cliente, admin, datos_base):
     assert r.status_code == 409
 
 
+def test_listado_maestros_familias_expone_visible_en_tactil(cliente, admin, datos_base):
+    _login(cliente, admin)
+    visible_id = cliente.post("/admin/api/maestros/familias",
+                              json={"nombre": "Peces"}).json()["id"]
+    oculta_id = cliente.post("/admin/api/maestros/familias",
+                             json={"nombre": "Peces escaneo",
+                                   "visible_en_tactil": False}).json()["id"]
+
+    familias = cliente.get("/admin/api/maestros/familias").json()
+
+    por_id = {f["id"]: f for f in familias}
+    assert por_id[visible_id]["visible_en_tactil"] is True
+    assert por_id[oculta_id]["visible_en_tactil"] is False
+
+
 # --- Maestros: clientes --------------------------------------------------------
 def test_crear_cliente_exige_sesion(cliente, datos_base):
     assert cliente.post("/admin/api/maestros/clientes",
