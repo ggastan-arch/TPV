@@ -5,10 +5,12 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.staticfiles import StaticFiles
 
 from app.presentacion.admin import router as admin_router
 from app.presentacion.health import router as health_router
 from app.presentacion.tpv import router as tpv_router
+from app.infraestructura import imagenes
 from app.infraestructura.config import DB_PATH_PRODUCCION, Settings, settings
 
 
@@ -35,6 +37,12 @@ def crear_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(tpv_router)
     app.include_router(admin_router)
+    # Imagenes de catalogo: archivo en disco, ruta publica en BD (nunca binario
+    # ni base64). `imagenes.MEDIA_DIR` se lee en tiempo de llamada (permite
+    # monkeypatch a tmp_path en tests). Se crea si no existe para que el
+    # arranque nunca falle por un `media/` ausente en una instalacion nueva.
+    imagenes.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=str(imagenes.MEDIA_DIR)), name="media")
     return app
 
 

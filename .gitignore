@@ -43,6 +43,11 @@ tpv_demo.db*
 *.bak
 backups/
 
+# Imagenes de catalogo (articulo/familia): archivos servidos desde /media,
+# desechables y regenerables via subida; NUNCA versionados (la BD solo guarda
+# la ruta, ver app/infraestructura/imagenes.py).
+media/
+
 # Los XSD/WSDL oficiales de la AEAT (schemas/) SI se versionan: son publicos y los
 # tests los necesitan. Un certificado alli quedaria cubierto por los patrones de arriba.
 

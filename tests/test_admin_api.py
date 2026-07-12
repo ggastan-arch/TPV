@@ -5,10 +5,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.presentacion.deps import get_session, get_uow
+import app.infraestructura.imagenes as imagenes_mod
 from app.infraestructura.seguridad import hash_pin
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.main import crear_app
-from app.infraestructura.persistencia.modelos import LogAuditoria, Usuario
+from app.infraestructura.persistencia.modelos import Articulo, Familia, LogAuditoria, Usuario
 
 
 @pytest.fixture
@@ -291,3 +292,228 @@ def test_desactivar_ultimo_admin_devuelve_409(cliente, admin, datos_base):
     _login(cliente, admin)
     r = cliente.post(f"/admin/api/maestros/usuarios/{admin['usuario_id']}/desactivar")
     assert r.status_code == 409
+
+
+# --- Maestros: subida de imagen (articulo y familia) ----------------------------
+# El tipo se detecta SIEMPRE por los bytes reales (nunca por el content-type
+# declarado en la subida multipart): estos tests fuerzan un content-type
+# "correcto" con contenido falso para probar justo esa superficie de seguridad.
+_JPEG_VALIDO = b"\xff\xd8\xff\xe0" + b"JFIF" + b"\x00" * 200
+_PNG_VALIDO = b"\x89PNG\r\n\x1a\n" + b"\x00" * 200
+_TEXTO_DISFRAZADO_DE_JPEG = b"esto no es una imagen real, es texto plano" * 20
+
+
+@pytest.fixture
+def media_tmp(tmp_path, monkeypatch):
+    # Subdirectorio propio: `tmp_path` tambien aloja `test.db` (fixture `engine`
+    # en conftest.py) y no debe confundirse con el contenido de MEDIA_DIR.
+    destino = tmp_path / "media"
+    monkeypatch.setattr(imagenes_mod, "MEDIA_DIR", destino)
+    return destino
+
+
+def _archivos_en(media_dir) -> list:
+    """Lista los archivos de `media_dir`; vacio (sin lanzar) si aun no existe
+    (rechazo antes de escribir disco -> el directorio nunca llega a crearse)."""
+    return list(media_dir.iterdir()) if media_dir.exists() else []
+
+
+def test_subir_imagen_articulo_valida_persiste_archivo_ruta_y_auditoria(
+    cliente, admin, datos_base, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    articulo_id = cliente.post("/admin/api/maestros/articulos",
+                               json=_nuevo_articulo(datos_base)).json()["id"]
+
+    r = cliente.post(f"/admin/api/maestros/articulos/{articulo_id}/imagen",
+                     files={"archivo": ("foto.jpg", _JPEG_VALIDO, "image/jpeg")})
+    assert r.status_code == 200
+    ruta = r.json()["imagen"]
+    assert ruta.startswith("/media/articulo-")
+
+    assert (media_tmp / ruta.removeprefix("/media/")).exists()
+
+    with crear_sesion() as s:
+        assert s.get(Articulo, articulo_id).imagen == ruta
+        assert s.query(LogAuditoria).filter_by(accion="cambiar_imagen_articulo").count() == 1
+
+    # El listado de solo lectura de maestros expone la ruta persistida.
+    articulos = cliente.get("/admin/api/maestros/articulos").json()
+    assert next(a for a in articulos if a["id"] == articulo_id)["imagen"] == ruta
+
+
+def test_subir_imagen_articulo_tipo_invalido_no_persiste_nada(
+    cliente, admin, datos_base, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    articulo_id = cliente.post("/admin/api/maestros/articulos",
+                               json=_nuevo_articulo(datos_base)).json()["id"]
+
+    r = cliente.post(f"/admin/api/maestros/articulos/{articulo_id}/imagen",
+                     files={"archivo": ("foto.jpg", _TEXTO_DISFRAZADO_DE_JPEG, "image/jpeg")})
+    assert r.status_code == 422
+    assert _archivos_en(media_tmp) == []
+    with crear_sesion() as s:
+        assert s.get(Articulo, articulo_id).imagen is None
+
+
+def test_subir_imagen_articulo_tamano_excedido_no_persiste_nada(
+    cliente, admin, datos_base, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    articulo_id = cliente.post("/admin/api/maestros/articulos",
+                               json=_nuevo_articulo(datos_base)).json()["id"]
+
+    contenido_grande = _JPEG_VALIDO + b"\x00" * (3 * 1024 * 1024)
+    r = cliente.post(f"/admin/api/maestros/articulos/{articulo_id}/imagen",
+                     files={"archivo": ("foto.jpg", contenido_grande, "image/jpeg")})
+    assert r.status_code == 422
+    assert _archivos_en(media_tmp) == []
+    with crear_sesion() as s:
+        assert s.get(Articulo, articulo_id).imagen is None
+
+
+def test_reemplazar_imagen_articulo_borra_la_anterior(
+    cliente, admin, datos_base, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    articulo_id = cliente.post("/admin/api/maestros/articulos",
+                               json=_nuevo_articulo(datos_base)).json()["id"]
+
+    r1 = cliente.post(f"/admin/api/maestros/articulos/{articulo_id}/imagen",
+                      files={"archivo": ("a.jpg", _JPEG_VALIDO, "image/jpeg")})
+    ruta_a = r1.json()["imagen"]
+    archivo_a = media_tmp / ruta_a.removeprefix("/media/")
+    assert archivo_a.exists()
+
+    r2 = cliente.post(f"/admin/api/maestros/articulos/{articulo_id}/imagen",
+                      files={"archivo": ("b.png", _PNG_VALIDO, "image/png")})
+    ruta_b = r2.json()["imagen"]
+    assert ruta_b != ruta_a
+    assert not archivo_a.exists()  # la anterior se borro
+    assert (media_tmp / ruta_b.removeprefix("/media/")).exists()
+
+    with crear_sesion() as s:
+        assert s.get(Articulo, articulo_id).imagen == ruta_b
+
+
+def test_subir_imagen_articulo_inexistente_da_404_sin_escribir_disco(cliente, admin, media_tmp):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/articulos/999999/imagen",
+                     files={"archivo": ("a.jpg", _JPEG_VALIDO, "image/jpeg")})
+    assert r.status_code == 404
+    assert _archivos_en(media_tmp) == []
+
+
+def test_subir_imagen_articulo_sin_sesion_da_401(cliente, media_tmp):
+    r = cliente.post("/admin/api/maestros/articulos/1/imagen",
+                     files={"archivo": ("a.jpg", _JPEG_VALIDO, "image/jpeg")})
+    assert r.status_code == 401
+
+
+def test_subir_imagen_familia_valida_persiste_archivo_ruta_y_auditoria(
+    cliente, admin, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    familia_id = cliente.post("/admin/api/maestros/familias", json={"nombre": "Peces"}).json()["id"]
+
+    r = cliente.post(f"/admin/api/maestros/familias/{familia_id}/imagen",
+                     files={"archivo": ("foto.png", _PNG_VALIDO, "image/png")})
+    assert r.status_code == 200
+    ruta = r.json()["imagen"]
+    assert ruta.startswith("/media/familia-")
+    assert (media_tmp / ruta.removeprefix("/media/")).exists()
+
+    with crear_sesion() as s:
+        assert s.get(Familia, familia_id).imagen == ruta
+        assert s.query(LogAuditoria).filter_by(accion="cambiar_imagen_familia").count() == 1
+
+    familias = cliente.get("/admin/api/maestros/familias").json()
+    assert next(f for f in familias if f["id"] == familia_id)["imagen"] == ruta
+
+
+def test_subir_imagen_familia_tipo_invalido_no_persiste_nada(
+    cliente, admin, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    familia_id = cliente.post("/admin/api/maestros/familias", json={"nombre": "Peces"}).json()["id"]
+
+    r = cliente.post(f"/admin/api/maestros/familias/{familia_id}/imagen",
+                     files={"archivo": ("foto.png", _TEXTO_DISFRAZADO_DE_JPEG, "image/png")})
+    assert r.status_code == 422
+    assert _archivos_en(media_tmp) == []
+    with crear_sesion() as s:
+        assert s.get(Familia, familia_id).imagen is None
+
+
+def test_reemplazar_imagen_familia_cuando_la_anterior_ya_no_existe_en_disco_no_bloquea(
+    cliente, admin, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    familia_id = cliente.post("/admin/api/maestros/familias", json={"nombre": "Peces"}).json()["id"]
+
+    r1 = cliente.post(f"/admin/api/maestros/familias/{familia_id}/imagen",
+                      files={"archivo": ("a.png", _PNG_VALIDO, "image/png")})
+    ruta_a = r1.json()["imagen"]
+    (media_tmp / ruta_a.removeprefix("/media/")).unlink()  # se borra manualmente antes del reemplazo
+
+    r2 = cliente.post(f"/admin/api/maestros/familias/{familia_id}/imagen",
+                      files={"archivo": ("b.jpg", _JPEG_VALIDO, "image/jpeg")})
+    assert r2.status_code == 200
+    ruta_b = r2.json()["imagen"]
+    with crear_sesion() as s:
+        assert s.get(Familia, familia_id).imagen == ruta_b
+
+
+def test_subir_imagen_familia_inexistente_da_404_sin_escribir_disco(cliente, admin, media_tmp):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/maestros/familias/999999/imagen",
+                     files={"archivo": ("a.png", _PNG_VALIDO, "image/png")})
+    assert r.status_code == 404
+    assert _archivos_en(media_tmp) == []
+
+
+def test_subir_imagen_familia_sin_sesion_da_401(cliente, media_tmp):
+    r = cliente.post("/admin/api/maestros/familias/1/imagen",
+                     files={"archivo": ("a.png", _PNG_VALIDO, "image/png")})
+    assert r.status_code == 401
+
+
+# --- cierre de la ruta arbitraria: "imagen" en el PUT JSON se ignora -----------
+def test_put_familia_con_imagen_en_el_body_se_ignora(
+    cliente, admin, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    familia_id = cliente.post("/admin/api/maestros/familias", json={"nombre": "Peces"}).json()["id"]
+    cliente.post(f"/admin/api/maestros/familias/{familia_id}/imagen",
+                files={"archivo": ("foto.png", _PNG_VALIDO, "image/png")})
+    with crear_sesion() as s:
+        ruta_original = s.get(Familia, familia_id).imagen
+    assert ruta_original is not None
+
+    r = cliente.put(f"/admin/api/maestros/familias/{familia_id}",
+                    json={"nombre": "Peces tropicales", "imagen": "/media/ruta-inyectada.png"})
+    assert r.status_code == 200
+    with crear_sesion() as s:
+        fam = s.get(Familia, familia_id)
+        assert fam.nombre == "Peces tropicales"
+        assert fam.imagen == ruta_original  # el campo del body JSON se ignora
+
+
+def test_put_articulo_con_imagen_en_el_body_se_ignora(
+    cliente, admin, datos_base, crear_sesion, media_tmp,
+):
+    _login(cliente, admin)
+    articulo_id = cliente.post("/admin/api/maestros/articulos",
+                               json=_nuevo_articulo(datos_base)).json()["id"]
+    cliente.post(f"/admin/api/maestros/articulos/{articulo_id}/imagen",
+                files={"archivo": ("foto.jpg", _JPEG_VALIDO, "image/jpeg")})
+    with crear_sesion() as s:
+        ruta_original = s.get(Articulo, articulo_id).imagen
+    assert ruta_original is not None
+
+    r = cliente.put(f"/admin/api/maestros/articulos/{articulo_id}",
+                    json={**_nuevo_articulo(datos_base), "imagen": "/media/ruta-inyectada.jpg"})
+    assert r.status_code == 200
+    with crear_sesion() as s:
+        assert s.get(Articulo, articulo_id).imagen == ruta_original

@@ -66,6 +66,9 @@ class Articulo(Base):
     requiere_cites: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     color_boton: Mapped[str | None] = mapped_column(String, nullable=True)
     icono: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Ruta publica bajo /media (nunca binario ni base64); solo se fija por el
+    # endpoint de subida (ver app/infraestructura/imagenes.py).
+    imagen: Mapped[str | None] = mapped_column(String, nullable=True)
     # Los articulos con ventas NUNCA se borran; solo activo=false.
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 

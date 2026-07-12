@@ -267,6 +267,59 @@ def test_botonera_respeta_boton_explicito_a_familia_no_visible(cliente, crear_se
     assert no_visible_id in familias_en_botones
 
 
+# --- Imagen efectiva del destino (articulo/familia) en los DTOs del TPV -------
+def test_botonera_expone_imagen_de_articulo_y_familia_con_imagen_asignada(cliente, crear_sesion, datos_tpv):
+    with crear_sesion() as s:
+        s.get(Articulo, datos_tpv["neon_id"]).imagen = "/media/articulo-1-abcd1234.jpg"
+        s.get(Familia, datos_tpv["familia_id"]).imagen = "/media/familia-1-abcd1234.png"
+        s.commit()
+
+    r = cliente.get("/tpv/api/botonera")
+    assert r.status_code == 200
+    botones = r.json()["botones"]
+    boton_articulo = next(b for b in botones if b["tipo"] == "articulo")
+    boton_familia = next(b for b in botones if b["tipo"] == "familia")
+    assert boton_articulo["articulo"]["imagen"] == "/media/articulo-1-abcd1234.jpg"
+    assert boton_familia["familia"]["imagen"] == "/media/familia-1-abcd1234.png"
+
+
+def test_botonera_destino_sin_imagen_expone_null_y_no_falla(cliente, datos_tpv):
+    r = cliente.get("/tpv/api/botonera")
+    assert r.status_code == 200
+    botones = r.json()["botones"]
+    boton_articulo = next(b for b in botones if b["tipo"] == "articulo")
+    boton_familia = next(b for b in botones if b["tipo"] == "familia")
+    assert boton_articulo["articulo"]["imagen"] is None
+    assert boton_familia["familia"]["imagen"] is None
+
+
+def test_familia_drilldown_expone_imagen_en_subfamilias_y_articulos(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        raiz = Familia(nombre="Peces", orden=1)
+        s.add(raiz)
+        s.flush()
+        sub_con_imagen = Familia(nombre="Ciclidos", parent_id=raiz.id,
+                                 imagen="/media/familia-2-aaaa1111.png")
+        sub_sin_imagen = Familia(nombre="Tetras", parent_id=raiz.id)
+        articulo_con_imagen = Articulo(
+            nombre="Neon", nombre_corto="Neon", familia_id=raiz.id,
+            tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("2.50"),
+            imagen="/media/articulo-3-bbbb2222.jpg")
+        s.add_all([sub_con_imagen, sub_sin_imagen, articulo_con_imagen])
+        s.commit()
+        raiz_id = raiz.id
+
+    r = cliente.get(f"/tpv/api/familia/{raiz_id}")
+    assert r.status_code == 200
+    cuerpo = r.json()
+    sub_dto = next(x for x in cuerpo["subfamilias"] if x["nombre"] == "Ciclidos")
+    sub_sin_imagen_dto = next(x for x in cuerpo["subfamilias"] if x["nombre"] == "Tetras")
+    art_dto = next(a for a in cuerpo["articulos"] if a["nombre"] == "Neon")
+    assert sub_dto["imagen"] == "/media/familia-2-aaaa1111.png"
+    assert sub_sin_imagen_dto["imagen"] is None
+    assert art_dto["imagen"] == "/media/articulo-3-bbbb2222.jpg"
+
+
 def test_stock_alarma_refleja_sobreventa(cliente, crear_sesion, datos_tpv):
     from app.infraestructura.persistencia.modelos import MovimientoStock
     from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL

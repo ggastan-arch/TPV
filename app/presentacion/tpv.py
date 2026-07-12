@@ -96,6 +96,7 @@ def _articulo_dto(a: Articulo) -> dict:
         "precio_libre": a.precio_libre,
         "requiere_cites": a.requiere_cites,
         "color": a.color_boton,
+        "imagen": a.imagen,
     }
 
 
@@ -133,7 +134,8 @@ def botonera(s: Session = Depends(get_session)) -> dict:
         elif b.familia_id is not None:
             fam = s.get(Familia, b.familia_id)
             dto["tipo"] = "familia"
-            dto["familia"] = {"id": fam.id, "nombre": fam.nombre, "color": fam.color}
+            dto["familia"] = {"id": fam.id, "nombre": fam.nombre, "color": fam.color,
+                              "imagen": fam.imagen}
         else:
             dto["tipo"] = "funcion"
             dto["funcion"] = b.funcion
@@ -163,7 +165,8 @@ def familia(familia_id: int, s: Session = Depends(get_session)) -> dict:
     ).scalars().all()
     return {
         "id": fam.id, "nombre": fam.nombre, "parent_id": fam.parent_id,
-        "subfamilias": [{"id": x.id, "nombre": x.nombre, "color": x.color} for x in subs],
+        "subfamilias": [{"id": x.id, "nombre": x.nombre, "color": x.color,
+                        "imagen": x.imagen} for x in subs],
         "articulos": [_articulo_dto(a) for a in arts],
     }
 

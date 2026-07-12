@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -74,6 +74,13 @@ from app.aplicacion.tipos_iva import (
 )
 from app.presentacion.deps import get_session, get_uow
 from app.infraestructura.config import settings
+from app.infraestructura.imagenes import (
+    ImagenInvalida,
+    borrar_media,
+    guardar_media,
+    nombre_archivo,
+    validar_imagen,
+)
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.seguridad import verificar_pin
 from app.infraestructura.fiscal.engine import NullEngine
@@ -119,11 +126,14 @@ class TipoIvaReq(BaseModel):
 
 
 class FamiliaReq(BaseModel):
+    """Sin campo `imagen`: la ruta SOLO se fija por el endpoint de subida
+    (`POST .../familias/{id}/imagen`), nunca por este payload JSON, para
+    cerrar el vector de inyeccion de una ruta arbitraria."""
+
     nombre: str
     parent_id: int | None = None
     orden: int = 0
     color: str | None = None
-    imagen: str | None = None
     visible_en_tactil: bool = True
 
 
@@ -326,7 +336,7 @@ def maestros_iva(_: int = Depends(require_admin), s: Session = Depends(get_sessi
 @router.get("/api/maestros/familias")
 def maestros_familias(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> list[dict]:
     return [{"id": f.id, "nombre": f.nombre, "parent_id": f.parent_id, "activo": f.activo,
-             "visible_en_tactil": f.visible_en_tactil}
+             "visible_en_tactil": f.visible_en_tactil, "imagen": f.imagen}
             for f in s.execute(select(Familia).order_by(Familia.orden)).scalars()]
 
 
@@ -334,7 +344,7 @@ def maestros_familias(_: int = Depends(require_admin), s: Session = Depends(get_
 def maestros_articulos(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> list[dict]:
     return [{"id": a.id, "nombre": a.nombre, "pvp": str(a.pvp),
              "tipo_iva": str(a.tipo_iva.porcentaje), "control_stock": a.control_stock,
-             "requiere_cites": a.requiere_cites, "activo": a.activo}
+             "requiere_cites": a.requiere_cites, "activo": a.activo, "imagen": a.imagen}
             for a in s.execute(select(Articulo).order_by(Articulo.nombre)).scalars()]
 
 
@@ -402,6 +412,28 @@ def activar_articulo(articulo_id: int, request: Request,
     except ArticuloNoEncontrado:
         raise HTTPException(404, "Articulo no encontrado")
     return {"ok": True}
+
+
+@router.post("/api/maestros/articulos/{articulo_id}/imagen")
+async def subir_imagen_articulo(articulo_id: int, request: Request,
+                                archivo: UploadFile = File(...),
+                                usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    """Sube una imagen (JPEG/PNG/WebP, tope ~3 MB) para un articulo. El nombre
+    de archivo lo genera el servidor; el reemplazo borra la imagen anterior
+    (best-effort). Rechazo de tipo/tamano -> 422, sin escribir nada en disco."""
+    if uow.articulos.buscar(articulo_id) is None:
+        raise HTTPException(404, "Articulo no encontrado")
+    contenido = await archivo.read()
+    try:
+        extension = validar_imagen(contenido)
+    except ImagenInvalida as exc:
+        raise HTTPException(422, str(exc))
+    nombre = nombre_archivo("articulo", articulo_id, extension)
+    guardar_media(nombre, contenido)
+    anterior = _servicio_articulos(request, usuario_id, uow).fijar_imagen(
+        articulo_id, f"/media/{nombre}")
+    borrar_media(anterior)
+    return {"imagen": f"/media/{nombre}"}
 
 
 # --- Maestros: tipos de IVA (escritura) ----------------------------------------
@@ -500,6 +532,27 @@ def activar_familia(familia_id: int, request: Request,
     except FamiliaNoEncontrada:
         raise HTTPException(404, "Familia no encontrada")
     return {"ok": True}
+
+
+@router.post("/api/maestros/familias/{familia_id}/imagen")
+async def subir_imagen_familia(familia_id: int, request: Request,
+                               archivo: UploadFile = File(...),
+                               usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    """Sube una imagen (JPEG/PNG/WebP, tope ~3 MB) para una familia. Mismo
+    patron que `subir_imagen_articulo`."""
+    if uow.familias.buscar(familia_id) is None:
+        raise HTTPException(404, "Familia no encontrada")
+    contenido = await archivo.read()
+    try:
+        extension = validar_imagen(contenido)
+    except ImagenInvalida as exc:
+        raise HTTPException(422, str(exc))
+    nombre = nombre_archivo("familia", familia_id, extension)
+    guardar_media(nombre, contenido)
+    anterior = _servicio_familias(request, usuario_id, uow).fijar_imagen(
+        familia_id, f"/media/{nombre}")
+    borrar_media(anterior)
+    return {"imagen": f"/media/{nombre}"}
 
 
 # --- Maestros: clientes (escritura) --------------------------------------------

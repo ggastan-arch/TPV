@@ -18,6 +18,7 @@ dependencies = [
     "requests>=2.32",
     "python-escpos>=3.1",
     "itsdangerous>=2.2",
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

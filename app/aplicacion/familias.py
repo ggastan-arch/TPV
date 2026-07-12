@@ -3,7 +3,11 @@
 Reglas: el padre debe existir; reasignar el padre NUNCA puede crear un ciclo (una familia
 no puede colgar de si misma ni de un descendiente suyo, o el CTE recursivo del arbol
 entraria en bucle); no se desactiva una familia con hijos activos (dejaria huerfanos en la
-navegacion); las familias NUNCA se borran, solo se activan/desactivan."""
+navegacion); las familias NUNCA se borran, solo se activan/desactivan.
+
+La imagen NO se acepta en `DatosFamilia`/el PUT JSON: se fija exclusivamente via
+`fijar_imagen`, invocado por el endpoint de subida (evita que un payload JSON
+inyecte una ruta arbitraria en `Familia.imagen`)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -18,7 +22,6 @@ class DatosFamilia:
     parent_id: int | None = None
     orden: int = 0
     color: str | None = None
-    imagen: str | None = None
     visible_en_tactil: bool = True
 
 
@@ -47,7 +50,7 @@ class ServicioFamilias:
     def crear(self, datos: DatosFamilia) -> int:
         self._validar_padre_existe(datos.parent_id)
         familia = Familia(nombre=datos.nombre, parent_id=datos.parent_id,
-                          orden=datos.orden, color=datos.color, imagen=datos.imagen,
+                          orden=datos.orden, color=datos.color,
                           visible_en_tactil=datos.visible_en_tactil)
         self.uow.familias.agregar(familia)
         self.uow.flush()
@@ -66,7 +69,6 @@ class ServicioFamilias:
         familia.parent_id = datos.parent_id
         familia.orden = datos.orden
         familia.color = datos.color
-        familia.imagen = datos.imagen
         familia.visible_en_tactil = datos.visible_en_tactil
         self._auditar("actualizar_familia", familia.id)
         self.uow.commit()
@@ -89,6 +91,19 @@ class ServicioFamilias:
         self._auditar("activar_familia", familia.id)
         self.uow.commit()
 
+    def fijar_imagen(self, familia_id: int, ruta: str) -> str | None:
+        """Fija `Familia.imagen` a `ruta` (ya validada y guardada en disco por
+        el endpoint de subida) y devuelve la ruta anterior (o `None`), para que
+        el endpoint pueda borrar el archivo huerfano tras el commit."""
+        familia = self.uow.familias.buscar(familia_id)
+        if familia is None:
+            raise FamiliaNoEncontrada(familia_id)
+        anterior = familia.imagen
+        familia.imagen = ruta
+        self._auditar("cambiar_imagen_familia", familia.id, detalle=ruta)
+        self.uow.commit()
+        return anterior
+
     # -- helpers ---------------------------------------------------------------
     def _validar_padre_existe(self, parent_id: int | None) -> None:
         if parent_id is not None and self.uow.familias.buscar(parent_id) is None:
@@ -104,7 +119,7 @@ class ServicioFamilias:
             padre = self.uow.familias.buscar(actual)
             actual = padre.parent_id if padre is not None else None
 
-    def _auditar(self, accion: str, familia_id: int) -> None:
+    def _auditar(self, accion: str, familia_id: int, detalle: str | None = None) -> None:
         self.uow.auditoria.registrar(
             accion=accion, entidad="familia", entidad_id=str(familia_id),
-            usuario_id=self.usuario_id, origen=self.origen)
+            detalle=detalle, usuario_id=self.usuario_id, origen=self.origen)

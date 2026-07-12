@@ -97,6 +97,19 @@ class ServicioArticulos:
     def activar(self, articulo_id: int) -> None:
         self._cambiar_activo(articulo_id, True, "activar_articulo")
 
+    def fijar_imagen(self, articulo_id: int, ruta: str) -> str | None:
+        """Fija `Articulo.imagen` a `ruta` (ya validada y guardada en disco por
+        el endpoint de subida) y devuelve la ruta anterior (o `None`), para que
+        el endpoint pueda borrar el archivo huerfano tras el commit."""
+        articulo = self.uow.articulos.buscar(articulo_id)
+        if articulo is None:
+            raise ArticuloNoEncontrado(articulo_id)
+        anterior = articulo.imagen
+        articulo.imagen = ruta
+        self._auditar("cambiar_imagen_articulo", articulo.id, detalle=ruta)
+        self.uow.commit()
+        return anterior
+
     # -- helpers ---------------------------------------------------------------
     def _cambiar_activo(self, articulo_id: int, activo: bool, accion: str) -> None:
         articulo = self.uow.articulos.buscar(articulo_id)
