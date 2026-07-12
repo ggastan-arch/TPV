@@ -60,7 +60,7 @@ class EmitirVenta:
                       total_con_iva=totales.total_con_iva)
         for lr in lineas:
             venta.lineas.append(VentaLinea(
-                articulo_id=lr.articulo.id, descripcion=lr.articulo.nombre,
+                articulo_id=lr.articulo.id, descripcion=lr.descripcion,
                 cantidad=lr.cantidad, pvp_unitario=lr.pvp,
                 tipo_iva_porcentaje=lr.calculo.porcentaje, base_linea=lr.calculo.base,
                 cuota_linea=lr.calculo.cuota, total_linea=lr.calculo.total))
@@ -71,6 +71,7 @@ class EmitirVenta:
         # El motor es un adaptador de infraestructura y opera sobre la sesion (ADR-0001).
         registro = self.motor.emit(self.uow.session, venta)
 
+        self._auditar_precios_manuales(venta, lineas, usuario_id)
         self._efecto_stock(venta, usuario_id)
 
         total = venta.total_con_iva
@@ -82,6 +83,20 @@ class EmitirVenta:
             fecha=registro.fecha_expedicion, total=str(total), cambio=str(cambio))
         self.uow.commit()
         return resultado
+
+    def _auditar_precios_manuales(self, venta: Venta, lineas, usuario_id: int) -> None:
+        """Invariante 4: por cada linea de un articulo NO `precio_libre` cuyo
+        precio cobrado difiera del PVP de catalogo, deja traza en el log de
+        auditoria (append-only) en la MISMA transaccion de emision. Los
+        `precio_libre` nunca auditan: ingresar su precio es su funcionamiento
+        normal, no un override anomalo."""
+        for vl, lr in zip(venta.lineas, lineas):
+            if lr.articulo.precio_libre or lr.pvp == lr.articulo.pvp:
+                continue
+            self.uow.auditoria.registrar(
+                accion="precio_manual_venta", entidad="venta_linea", entidad_id=str(vl.id),
+                detalle=f"articulo {lr.articulo.id}: catalogo {lr.articulo.pvp} -> cobrado {lr.pvp}",
+                usuario_id=usuario_id, origen="local")  # cobro siempre local
 
     def _efecto_stock(self, venta: Venta, usuario_id: int) -> None:
         """Efecto de stock NO bloqueante (informativo, ver design.md "Punto critico").

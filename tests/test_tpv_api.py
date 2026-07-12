@@ -156,6 +156,36 @@ def test_calcular_precio_libre(cliente, datos_tpv):
     assert r.json()["lineas"][0]["requiere_cites"] is True
 
 
+# --- Edicion de linea: override de precio/descripcion (cualquier articulo) -----
+def test_calcular_override_pvp_articulo_no_precio_libre(cliente, datos_tpv):
+    """El override de `pvp` aplica a CUALQUIER articulo, no solo `precio_libre`
+    (antes se ignoraba en silencio para el `neon`, que no es `precio_libre`)."""
+    r = cliente.post("/tpv/api/calcular", json={"items": [
+        {"articulo_id": datos_tpv["neon_id"], "cantidad": "1", "pvp": "1.00"}]})
+    assert r.status_code == 200
+    assert r.json()["lineas"][0]["pvp"] == "1.00"
+    assert r.json()["total"] == "1.00"
+
+
+def test_calcular_sin_override_usa_pvp_catalogo(cliente, datos_tpv):
+    """No-regresion: sin `pvp` en el item, la linea sigue usando el PVP de
+    catalogo del articulo, igual que antes del cambio."""
+    r = cliente.post("/tpv/api/calcular", json={"items": [
+        {"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}]})
+    assert r.status_code == 200
+    assert r.json()["lineas"][0]["pvp"] == "2.50"
+    assert r.json()["total"] == "2.50"
+
+
+def test_calcular_eco_descripcion_override(cliente, datos_tpv):
+    """Un `descripcion` override en el item se hace eco en la linea calculada;
+    sin override se conserva `articulo.nombre` (comportamiento actual)."""
+    r = cliente.post("/tpv/api/calcular", json={"items": [
+        {"articulo_id": datos_tpv["neon_id"], "cantidad": "1", "descripcion": "Promo verano"}]})
+    assert r.status_code == 200
+    assert r.json()["lineas"][0]["descripcion"] == "Promo verano"
+
+
 def test_cobrar_emite_venta(cliente, crear_sesion, datos_tpv):
     login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
     r = cliente.post("/tpv/api/cobrar", json={
@@ -177,6 +207,25 @@ def test_cobrar_emite_venta(cliente, crear_sesion, datos_tpv):
     # El QR de la venta se sirve como PNG.
     qr = cliente.get(f"/tpv/api/venta/{datos['venta_id']}/qr.png")
     assert qr.status_code == 200 and qr.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_cobrar_acepta_pvp_y_descripcion_override(cliente, crear_sesion, datos_tpv):
+    """El endpoint de cobro acepta `pvp` y `descripcion` opcionales por item y los
+    congela en la venta emitida (edicion de linea, pre-emision)."""
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1",
+                   "pvp": "1.00", "descripcion": "Promo verano"}],
+        "pagos": [{"medio": "efectivo", "importe": "1.00"}],
+    })
+    assert r.status_code == 200
+    datos = r.json()
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, datos["venta_id"])
+        assert venta.lineas[0].pvp_unitario == Decimal("1.00")
+        assert venta.lineas[0].descripcion == "Promo verano"
 
 
 def test_cobrar_ticket_vacio_rechaza(cliente, datos_tpv):

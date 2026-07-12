@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 class ItemVenta:
     articulo_id: int
     cantidad: Decimal = field(default_factory=lambda: Decimal("1"))
-    pvp: Decimal | None = None  # solo se aplica a articulos de precio libre
+    pvp: Decimal | None = None  # override de precio unitario (cualquier articulo)
+    descripcion: str | None = None  # override de descripcion de linea
 
 
 @dataclass
@@ -27,6 +28,7 @@ class LineaResuelta:
     articulo: "Articulo"
     pvp: Decimal
     cantidad: Decimal
+    descripcion: str
     calculo: Linea
 
 
@@ -45,10 +47,15 @@ def resolver_items(
         articulo = articulos.buscar(it.articulo_id)
         if articulo is None:
             raise ArticuloNoExiste(it.articulo_id)
-        pvp = it.pvp if (it.pvp is not None and articulo.precio_libre) else articulo.pvp
+        # El override de pvp aplica a CUALQUIER articulo (no solo precio_libre):
+        # el hecho fiscal auditable es "precio cobrado != catalogo" (ver EmitirVenta).
+        pvp = it.pvp if it.pvp is not None else articulo.pvp
+        descripcion = (getattr(it, "descripcion", None) or "").strip() or articulo.nombre
         calculo = calcular_linea(
             Decimal(pvp), Decimal(it.cantidad), Decimal(articulo.tipo_iva.porcentaje)
         )
-        resueltas.append(LineaResuelta(articulo, Decimal(pvp), Decimal(it.cantidad), calculo))
+        resueltas.append(
+            LineaResuelta(articulo, Decimal(pvp), Decimal(it.cantidad), descripcion, calculo)
+        )
         calculos.append(calculo)
     return resueltas, agregar_totales(calculos)

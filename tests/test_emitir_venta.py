@@ -16,6 +16,7 @@ from app.infraestructura.persistencia.repositorios import RepositorioStockSQL
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.infraestructura.persistencia.modelos import (
     Articulo,
+    LogAuditoria,
     MovimientoStock,
     RegistroFiscal,
     Venta,
@@ -35,12 +36,19 @@ def articulo_neon(session, datos_base):
     return a.id
 
 
-def _crear_articulo(session, datos_base, *, control_stock: bool, nombre: str) -> int:
+def _crear_articulo(
+    session, datos_base, *, control_stock: bool, nombre: str, precio_libre: bool = False
+) -> int:
     a = Articulo(nombre=nombre, nombre_corto=nombre, tipo_iva_id=datos_base["iva21_id"],
-                 pvp=Decimal("3.00"), control_stock=control_stock)
+                 pvp=Decimal("3.00"), control_stock=control_stock, precio_libre=precio_libre)
     session.add(a)
     session.commit()
     return a.id
+
+
+def _auditorias(crear_sesion, accion):
+    with crear_sesion() as s:
+        return s.query(LogAuditoria).filter_by(accion=accion).all()
 
 
 def _activar_control_stock(crear_sesion) -> None:
@@ -182,3 +190,94 @@ def test_efecto_stock_sobreventa_deja_saldo_negativo_y_alarma_lo_cuenta(
         repo = UnidadDeTrabajoSQL(s).stock
         assert repo.stock_actual(articulo_id) == Decimal("-4")
         assert repo.rastreados_en_negativo() == [(articulo_id, Decimal("-4"))]
+
+
+# --- Edicion de linea: congelado y auditoria de precio manual (invariante 4) ---------
+
+
+def test_emitir_venta_congela_pvp_override_no_precio_libre(
+    crear_sesion, motor, datos_base, articulo_neon
+):
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"), pvp=Decimal("1.00"))],
+            pagos=[PagoVenta("efectivo", Decimal("1.00"))],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.lineas[0].pvp_unitario == Decimal("1.00")
+
+
+def test_emitir_venta_congela_descripcion_override(
+    crear_sesion, motor, datos_base, articulo_neon
+):
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"),
+                             descripcion="Guppy macho - promo")],
+            pagos=[PagoVenta("efectivo", Decimal("10.00"))],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.lineas[0].descripcion == "Guppy macho - promo"
+
+
+def test_emitir_venta_congela_cantidad_editada(crear_sesion, motor, datos_base, articulo_neon):
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("3"))],
+            pagos=[PagoVenta("efectivo", Decimal("10.00"))],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.lineas[0].cantidad == Decimal("3")
+
+
+def test_emitir_venta_registra_auditoria_precio_manual(
+    crear_sesion, motor, datos_base, articulo_neon
+):
+    with crear_sesion() as s:
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"), pvp=Decimal("1.00"))],
+            pagos=[PagoVenta("efectivo", Decimal("1.00"))],
+        )
+
+    logs = _auditorias(crear_sesion, "precio_manual_venta")
+    assert len(logs) == 1
+    assert logs[0].entidad == "venta_linea"
+    assert logs[0].detalle == f"articulo {articulo_neon}: catalogo 2.50 -> cobrado 1.00"
+
+
+def test_emitir_venta_sin_diferencia_precio_no_registra_auditoria(
+    crear_sesion, motor, datos_base, articulo_neon
+):
+    with crear_sesion() as s:
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("10.00"))],
+        )
+
+    assert _auditorias(crear_sesion, "precio_manual_venta") == []
+
+
+def test_emitir_venta_precio_libre_no_registra_auditoria(crear_sesion, motor, datos_base):
+    with crear_sesion() as s:
+        articulo_id = _crear_articulo(
+            s, datos_base, control_stock=False, nombre="Tridacna", precio_libre=True)
+
+    with crear_sesion() as s:
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"), pvp=Decimal("50.00"))],
+            pagos=[PagoVenta("efectivo", Decimal("50.00"))],
+        )
+
+    assert _auditorias(crear_sesion, "precio_manual_venta") == []

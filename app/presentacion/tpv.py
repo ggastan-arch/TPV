@@ -59,7 +59,8 @@ def require_pin(pin: str | None = None, uow=Depends(get_uow)) -> int:
 class ItemVenta(BaseModel):
     articulo_id: int
     cantidad: Decimal = Decimal("1")
-    pvp: Decimal | None = None  # solo para articulos de precio libre
+    pvp: Decimal | None = None  # override de precio unitario (cualquier articulo)
+    descripcion: str | None = None  # override de descripcion de linea
 
 
 class CalcularReq(BaseModel):
@@ -194,7 +195,7 @@ def calcular(req: CalcularReq, uow=Depends(get_uow)) -> dict:
         raise HTTPException(404, str(exc)) from exc
     return {
         "lineas": [
-            {"articulo_id": lr.articulo.id, "descripcion": lr.articulo.nombre,
+            {"articulo_id": lr.articulo.id, "descripcion": lr.descripcion,
              "cantidad": str(lr.cantidad), "pvp": str(lr.pvp),
              "tipo_iva": str(lr.calculo.porcentaje), "total": str(lr.calculo.total),
              "requiere_cites": lr.articulo.requiere_cites}
@@ -218,7 +219,8 @@ def cobrar(
     try:
         resultado = EmitirVenta(uow, motor).ejecutar(
             usuario_id=req.usuario_id,
-            items=[ItemAplicacion(articulo_id=i.articulo_id, cantidad=i.cantidad, pvp=i.pvp)
+            items=[ItemAplicacion(articulo_id=i.articulo_id, cantidad=i.cantidad,
+                                   pvp=i.pvp, descripcion=i.descripcion)
                    for i in req.items],
             pagos=[PagoVenta(medio=p.medio, importe=p.importe) for p in req.pagos],
         )
