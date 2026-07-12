@@ -1,0 +1,40 @@
+change_name: familia-visible-tactil
+status: archived
+archived_date: '2026-07-12'
+
+phases:
+  proposal: completed
+  spec: completed
+  design: completed
+  tasks: completed
+  apply: completed
+  verify: completed
+  archive: completed
+
+verification:
+  tests_passed: 359
+  tests_failed: 0
+  import_linter_kept: 3
+  import_linter_broken: 0
+  migration_0005: verified_upgrade_downgrade
+  final_commit: 9585587
+
+consolidation:
+  spec_files_consolidated:
+    - openspec/specs/maestros-crud/spec.md
+    - openspec/specs/tpv-venta/spec.md
+  deltas_merged: true
+  deltas_source:
+    - openspec/changes/familia-visible-tactil/specs/maestros-crud/spec.md
+    - openspec/changes/familia-visible-tactil/specs/tpv-venta/spec.md
+
+summary: |
+  Cambio familia-visible-tactil archivado exitosamente.
+  - Flag booleano visible_en_tactil añadido a Familia (migración 0005 aditiva, server_default=true)
+  - CRUD de familias: editable, auditado
+  - Drill-down de subfamilias: filtro activo + visible_en_tactil=True
+  - Botones explícitos de botonera: respetados aunque familia no sea visible (edge case documentado)
+  - Verificación: 359 tests verde, 3 contratos de import-linter KEPT, migración reversible
+  - Consolidación: deltas integrados en specs maestros maestros-crud y tpv-venta
+  - Sin impacto en contrato fiscal, ventas, registros ni cadena de huellas
+  - Rollback seguro: downgrade 0005 + revertir código
