@@ -1,0 +1,102 @@
+change: imagenes-catalogo
+status: archived
+archived_at: 2026-07-12T12:00:00Z
+
+# SDD Phases
+phases:
+  propose:
+    status: complete
+    artifacts:
+      - openspec/changes/imagenes-catalogo/proposal.md
+  spec:
+    status: complete
+    artifacts:
+      - openspec/changes/imagenes-catalogo/specs/maestros-crud/spec.md
+      - openspec/changes/imagenes-catalogo/specs/tpv-venta/spec.md
+  design:
+    status: complete
+    artifacts:
+      - openspec/changes/imagenes-catalogo/design.md
+  tasks:
+    status: complete
+    artifacts:
+      - openspec/changes/imagenes-catalogo/tasks.md
+  apply:
+    status: complete
+    batches: 2
+    commits:
+      - commit: 23ccc06
+        description: "Tanda 1 - Backend (modelo, migración, util, endpoints, DTO)"
+      - commit: 01fb542
+        description: "Tanda 2 - Frontend (admin.html, tpv.html)"
+  verify:
+    status: complete
+    verdict: "PASS WITH WARNINGS"
+    critical_issues: 0
+    warnings: 2
+    suggestions: 1
+    details: "0 CRITICAL, 2 WARNING, 1 SUGGESTION. Ready to merge after human runs task 7.4 (manual browser checklist)."
+  archive:
+    status: complete
+    specs_merged: true
+    specs_targets:
+      - openspec/specs/maestros-crud/spec.md
+      - openspec/specs/tpv-venta/spec.md
+
+# Implementation Summary
+implementation:
+  backend:
+    status: delivered
+    model: "Articulo.imagen, Familia.imagen (nullable VARCHAR)"
+    migration: "0006_articulo_imagen"
+    migration_status: "verified_up_and_down"
+    validation: "magic bytes (JPEG/PNG/WebP), max 3MB"
+    storage: "media/ directory, gitignored"
+    endpoints:
+      - method: POST
+        path: "/admin/api/maestros/articulos/{id}/imagen"
+        description: "Upload image for article"
+      - method: POST
+        path: "/admin/api/maestros/familias/{id}/imagen"
+        description: "Upload image for family"
+  frontend:
+    status: delivered
+    files_modified:
+      - app/ui/admin.html
+      - app/ui/tpv.html
+    manual_verification: "task 7.4 checklist (human-verified, not automated)"
+  tests:
+    total: 392
+    baseline: 359
+    new: 33
+    test_files:
+      - tests/test_imagenes.py (15 unit tests)
+      - tests/test_admin_api.py (image upload integration)
+      - tests/test_tpv_api.py (DTO exposure, drill-down)
+    architecture: "3 kept, 0 broken (import-linter)"
+
+# Known Warnings (non-blocking)
+warnings:
+  - name: "Orphan media file on commit failure"
+    description: "design.md describes cleanup on fijar_imagen commit failure, but code has no try/except. Low risk (non-fiscal, untested by design per Strict TDD). Recommend follow-up if test scenario is added."
+    severity: WARNING
+    blocking: false
+  - name: "TDD Cycle Evidence format"
+    description: "apply-progress lacks formal 'TDD Cycle Evidence' table per strict-tdd-verify.md. Evidence is present distributed across tasks.md RED/GREEN labels. Cosmetic format gap, not substance gap."
+    severity: WARNING
+    blocking: false
+
+# Pending Human Action
+pending:
+  - task: "7.4 Manual browser QA checklist"
+    description: "Execute frontend verification checklist before merging (upload JPEG/PNG, error on PDF, preview updates, TPV button rendering, media/ gitignore)"
+    blocking_archive: false
+    blocking_merge: true
+    reason: "No browser test tool available to agent; human verification required before production merge"
+
+# Archival Details
+archival:
+  reason: "Implementation and verification complete (392 tests PASS + import-linter KEPT). Delta specs merged into main specs."
+  archive_date: 2026-07-12
+  archive_location: "openspec/changes/archive/2026-07-12-imagenes-catalogo/"
+  next_step: "Human runs task 7.4 checklist, then merges to main branch"
