@@ -51,6 +51,10 @@
   .ticket-ok img { background:#fff; padding:8px; border-radius:8px; margin:10px auto; display:block; }
   .fila-modal { display:flex; gap:10px; margin-top:12px; }
   .fila-modal .btn { flex:1; }
+  .buscador { display:flex; align-items:center; gap:8px; padding:0 4px 10px; }
+  .buscador .lupa { font-size:20px; }
+  .campo-buscar { flex:1; font-size:18px; padding:10px 12px; border-radius:10px;
+                  border:1px solid var(--line); background:#0f172a; color:#fff; }
 </style>
 </head>
 <body>
@@ -61,6 +65,11 @@
       <div class="breadcrumb" id="breadcrumb">Venta</div>
       <div class="usuario" id="usuario"></div>
     </header>
+    <div class="buscador">
+      <span class="lupa">&#128269;</span>
+      <input type="text" id="buscarInput" class="campo-buscar"
+             placeholder="Buscar articulo por nombre..." oninput="onBuscarInput()">
+    </div>
     <div class="grid" id="grid"></div>
   </div>
   <div class="col-carrito">
@@ -124,6 +133,7 @@ function pantallaLogin() {
 
 /* ---------- BOTONERA / NAVEGACION ---------- */
 async function irInicio() {
+  $("buscarInput").value = "";
   $("breadcrumb").textContent = "Venta";
   const data = await api("/tpv/api/botonera");
   const grid = $("grid");
@@ -166,6 +176,31 @@ async function abrirFamilia(id) {
     b.className = "btn b-articulo";
     b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${eur(a.pvp)}</span>`;
     b.onclick = () => anadir(a); grid.appendChild(b);
+  }
+}
+
+/* ---------- BUSCADOR (lupa, debounce) ---------- */
+let tBuscarDebounce = null;
+function onBuscarInput() {
+  clearTimeout(tBuscarDebounce);
+  const q = $("buscarInput").value.trim();
+  // Menos de 2 caracteres: no dispara peticion, restaura la botonera normal.
+  if (q.length < 2) { irInicio(); return; }
+  tBuscarDebounce = setTimeout(() => buscar(q), 250);
+}
+
+async function buscar(q) {
+  const resultados = await api("/tpv/api/buscar?q=" + encodeURIComponent(q));
+  $("breadcrumb").textContent = "Venta › Buscar: " + q;
+  const grid = $("grid");
+  grid.style.gridTemplateColumns = "repeat(4, 1fr)";
+  grid.innerHTML = "";
+  for (const a of resultados) {
+    const b = document.createElement("button");
+    b.className = "btn b-articulo";
+    b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${eur(a.pvp)}</span>`;
+    b.onclick = () => anadir(a);
+    grid.appendChild(b);
   }
 }
 

@@ -320,6 +320,69 @@ def test_familia_drilldown_expone_imagen_en_subfamilias_y_articulos(cliente, cre
     assert art_dto["imagen"] == "/media/articulo-3-bbbb2222.jpg"
 
 
+# --- Busqueda incremental por nombre (lupa) ------------------------------------
+def test_buscar_coincide_por_nombre_case_insensitive(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        s.add(Articulo(nombre="Betta Splendens Macho", nombre_corto="Betta",
+                       tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("5.00")))
+        s.commit()
+
+    r = cliente.get("/tpv/api/buscar", params={"q": "BETTA"})
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert [a["nombre"] for a in cuerpo] == ["Betta Splendens Macho"]
+    assert set(cuerpo[0].keys()) == {
+        "id", "nombre", "nombre_corto", "pvp", "tipo_iva",
+        "precio_libre", "requiere_cites", "color", "imagen",
+    }
+
+
+def test_buscar_coincide_por_nombre_corto(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        s.add(Articulo(nombre="Pez tetra", nombre_corto="xyzcorto",
+                       tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("3.00")))
+        s.commit()
+
+    r = cliente.get("/tpv/api/buscar", params={"q": "xyz"})
+    assert r.status_code == 200
+    assert [a["nombre"] for a in r.json()] == ["Pez tetra"]
+
+
+def test_buscar_excluye_articulos_inactivos(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        s.add(Articulo(nombre="Guppy activo", nombre_corto="Guppy",
+                       tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("3.00")))
+        s.add(Articulo(nombre="Guppy inactivo", nombre_corto="Guppy2",
+                       tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("3.00"), activo=False))
+        s.commit()
+
+    r = cliente.get("/tpv/api/buscar", params={"q": "guppy"})
+    assert r.status_code == 200
+    assert [a["nombre"] for a in r.json()] == ["Guppy activo"]
+
+
+def test_buscar_query_corta_no_ejecuta_busqueda(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        s.add(Articulo(nombre="Betta Splendens Macho", nombre_corto="Betta",
+                       tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("5.00")))
+        s.commit()
+
+    assert cliente.get("/tpv/api/buscar").json() == []
+    assert cliente.get("/tpv/api/buscar", params={"q": "a"}).json() == []
+
+
+def test_buscar_limita_a_top_20(cliente, crear_sesion, datos_base):
+    with crear_sesion() as s:
+        for i in range(25):
+            s.add(Articulo(nombre=f"Pez {i:02d}", nombre_corto=f"P{i:02d}",
+                           tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("1.00")))
+        s.commit()
+
+    r = cliente.get("/tpv/api/buscar", params={"q": "pez"})
+    assert r.status_code == 200
+    assert len(r.json()) == 20
+
+
 def test_stock_alarma_refleja_sobreventa(cliente, crear_sesion, datos_tpv):
     from app.infraestructura.persistencia.modelos import MovimientoStock
     from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL

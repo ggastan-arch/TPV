@@ -35,6 +35,12 @@ from app.infraestructura.persistencia.modelos import (
 ESTADOS_ACEPTADOS = ("aceptado", "aceptado_con_errores")
 
 
+def _escapar_comodines_like(texto: str) -> str:
+    """Escapa `\\`, `%` y `_` para que `ilike(..., escape="\\")` los trate como
+    texto literal en vez de comodines LIKE."""
+    return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 class RepositorioArticulosSQL:
     def __init__(self, session: Session):
         self._s = session
@@ -55,6 +61,28 @@ class RepositorioArticulosSQL:
         stmt = select(Articulo).order_by(Articulo.nombre)
         if not incluir_inactivos:
             stmt = stmt.where(Articulo.activo.is_(True))
+        return list(self._s.execute(stmt).scalars())
+
+    def buscar_por_nombre(self, q: str, limite: int = 20) -> list[Articulo]:
+        """Busqueda incremental (lupa del TPV): subcadena case-insensitive sobre
+        `nombre` o `nombre_corto`, solo articulos activos. Guarda de longitud
+        minima (2 caracteres) para no ejecutar coincidencias con q vacio/1
+        caracter. Los comodines LIKE `%`/`_` de `q` se escapan para que se
+        traten como texto literal, no como wildcard."""
+        q = q.strip()
+        if len(q) < 2:
+            return []
+        patron = f"%{_escapar_comodines_like(q)}%"
+        stmt = (
+            select(Articulo)
+            .where(
+                Articulo.activo.is_(True),
+                Articulo.nombre.ilike(patron, escape="\\")
+                | Articulo.nombre_corto.ilike(patron, escape="\\"),
+            )
+            .order_by(Articulo.nombre)
+            .limit(limite)
+        )
         return list(self._s.execute(stmt).scalars())
 
 

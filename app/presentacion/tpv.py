@@ -171,6 +171,13 @@ def familia(familia_id: int, s: Session = Depends(get_session)) -> dict:
     }
 
 
+@router.get("/api/buscar")
+def buscar(q: str = "", uow=Depends(get_uow)) -> list[dict]:
+    """Busqueda incremental por nombre (lupa): solo lectura, sin efectos.
+    Universo = todos los articulos activos (ver `buscar_por_nombre`)."""
+    return [_articulo_dto(a) for a in uow.articulos.buscar_por_nombre(q)]
+
+
 @router.get("/api/articulo/por-codigo/{codigo}")
 def articulo_por_codigo(codigo: str, uow=Depends(get_uow)) -> dict:
     articulo = uow.articulos.buscar_por_codigo(codigo)
