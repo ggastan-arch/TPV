@@ -36,6 +36,7 @@ from app.infraestructura.persistencia.modelos import (
     PerfilBotonera,
     RegistroFiscal,
     Usuario,
+    Venta,
 )
 
 _log = logging.getLogger(__name__)

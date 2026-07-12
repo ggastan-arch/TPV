@@ -235,6 +235,36 @@ def test_cobrar_ticket_vacio_rechaza(cliente, datos_tpv):
     assert r.status_code == 400
 
 
+def test_imprimir_ticket_seguro_llega_a_la_impresora(crear_sesion, motor, datos_tpv, monkeypatch):
+    """Regresion: `_imprimir_ticket_seguro` debe llegar a `imprimir_ticket` para una
+    venta emitida. Bug corregido: `Venta` no estaba importado en `tpv.py`, por lo que
+    `s.get(Venta, venta_id)` lanzaba `NameError` (atrapado por el `except Exception`
+    local-first) y el ticket nunca llegaba a la impresora en produccion."""
+    from app.aplicacion.emitir_venta import EmitirVenta, PagoVenta
+    from app.aplicacion.lineas import ItemVenta as ItemUC
+    from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
+
+    with crear_sesion() as s:
+        resultado = EmitirVenta(UnidadDeTrabajoSQL(s), motor).ejecutar(
+            usuario_id=datos_tpv["usuario_id"],
+            items=[ItemUC(articulo_id=datos_tpv["neon_id"], cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("2.50"))],
+        )
+
+    llamadas: list[tuple] = []
+    monkeypatch.setattr("app.infraestructura.db.SessionLocal", crear_sesion)
+    monkeypatch.setattr("app.infraestructura.impresion.ticket.crear_impresora", lambda: object())
+    monkeypatch.setattr(
+        "app.infraestructura.impresion.ticket.imprimir_ticket",
+        lambda *a, **k: llamadas.append((a, k)),
+    )
+
+    from app.presentacion.tpv import _imprimir_ticket_seguro
+    _imprimir_ticket_seguro(resultado.venta_id)
+
+    assert len(llamadas) == 1
+
+
 # --- Alarma de stock (informativa, nunca bloquea el cobro) ---------------------
 def test_stock_alarma_exige_pin(cliente, datos_tpv):
     assert cliente.get("/tpv/api/stock/alarma").status_code == 401
