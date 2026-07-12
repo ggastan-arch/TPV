@@ -10,12 +10,15 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.datos_demo import ARTICULOS as ARTICULOS_DEMO
+from app.datos_demo import FAMILIAS as FAMILIAS_DEMO
 from app.infraestructura.db import SessionLocal
 from app.infraestructura.seguridad import hash_pin
 from app.infraestructura.persistencia.modelos import (
     Articulo,
     Boton,
     Cliente,
+    CodigoBarras,
     ContadorSerie,
     Familia,
     PaginaBotonera,
@@ -99,6 +102,143 @@ def _sembrar_catalogo_base(s: Session, ejercicio: int) -> None:
                 funcion="abrir_cajon"))
 
 
+def _sembrar_iva_series_usuarios(
+    s: Session, ejercicio: int
+) -> tuple[TipoIVA, TipoIVA]:
+    """Base fiscal comun: tipos de IVA, series con su contador y usuarios."""
+    iva_general = TipoIVA(nombre="General 21%", porcentaje=Decimal("21.00"))
+    iva_reducido = TipoIVA(nombre="Reducido 10%", porcentaje=Decimal("10.00"))
+    s.add_all([iva_general, iva_reducido])
+
+    for codigo, desc, tipo in SERIES:
+        s.add(Serie(codigo=codigo, descripcion=desc, tipo_factura_default=tipo))
+    s.flush()
+    for codigo, _desc, _tipo in SERIES:
+        s.add(ContadorSerie(serie=codigo, ejercicio=ejercicio, ultimo_numero=0))
+
+    s.add(Usuario(nombre="admin", pin_hash=hash_pin("1234"), rol="administracion"))
+    s.add(Usuario(nombre="dependiente", pin_hash=hash_pin("0000"), rol="venta"))
+    s.flush()
+    return iva_general, iva_reducido
+
+
+def _construir_familias(s: Session, rutas: list[str]) -> dict[str, Familia]:
+    """Crea el arbol de familias a partir de rutas "Padre/Hijo/Nieto".
+
+    Devuelve un mapa ruta_completa -> Familia. El campo `orden` se asigna por
+    orden de aparicion dentro de cada nivel (raiz o padre).
+    """
+    familias: dict[str, Familia] = {}
+    ordenes: dict[int | None, int] = {}
+    for ruta in rutas:
+        partes = ruta.split("/")
+        padre: Familia | None = None
+        acumulada = ""
+        for parte in partes:
+            acumulada = f"{acumulada}/{parte}" if acumulada else parte
+            if acumulada not in familias:
+                parent_id = padre.id if padre is not None else None
+                ordenes[parent_id] = ordenes.get(parent_id, 0) + 1
+                fam = Familia(
+                    nombre=parte, parent_id=parent_id, orden=ordenes[parent_id]
+                )
+                s.add(fam)
+                s.flush()  # asigna id para que sirva de parent de sus hijos
+                familias[acumulada] = fam
+            padre = familias[acumulada]
+    return familias
+
+
+def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
+    """Catalogo demo de agua dulce (sin acuario marino) reconstruido a partir
+    del arbol de familias real de la tienda. Precios de demostracion."""
+    iva_general, iva_reducido = _sembrar_iva_series_usuarios(s, ejercicio)
+    ivas = {"general": iva_general, "reducido": iva_reducido}
+
+    familias = _construir_familias(s, FAMILIAS_DEMO)
+
+    articulos: dict[str, Articulo] = {}
+    for datos in ARTICULOS_DEMO:
+        flags = set(datos.get("flags", ()))
+        articulo = Articulo(
+            nombre=datos["nombre"],
+            nombre_corto=datos["corto"],
+            familia_id=familias[datos["familia"]].id,
+            tipo_iva_id=ivas[datos["iva"]].id,
+            pvp=Decimal(datos["pvp"]),
+            control_stock="control_stock" in flags,
+            precio_libre="precio_libre" in flags,
+            requiere_cites="requiere_cites" in flags,
+        )
+        s.add(articulo)
+        s.flush()
+        ean = datos.get("ean")
+        if ean:
+            s.add(CodigoBarras(articulo_id=articulo.id, codigo=ean, principal=True))
+        articulos[datos["corto"]] = articulo
+
+    _sembrar_botonera_demo(s, familias, articulos)
+
+
+def _sembrar_botonera_demo(
+    s: Session,
+    familias: dict[str, Familia],
+    articulos: dict[str, Articulo],
+) -> None:
+    """Botonera demo: pagina con articulos frecuentes, navegacion por familias
+    y funciones. Tolera que falte algun articulo del catalogo."""
+    perfil = PerfilBotonera(nombre="Principal")
+    s.add(perfil)
+    s.flush()
+    pagina = PaginaBotonera(
+        perfil_id=perfil.id, nombre="Inicio", orden=0, columnas=5, filas=4
+    )
+    s.add(pagina)
+    s.flush()
+
+    # Fila 0: articulos directos frecuentes.
+    directos = ["Neón cardenal", "Guppy macho", "Escalar velo", "Anubias", "Betta macho"]
+    for col, corto in enumerate(directos):
+        art = articulos.get(corto)
+        if art is not None:
+            s.add(Boton(pagina_id=pagina.id, fila=0, columna=col,
+                        texto=art.nombre_corto, articulo_id=art.id))
+
+    # Fila 1: navegacion por familias principales.
+    fams = [
+        ("Peces", "Peces por familias"),
+        ("Plantas", "Plantas"),
+        ("Alimento", "Alimento"),
+        ("Trat. agua", "Tratamiento del agua"),
+        ("Filtración", "Filtración"),
+    ]
+    for col, (texto, ruta) in enumerate(fams):
+        fam = familias.get(ruta)
+        if fam is not None:
+            s.add(Boton(pagina_id=pagina.id, fila=1, columna=col,
+                        texto=texto, familia_id=fam.id))
+
+    # Fila 2: mas familias.
+    fams2 = [
+        ("Decoración", "Decoración"),
+        ("Iluminación", "Iluminación"),
+        ("Acuarios", "Acuarios"),
+        ("Medicamentos", "Medicamentos"),
+        ("Accesorios", "Accesorios"),
+    ]
+    for col, (texto, ruta) in enumerate(fams2):
+        fam = familias.get(ruta)
+        if fam is not None:
+            s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
+                        texto=texto, familia_id=fam.id))
+
+    # Fila 3: funciones.
+    s.add(Boton(pagina_id=pagina.id, fila=3, columna=3, texto="Convertir en factura",
+                funcion="convertir_factura"))
+    s.add(Boton(pagina_id=pagina.id, fila=3, columna=4, texto="Abrir cajón",
+                funcion="abrir_cajon"))
+
+
 def sembrar() -> None:
     ejercicio = datetime.now().astimezone().year
     with SessionLocal() as s, s.begin():
@@ -111,16 +251,17 @@ def sembrar() -> None:
 
 
 def sembrar_demo() -> None:
-    """Seed idempotente de `tpv_demo.db`: mismo catalogo base que `sembrar()`
-    mas un cliente de prueba. La "empresa demo" es el emisor de `settings`
-    (NIF/nombre ya resueltos por el perfil, `Settings._resolver_perfil`); no
-    existe una tabla de empresa separada."""
+    """Seed idempotente de `tpv_demo.db`: catalogo demo de agua dulce (arbol de
+    familias real de la tienda, SIN acuario marino, con precios de
+    demostracion) mas un cliente de prueba. La "empresa demo" es el emisor de
+    `settings` (NIF/nombre ya resueltos por el perfil,
+    `Settings._resolver_perfil`); no existe una tabla de empresa separada."""
     ejercicio = datetime.now().astimezone().year
     with SessionLocal() as s, s.begin():
         if _hay_datos(s):
             print("Ya hay datos demo; no se siembra de nuevo.")
             return
-        _sembrar_catalogo_base(s, ejercicio)
+        _sembrar_catalogo_demo(s, ejercicio)
         s.add(Cliente(
             nombre="Cliente de prueba (demo)", nif="00000000T",
             domicilio="Calle Demo 1, Bilbao", rgpd_consentimiento=True,
