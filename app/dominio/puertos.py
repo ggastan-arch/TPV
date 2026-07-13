@@ -22,6 +22,19 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class UltimoErrorRemision:
+    """Ultimo intento de remision rechazado (para el panel fiscal, visible de forma
+    persistente entre refrescos sin necesidad de una nueva remision: se deriva del
+    historico append-only `remision_intento`, no de un estado efimero en memoria)."""
+
+    registro_id: int
+    codigo: str | None
+    descripcion: str | None
+    num_serie: str | None
+    fecha: str
+
+
+@dataclass
 class TotalesRangoZ:
     """Agregado de las ventas cobradas de un rango de `registro_fiscal.orden`
     (registros de alta). Usado por `GenerarCierreZ` para congelar el snapshot."""
@@ -95,6 +108,7 @@ class RepositorioRegistros(Protocol):
     def pendientes(self, maximo: int = 1000) -> list["RegistroFiscal"]: ...
     def contar_pendientes(self) -> int: ...
     def hay_incidencia_pendiente(self) -> bool: ...
+    def contar_requiere_intervencion(self) -> int: ...
     def registros_a_reintentar(
         self, ahora=None, intervalo_horas: int = 1
     ) -> list["RegistroFiscal"]: ...
@@ -102,9 +116,13 @@ class RepositorioRegistros(Protocol):
     def registrar_resultado(
         self, registro: "RegistroFiscal", resultado: str, *,
         codigo_error: str | None = None, descripcion: str | None = None,
-        csv: str | None = None,
+        csv: str | None = None, estado_remision_final: str | None = None,
     ) -> None: ...
     def max_orden_alta(self) -> int: ...
+    def reencolar(
+        self, registro: "RegistroFiscal", *, usuario_id: int | None = None, origen: str = "local"
+    ) -> None: ...
+    def ultimo_error(self) -> "UltimoErrorRemision | None": ...
 
 
 class RepositorioCierresZ(Protocol):

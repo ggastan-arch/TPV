@@ -10,7 +10,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.dominio.puertos import TotalesRangoZ
+from app.dominio.puertos import TotalesRangoZ, UltimoErrorRemision
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.persistencia.modelos import (
     Articulo,
@@ -33,6 +33,10 @@ from app.infraestructura.persistencia.modelos import (
 
 # Estados terminales de aceptacion: ya no hace falta reintentar la remision.
 ESTADOS_ACEPTADOS = ("aceptado", "aceptado_con_errores")
+# Estados terminales de la cola (aceptados + requiere_intervencion): en ambos casos
+# ya no se reintenta automaticamente. `requiere_intervencion` sale del bucle de
+# reintento pero SIGUE siendo recuperable via `reencolar` (invariante 4, R3).
+ESTADOS_TERMINALES = ESTADOS_ACEPTADOS + ("requiere_intervencion",)
 
 
 def _escapar_comodines_like(texto: str) -> str:
@@ -206,7 +210,7 @@ class RepositorioRegistrosSQL:
     def pendientes(self, maximo: int = 1000) -> list[RegistroFiscal]:
         stmt = (
             select(RegistroFiscal)
-            .where(RegistroFiscal.estado_remision.not_in(ESTADOS_ACEPTADOS))
+            .where(RegistroFiscal.estado_remision.not_in(ESTADOS_TERMINALES))
             .order_by(RegistroFiscal.orden)
             .limit(min(maximo, 1000))
         )
@@ -216,7 +220,7 @@ class RepositorioRegistrosSQL:
         stmt = (
             select(func.count())
             .select_from(RegistroFiscal)
-            .where(RegistroFiscal.estado_remision.not_in(ESTADOS_ACEPTADOS))
+            .where(RegistroFiscal.estado_remision.not_in(ESTADOS_TERMINALES))
         )
         return self._s.execute(stmt).scalar_one()
 
@@ -226,11 +230,20 @@ class RepositorioRegistrosSQL:
             .join(RegistroFiscal, RemisionIntento.registro_fiscal_id == RegistroFiscal.id)
             .where(
                 RemisionIntento.incidencia.is_(True),
-                RegistroFiscal.estado_remision.not_in(ESTADOS_ACEPTADOS),
+                RegistroFiscal.estado_remision.not_in(ESTADOS_TERMINALES),
             )
             .limit(1)
         )
         return self._s.execute(stmt).first() is not None
+
+    def contar_requiere_intervencion(self) -> int:
+        """Registros que salieron del bucle automatico y esperan `reencolar` (R3/R4)."""
+        stmt = (
+            select(func.count())
+            .select_from(RegistroFiscal)
+            .where(RegistroFiscal.estado_remision == "requiere_intervencion")
+        )
+        return self._s.execute(stmt).scalar_one()
 
     def registros_a_reintentar(
         self, ahora: datetime | None = None, intervalo_horas: int = 1
@@ -259,16 +272,61 @@ class RepositorioRegistrosSQL:
     def registrar_resultado(
         self, registro: RegistroFiscal, resultado: str, *,
         codigo_error: str | None = None, descripcion: str | None = None,
-        csv: str | None = None,
+        csv: str | None = None, estado_remision_final: str | None = None,
     ) -> None:
         """Anota el intento (append-only) y actualiza el estado canonico del registro.
-        Una incidencia (no se pudo remitir) deja el registro 'pendiente' para reintento."""
+        Una incidencia (no se pudo remitir) deja el registro 'pendiente' para reintento.
+        `estado_remision_final`, si se pasa, sustituye la derivacion por defecto (usado
+        por el rechazo de cabecera y el duplicado 'Anulada': terminal anomalo que no
+        cabe en el vocabulario CHECK de `resultado`, ver design.md)."""
         incidencia = resultado == "incidencia"
         self._s.add(RemisionIntento(
             registro_fiscal_id=registro.id, fecha_hora_huso=ahora_huso(),
             resultado=resultado, incidencia=incidencia,
             codigo_error=codigo_error, descripcion=descripcion, csv=csv))
-        registro.estado_remision = "pendiente" if incidencia else resultado
+        registro.estado_remision = estado_remision_final or ("pendiente" if incidencia else resultado)
+
+    def reencolar(
+        self, registro: RegistroFiscal, *, usuario_id: int | None = None, origen: str = "local",
+    ) -> None:
+        """Recuperacion manual de un registro en `requiere_intervencion` (R3): vuelve a
+        `pendiente` para que el ciclo de reintento lo tome de nuevo. La accion queda en
+        el log de auditoria append-only en la MISMA operacion (invariante 4).
+
+        Precondicion: solo se reencola un registro que esta REALMENTE en
+        `requiere_intervencion`. Sin esta guarda se podria forzar a `pendiente`
+        cualquier registro (incluso uno ya `aceptado`/`aceptado_con_errores`, estado
+        terminal), provocando un reenvio no querido a la AEAT."""
+        if registro.estado_remision != "requiere_intervencion":
+            raise ValueError(
+                "Solo se reencola un registro en estado 'requiere_intervencion' "
+                f"(actual: '{registro.estado_remision}')"
+            )
+        registro.estado_remision = "pendiente"
+        self._s.add(LogAuditoria(
+            fecha_hora_huso=ahora_huso(), usuario_id=usuario_id, accion="reencolar_remision",
+            entidad="registro_fiscal", entidad_id=str(registro.id), origen=origen))
+
+    def ultimo_error(self) -> "UltimoErrorRemision | None":
+        """Ultimo intento de remision rechazado (para el panel fiscal, visibilidad
+        persistente entre refrescos: R4). Incluye tanto el rechazo de linea normal
+        como el rechazo de cabecera (este ultimo sin `codigo_error`, ver remitente.py)."""
+        stmt = (
+            select(RemisionIntento, RegistroFiscal.num_serie_factura)
+            .join(RegistroFiscal, RemisionIntento.registro_fiscal_id == RegistroFiscal.id)
+            .where(RemisionIntento.resultado == "rechazado")
+            .order_by(RemisionIntento.id.desc())
+            .limit(1)
+        )
+        fila = self._s.execute(stmt).first()
+        if fila is None:
+            return None
+        intento, num_serie = fila
+        return UltimoErrorRemision(
+            registro_id=intento.registro_fiscal_id,
+            codigo=intento.codigo_error, descripcion=intento.descripcion,
+            num_serie=num_serie, fecha=intento.fecha_hora_huso,
+        )
 
     def _ultimo_intento(self, registro_id: int) -> RemisionIntento | None:
         stmt = (

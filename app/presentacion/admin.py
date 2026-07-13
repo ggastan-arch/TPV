@@ -209,6 +209,10 @@ class MermaStockReq(BaseModel):
     motivo: str
 
 
+class ReencolarReq(BaseModel):
+    registro_id: int
+
+
 def _origen(request: Request) -> str:
     host = request.client.host if request.client else ""
     return "local" if host in ("127.0.0.1", "::1", "localhost") else "remoto"
@@ -261,6 +265,7 @@ def me(request: Request, s: Session = Depends(get_session)) -> dict:
 def fiscal_estado(_: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
     motor = NullEngine(settings.nif_emisor, settings.nombre_emisor)
     informe = motor.verify_chain(uow.session)
+    ultimo_error = uow.registros.ultimo_error()
     return {
         "declaracion_responsable": {
             "software": settings.nombre_sistema,
@@ -276,6 +281,9 @@ def fiscal_estado(_: int = Depends(require_admin), uow=Depends(get_uow)) -> dict
             "pendientes": uow.registros.contar_pendientes(),
             "incidencia": uow.registros.hay_incidencia_pendiente(),
             "certificado_configurado": bool(settings.certificado_cert_path),
+            # Registros que requieren intervencion manual (R3): visibilidad
+            # persistente entre refrescos, no efimera (R4).
+            "requiere_intervencion": uow.registros.contar_requiere_intervencion(),
         },
         "cadena": {"ok": informe.ok, "registros": informe.registros, "errores": informe.errores},
         "ultimos_registros": [
@@ -283,6 +291,12 @@ def fiscal_estado(_: int = Depends(require_admin), uow=Depends(get_uow)) -> dict
              "estado_remision": r.estado_remision, "huella": (r.huella or "")[:16] + "..."}
             for r in uow.registros.ultimos(10)
         ],
+        "ultimo_error": (
+            {"registro_id": ultimo_error.registro_id, "codigo": ultimo_error.codigo,
+             "descripcion": ultimo_error.descripcion,
+             "num_serie": ultimo_error.num_serie, "fecha": ultimo_error.fecha}
+            if ultimo_error is not None else None
+        ),
     }
 
 
@@ -306,6 +320,20 @@ def fiscal_reintentar(request: Request, usuario_id: int = Depends(require_admin)
         return {"ok": False, "mensaje": "Incidencia de conectividad; se reintentara."}
     return {"ok": True, "estado_envio": respuesta.estado_envio, "csv": respuesta.csv,
             "lineas": len(respuesta.lineas)}
+
+
+@router.post("/api/fiscal/reencolar")
+def fiscal_reencolar(req: ReencolarReq, request: Request,
+                     usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    registro = uow.registros.buscar(req.registro_id)
+    if registro is None:
+        raise HTTPException(404, "Registro no encontrado")
+    try:
+        uow.registros.reencolar(registro, usuario_id=usuario_id, origen=_origen(request))
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    uow.commit()
+    return {"ok": True}
 
 
 # --- Informe del dia -----------------------------------------------------------

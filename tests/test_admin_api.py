@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from _helpers import construir_venta
 from app.presentacion.deps import get_session, get_uow
 import app.infraestructura.imagenes as imagenes_mod
 from app.infraestructura.seguridad import hash_pin
@@ -101,6 +102,91 @@ def test_reintentar_sin_certificado(cliente, admin):
     cuerpo = r.json()
     assert cuerpo["ok"] is False
     assert "Certificado" in cuerpo["mensaje"]
+
+
+def test_reencolar_registro_inexistente_da_404(cliente, admin):
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/fiscal/reencolar", json={"registro_id": 999999})
+    assert r.status_code == 404
+
+
+def test_reencolar_exige_sesion(cliente):
+    r = cliente.post("/admin/api/fiscal/reencolar", json={"registro_id": 1})
+    assert r.status_code == 401
+
+
+def test_fiscal_estado_expone_ultimo_error(cliente, admin, crear_sesion, motor, datos_base):
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        s.add(venta)
+        reg = motor.emit(s, venta)
+        reg_id = reg.id
+    with crear_sesion() as s, s.begin():
+        repo = UnidadDeTrabajoSQL(s).registros
+        repo.registrar_resultado(
+            repo.buscar(reg_id), "rechazado", codigo_error="4109",
+            descripcion="Cabecera incorrecta", estado_remision_final="requiere_intervencion")
+
+    _login(cliente, admin)
+    # Dos consultas sucesivas, SIN ninguna nueva remision entre medio: el conteo y el
+    # ultimo error deben seguir visibles (no son un dato efimero de una unica respuesta).
+    estado1 = cliente.get("/admin/api/fiscal/estado").json()
+    estado2 = cliente.get("/admin/api/fiscal/estado").json()
+    for estado in (estado1, estado2):
+        assert estado["cola"]["requiere_intervencion"] == 1
+        assert estado["ultimo_error"]["codigo"] == "4109"
+        assert estado["ultimo_error"]["descripcion"] == "Cabecera incorrecta"
+        assert estado["ultimo_error"]["num_serie"] is not None
+        assert estado["ultimo_error"]["registro_id"] == reg_id
+
+
+def test_reencolar_devuelve_a_pendiente_via_endpoint(cliente, admin, crear_sesion, motor, datos_base):
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        s.add(venta)
+        reg = motor.emit(s, venta)
+        reg_id = reg.id
+    with crear_sesion() as s, s.begin():
+        repo = UnidadDeTrabajoSQL(s).registros
+        repo.registrar_resultado(
+            repo.buscar(reg_id), "rechazado", codigo_error="4109",
+            descripcion="Cabecera incorrecta", estado_remision_final="requiere_intervencion")
+
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/fiscal/reencolar", json={"registro_id": reg_id})
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).registros
+        assert repo.buscar(reg_id).estado_remision == "pendiente"
+        assert s.query(LogAuditoria).filter_by(
+            accion="reencolar_remision", entidad_id=str(reg_id)).count() == 1
+
+
+def test_reencolar_rechaza_si_no_requiere_intervencion_via_endpoint(
+    cliente, admin, crear_sesion, motor, datos_base,
+):
+    """Fix de WARNING de verify: el endpoint no debe reencolar un registro que no
+    esta en 'requiere_intervencion' (aqui, uno ya 'aceptado')."""
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        s.add(venta)
+        reg = motor.emit(s, venta)
+        reg_id = reg.id
+    with crear_sesion() as s, s.begin():
+        repo = UnidadDeTrabajoSQL(s).registros
+        repo.registrar_resultado(repo.buscar(reg_id), "aceptado", csv="CSV-1")
+
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/fiscal/reencolar", json={"registro_id": reg_id})
+    assert r.status_code == 409
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).registros
+        assert repo.buscar(reg_id).estado_remision == "aceptado"
+        assert s.query(LogAuditoria).filter_by(
+            accion="reencolar_remision", entidad_id=str(reg_id)).count() == 0
 
 
 # --- Maestros: alta/edicion/baja de articulos ----------------------------------

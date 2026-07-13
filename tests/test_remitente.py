@@ -86,3 +86,62 @@ def test_incidencia_de_red_se_propaga():
 def test_remitente_desde_settings_usa_endpoint_pruebas():
     rem = remitente_desde_settings(poster=lambda u, h, b: (200, b""))
     assert rem.endpoint == "https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP"
+
+
+# --- Duplicado (codigo 3000 + RegistroDuplicado) --------------------------------
+def test_parsea_duplicado_correcta_es_aceptado():
+    def poster(url, headers, body):
+        return 200, respuesta_remision_xml(
+            [("T2026-000001", "Incorrecto", 3000, "Registro duplicado",
+              {"estado": "Correcta"})],
+            estado="ParcialmenteCorrecto")
+
+    rem = RemitenteVerifactu(endpoint=endpoint_verifactu("pruebas"), poster=poster)
+    resp = rem.enviar(_ENVELOPE_MIN)
+    assert len(resp.lineas) == 1
+    linea = resp.lineas[0]
+    assert linea.resultado == "aceptado"
+    assert linea.duplicado is True
+    assert linea.estado_final is None
+
+
+def test_parsea_duplicado_aceptada_con_errores():
+    def poster(url, headers, body):
+        return 200, respuesta_remision_xml(
+            [("T2026-000001", "Incorrecto", 3000, "Registro duplicado",
+              {"estado": "AceptadaConErrores"})],
+            estado="ParcialmenteCorrecto")
+
+    rem = RemitenteVerifactu(endpoint=endpoint_verifactu("pruebas"), poster=poster)
+    resp = rem.enviar(_ENVELOPE_MIN)
+    linea = resp.lineas[0]
+    assert linea.resultado == "aceptado_con_errores"
+    assert linea.duplicado is True
+
+
+def test_parsea_duplicado_anulada_requiere_intervencion():
+    def poster(url, headers, body):
+        return 200, respuesta_remision_xml(
+            [("T2026-000001", "Incorrecto", 3000, "Registro duplicado",
+              {"estado": "Anulada"})],
+            estado="ParcialmenteCorrecto")
+
+    rem = RemitenteVerifactu(endpoint=endpoint_verifactu("pruebas"), poster=poster)
+    resp = rem.enviar(_ENVELOPE_MIN)
+    linea = resp.lineas[0]
+    assert linea.resultado == "rechazado"
+    assert linea.duplicado is True
+    assert linea.estado_final == "requiere_intervencion"
+
+
+# --- Rechazo de cabecera (sin lineas) --------------------------------------------
+def test_parsea_rechazo_de_cabecera_sin_lineas():
+    def poster(url, headers, body):
+        return 200, respuesta_remision_xml([], estado="Incorrecto")
+
+    rem = RemitenteVerifactu(endpoint=endpoint_verifactu("pruebas"), poster=poster)
+    resp = rem.enviar(_ENVELOPE_MIN)
+    assert resp.lineas == []
+    assert resp.estado_envio == "Incorrecto"
+    assert resp.descripcion_cabecera is not None
+    assert "Incorrecto" in resp.descripcion_cabecera

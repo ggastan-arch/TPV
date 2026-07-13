@@ -143,10 +143,27 @@ async function pintarPestana() {
 async function pintarFiscal() {
   const d = await api("/admin/api/fiscal/estado");
   const dr = d.declaracion_responsable;
-  const alarma = d.cola.incidencia
+  // "requiere_intervencion" es la alarma de mayor prioridad: registros terminales que
+  // ya no se reintentan solos (R3) y necesitan accion explicita del administrador.
+  const alarma = d.cola.requiere_intervencion
+    ? `<span class="alarma">REQUIERE INTERVENCIÓN</span>`
+    : d.cola.incidencia
     ? `<span class="alarma">INCIDENCIA</span>` : (d.cola.pendientes ? `<span class="warn">pendientes</span>` : `<span class="ok">al día</span>`);
   const cadena = d.cadena.ok ? `<span class="ok">✔ cadena íntegra (${d.cadena.registros} registros)</span>`
     : `<span class="alarma">✖ cadena con errores: ${d.cadena.errores.join("; ")}</span>`;
+  // Bloque de "requiere intervención" + último error: persistente entre refrescos
+  // (R4), no depende de haber lanzado una remisión en esta misma sesión.
+  const bloqueIntervencion = d.cola.requiere_intervencion
+    ? `<div class="card"><h2><span class="alarma">REQUIERE INTERVENCIÓN</span></h2>
+        <div class="grid2">
+          <div><div class="kpi">${d.cola.requiere_intervencion}</div>registro(s) fuera de la cola automática</div>
+          ${d.ultimo_error ? `
+          <div class="dato"><b>Último error AEAT</b>${d.ultimo_error.codigo ? `[${d.ultimo_error.codigo}] ` : ""}${d.ultimo_error.descripcion ?? "—"}</div>
+          <div class="dato"><b>Nº serie</b>${d.ultimo_error.num_serie ?? "—"}</div>` : ""}
+        </div>
+        <p><button class="accion" id="reencolar">Reencolar y reintentar</button> <span id="remsg"></span></p>
+      </div>`
+    : "";
   $("#main").innerHTML = `
     <div class="card"><h2>Cola de remisión ${alarma}</h2>
       <div class="grid2">
@@ -156,6 +173,7 @@ async function pintarFiscal() {
       </div>
       <p><button class="accion" id="reintentar">Reintentar remisión</button> <span id="rmsg"></span></p>
     </div>
+    ${bloqueIntervencion}
     <div class="card"><h2>Declaración responsable</h2><div class="grid2">
       <div class="dato"><b>Software</b>${dr.software} (${dr.id_sistema}) v${dr.version}</div>
       <div class="dato"><b>Productor</b>${dr.productor} · ${dr.nif_productor}</div>
@@ -172,6 +190,20 @@ async function pintarFiscal() {
     $("#rmsg").textContent = r.ok ? `Enviado (${r.estado_envio})` : r.mensaje;
     if (r.ok) pintarFiscal();
   };
+  const btnReencolar = $("#reencolar");
+  if (btnReencolar) {
+    btnReencolar.onclick = async () => {
+      // Reencola el registro del ultimo error (recuperacion manual, R3). Si hubiera
+      // varios registros en requiere_intervencion, este boton actua sobre el mas
+      // reciente; el resto se reencola igual tras corregir la causa raiz (recarga
+      // el panel entre reencolados sucesivos).
+      const r = await api("/admin/api/fiscal/reencolar", {
+        method: "POST", body: { registro_id: d.ultimo_error.registro_id },
+      });
+      $("#remsg").textContent = r.ok ? "Reencolado: volverá a intentarse." : (r.mensaje ?? "Error al reencolar.");
+      if (r.ok) pintarFiscal();
+    };
+  }
 }
 
 /* ---- DÍA ---- */

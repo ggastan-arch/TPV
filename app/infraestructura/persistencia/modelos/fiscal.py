@@ -30,6 +30,11 @@ ESTADOS_REMISION = (
     "aceptado",
     "aceptado_con_errores",
     "rechazado",
+    # Terminal anomalo, no reintentable automaticamente (rechazo de cabecera o
+    # duplicado "Anulada"): requiere accion explicita de un administrador
+    # (endpoint /api/fiscal/reencolar). Sin CHECK en BD (columna String plana,
+    # sin migracion): ver design.md, decision "SIN migracion Alembic".
+    "requiere_intervencion",
 )
 RESULTADOS_REMISION = (
     "enviado",

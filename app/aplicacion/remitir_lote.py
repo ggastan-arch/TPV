@@ -60,12 +60,26 @@ class RemitirLote:
             self.uow.commit()
             return None
 
+        if not respuesta.lineas and respuesta.estado_envio == "Incorrecto":
+            # Rechazo de cabecera: no hay desglose por registro, asi que TODO el lote
+            # queda con rastro propio en requiere_intervencion (invariante "nunca se
+            # descarta un registro en silencio"). Sin marca de incidencia: no es un
+            # problema de conectividad, requiere intervencion humana (R2/R3).
+            for reg in lote:
+                registros.registrar_resultado(
+                    reg, "rechazado", codigo_error=respuesta.codigo_error_cabecera,
+                    descripcion=respuesta.descripcion_cabecera,
+                    estado_remision_final="requiere_intervencion")
+            self.uow.commit()
+            return respuesta
+
         por_num = {reg.num_serie_factura: reg for reg in lote}
         for linea in respuesta.lineas:
             reg = por_num.get(linea.num_serie_factura)
             if reg is not None:
                 registros.registrar_resultado(
                     reg, linea.resultado, codigo_error=linea.codigo_error,
-                    descripcion=linea.descripcion, csv=respuesta.csv)
+                    descripcion=linea.descripcion, csv=respuesta.csv,
+                    estado_remision_final=linea.estado_final)
         self.uow.commit()
         return respuesta

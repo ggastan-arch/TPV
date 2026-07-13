@@ -40,6 +40,16 @@ _ESTADO_A_RESULTADO = {
     "Incorrecto": "rechazado",
 }
 
+# EstadoRegistroDuplicado (vocabulario propio, FEMENINO: Correcta/AceptadaConErrores/
+# Anulada, XSD EstadoRegistroSFType) -> resultado interno cuando la AEAT rechaza el
+# registro por duplicado (codigo 3000) porque ya existe dado de alta en su sistema.
+# Tabla DEDICADA: mezclar con _ESTADO_A_RESULTADO (formas masculinas de linea normal)
+# volveria a clasificar el duplicado como rechazado y reactivaria el bucle de reenvio.
+_DUPLICADO_A_RESULTADO = {
+    "Correcta": "aceptado",
+    "AceptadaConErrores": "aceptado_con_errores",
+}
+
 
 def endpoint_verifactu(entorno: str, *, sello: bool = False) -> str:
     return _ENDPOINTS[(entorno, sello)]
@@ -56,9 +66,14 @@ class RemisionIncidencia(Exception):
 @dataclass
 class ResultadoLinea:
     num_serie_factura: str
-    resultado: str  # aceptado | aceptado_con_errores | rechazado
+    resultado: str  # CHECK-valid en remision_intento: aceptado|aceptado_con_errores|rechazado
     codigo_error: str | None = None
     descripcion: str | None = None
+    # Override de registro_fiscal.estado_remision (None = derivar de `resultado`).
+    # Solo se usa para el duplicado "Anulada": terminal anomalo, no reintentable,
+    # que no cabe en el vocabulario CHECK de `resultado` (ver design.md).
+    estado_final: str | None = None
+    duplicado: bool = False  # True si la linea vino con bloque RegistroDuplicado (cod 3000)
 
 
 @dataclass
@@ -67,6 +82,12 @@ class RespuestaEnvio:
     tiempo_espera_segundos: int
     estado_envio: str  # Correcto | ParcialmenteCorrecto | Incorrecto
     lineas: list[ResultadoLinea] = field(default_factory=list)
+    # Rechazo de cabecera (EstadoEnvio=Incorrecto sin ninguna RespuestaLinea): el XSD
+    # RespuestaBaseType no define un codigo de error a nivel de envio, por eso
+    # `codigo_error_cabecera` normalmente queda en None y solo se rellena la
+    # descripcion (ver design.md, Open Questions).
+    codigo_error_cabecera: str | None = None
+    descripcion_cabecera: str | None = None
 
 
 class Remitente:
@@ -184,14 +205,48 @@ def _parsear_respuesta(contenido: bytes) -> RespuestaEnvio:
         idf = ln.find(f"{{{NS_SF}}}IDFactura")
         num_serie = idf.find(f"{{{NS_SF}}}NumSerieFactura").text if idf is not None else None
         estado_reg = ln.find(f"{{{NS_RESP}}}EstadoRegistro").text
-        lineas.append(
-            ResultadoLinea(
-                num_serie_factura=num_serie,
-                resultado=_ESTADO_A_RESULTADO.get(estado_reg, "rechazado"),
-                codigo_error=_texto(ln, f"{{{NS_RESP}}}CodigoErrorRegistro"),
-                descripcion=_texto(ln, f"{{{NS_RESP}}}DescripcionErrorRegistro"),
-            )
-        )
+        codigo_error = _texto(ln, f"{{{NS_RESP}}}CodigoErrorRegistro")
+        descripcion = _texto(ln, f"{{{NS_RESP}}}DescripcionErrorRegistro")
+        lineas.append(_clasificar_linea(ln, num_serie, estado_reg, codigo_error, descripcion))
+
+    codigo_error_cabecera = None
+    descripcion_cabecera = None
+    if not lineas and estado_envio == "Incorrecto":
+        # Rechazo de cabecera: el XSD RespuestaBaseType no define un codigo de error a
+        # nivel de envio (ver design.md, Open Questions), asi que se deja constancia
+        # del EstadoEnvio para que quede un motivo persistido por cada registro.
+        descripcion_cabecera = f"Rechazo de cabecera de la AEAT (EstadoEnvio={estado_envio})"
+
     return RespuestaEnvio(
-        csv=csv, tiempo_espera_segundos=tiempo, estado_envio=estado_envio, lineas=lineas
+        csv=csv, tiempo_espera_segundos=tiempo, estado_envio=estado_envio, lineas=lineas,
+        codigo_error_cabecera=codigo_error_cabecera, descripcion_cabecera=descripcion_cabecera,
+    )
+
+
+def _clasificar_linea(
+    ln, num_serie: str | None, estado_reg: str, codigo_error: str | None, descripcion: str | None
+) -> ResultadoLinea:
+    """Clasifica una RespuestaLinea: normal (EstadoRegistro, formas masculinas) o
+    duplicado (bloque RegistroDuplicado, EstadoRegistroDuplicado en formas femeninas).
+    El nodo RegistroDuplicado solo llega cuando la AEAT rechazo por duplicado (cod 3000)."""
+    duplicado_nodo = ln.find(f"{{{NS_RESP}}}RegistroDuplicado")
+    if duplicado_nodo is not None:
+        estado_dup = _texto(duplicado_nodo, f"{{{NS_RESP}}}EstadoRegistroDuplicado") or ""
+        resultado_dup = _DUPLICADO_A_RESULTADO.get(estado_dup)
+        if resultado_dup is not None:
+            return ResultadoLinea(
+                num_serie_factura=num_serie, resultado=resultado_dup,
+                codigo_error=codigo_error, descripcion=descripcion, duplicado=True,
+            )
+        # "Anulada" u otro valor no contemplado: terminal anomalo, no reintentable;
+        # no cabe en el vocabulario CHECK de `resultado`, se aisla via `estado_final`.
+        return ResultadoLinea(
+            num_serie_factura=num_serie, resultado="rechazado",
+            codigo_error=codigo_error, descripcion=descripcion,
+            estado_final="requiere_intervencion", duplicado=True,
+        )
+    return ResultadoLinea(
+        num_serie_factura=num_serie,
+        resultado=_ESTADO_A_RESULTADO.get(estado_reg, "rechazado"),
+        codigo_error=codigo_error, descripcion=descripcion,
     )
