@@ -1,0 +1,16 @@
+# Blueprint de Render para el despliegue del modo demo (TFM).
+# Deploy: New > Blueprint > conectar este repo. Render construye la imagen del
+# Dockerfile, inyecta $PORT y genera un TPV_SESSION_SECRET aleatorio (evita usar
+# el secreto por defecto committeado en el repo publico).
+services:
+  - type: web
+    name: tpv-acuatpv-demo
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: TPV_PROFILE
+        value: demo
+      - key: TPV_SESSION_SECRET
+        generateValue: true

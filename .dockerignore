@@ -1,0 +1,33 @@
+# Nunca meter en la imagen: entornos, secretos, datos reales, cruft.
+.git/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Datos y secretos (jamas en la imagen): BDs reales/prueba, .env, certificados, capturas.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+.env
+.env.*
+capturas_aeat/
+*.pem
+*.pfx
+*.p12
+*.cer
+*.crt
+*.key
+
+# Imagenes de catalogo subidas (efimeras) y cruft de editor.
+media/
+docs/.obsidian/
+.idea/
+.vscode/
