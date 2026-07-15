@@ -37,7 +37,10 @@ def test_sembrar_demo_sobre_bd_vacia_crea_catalogo_y_cliente(monkeypatch):
         assert clientes[0].nombre
 
 
-def test_sembrar_demo_incluye_genericos_libres_y_material_al_peso(monkeypatch):
+def test_sembrar_demo_incluye_articulos_de_precio_libre(monkeypatch):
+    """El catalogo demo ejercita el modo de precio libre: articulos a granel o
+    negociables (discos, maderas, rocas...) se dan de alta con modo_precio='libre',
+    de modo que la demo muestre esa funcionalidad del TPV."""
     Sesion = _sesion_en_memoria(monkeypatch)
 
     seed_module.sembrar_demo()
@@ -45,12 +48,9 @@ def test_sembrar_demo_incluye_genericos_libres_y_material_al_peso(monkeypatch):
     with Sesion() as s:
         articulos = s.execute(select(Articulo)).scalars().all()
 
-    genericos_libres = [a for a in articulos if a.modo_precio == "libre" and a.pvp == Decimal("0.00")]
-    materiales_al_peso = [a for a in articulos if a.modo_precio == "al_peso"]
-
-    assert len(genericos_libres) >= 3  # peces, plantas, material
-    assert len(materiales_al_peso) >= 1
-    assert all(m.pvp > Decimal("0.00") for m in materiales_al_peso)
+    libres = [a for a in articulos if a.modo_precio == "libre"]
+    assert len(libres) >= 3
+    assert all(a.pvp >= Decimal("0.00") for a in libres)
 
 
 def test_sembrar_demo_dos_veces_no_duplica(monkeypatch):

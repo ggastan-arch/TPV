@@ -191,7 +191,7 @@ def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
             tipo_iva_id=ivas[datos["iva"]].id,
             pvp=Decimal(datos["pvp"]),
             control_stock="control_stock" in flags,
-            precio_libre="precio_libre" in flags,
+            modo_precio="libre" if "precio_libre" in flags else "fijo",
             requiere_cites="requiere_cites" in flags,
         )
         s.add(articulo)
@@ -256,9 +256,9 @@ def _sembrar_botonera_demo(
             s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
                         texto=texto, familia_id=fam.id))
 
-    # Fila 3: funciones.
-    s.add(Boton(pagina_id=pagina.id, fila=3, columna=3, texto="Convertir en factura",
-                funcion="convertir_factura"))
+    # Fila 3: funciones. Solo funciones ya implementadas en la botonera
+    # (ejecutarFuncion en tpv.html): "abrir_cajon". No se siembra "convertir_factura"
+    # mientras la funcion no exista (evita un boton que no hace nada en el demo).
     s.add(Boton(pagina_id=pagina.id, fila=3, columna=4, texto="Abrir cajón",
                 funcion="abrir_cajon"))
 
