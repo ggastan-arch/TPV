@@ -4,6 +4,8 @@ Todo con `poster` inyectado: ni red ni certificado. El flujo cola->envio esta en
 test_remision.py (caso de uso RemitirLote)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from lxml import etree
 
@@ -17,6 +19,7 @@ from app.infraestructura.fiscal.remitente import (
 )
 from app.infraestructura.fiscal.xml import NS, NS_LR
 
+_GOLDEN = Path(__file__).parent / "golden"
 _E_SOAP = "{http://schemas.xmlsoap.org/soap/envelope/}"
 _ENVELOPE_MIN = ('<?xml version="1.0"?>'
                  f'<sfLR:RegFactuSistemaFacturacion xmlns:sfLR="{NS_LR}"/>').encode()
@@ -132,6 +135,77 @@ def test_parsea_duplicado_anulada_requiere_intervencion():
     assert linea.resultado == "rechazado"
     assert linea.duplicado is True
     assert linea.estado_final == "requiere_intervencion"
+
+
+# --- Captura de la respuesta cruda de la AEAT (depuracion / golden tests) --------
+def test_captura_peticion_y_respuesta_crudas(tmp_path):
+    resp_bytes = respuesta_remision_xml([("T2026-000001", "Correcto", None, None)],
+                                        csv="ABC123")
+
+    def poster(url, headers, body):
+        return 200, resp_bytes
+
+    rem = RemitenteVerifactu(endpoint=endpoint_verifactu("pruebas"), poster=poster,
+                             captura_dir=str(tmp_path))
+    rem.enviar(_ENVELOPE_MIN)
+
+    ficheros = list(tmp_path.iterdir())
+    respuestas = [f for f in ficheros if "respuesta" in f.name]
+    peticiones = [f for f in ficheros if "peticion" in f.name]
+    assert len(respuestas) == 1
+    assert len(peticiones) == 1
+    # Los bytes se guardan crudos, sin reparsear: es lo que hace fiable el golden test.
+    assert respuestas[0].read_bytes() == resp_bytes
+
+
+def test_captura_fallida_no_rompe_remision(tmp_path):
+    # captura_dir imposible de crear (su padre es un fichero): la captura es best-effort
+    # y JAMAS puede tumbar la remision fiscal.
+    ocupado = tmp_path / "ocupado"
+    ocupado.write_text("no soy un directorio")
+    resp_bytes = respuesta_remision_xml([("T2026-000001", "Correcto", None, None)], csv="OK")
+
+    rem = RemitenteVerifactu(endpoint=endpoint_verifactu("pruebas"),
+                             poster=lambda u, h, b: (200, resp_bytes),
+                             captura_dir=str(ocupado / "sub"))
+    resp = rem.enviar(_ENVELOPE_MIN)
+    assert resp.csv == "OK"
+
+
+# --- Golden test: respuesta REAL de la AEAT (sanitizada) -------------------------
+# Reproduce el layout real (prefijos tikR/tik, IDFactura en NS_RESP con hijos en NS_SF,
+# RegistroDuplicado en NS_RESP con hijos en NS_SF) que los fixtures sinteticos NO
+# reproducian y que dejo escapar el bug de namespaces cruzados. Es el candado de regresion.
+def test_golden_respuesta_real_aeat_duplicados_mixta():
+    crudo = (_GOLDEN / "respuesta_aeat_duplicados_mixta.xml").read_bytes()
+
+    rem = RemitenteVerifactu(endpoint=endpoint_verifactu("pruebas"),
+                             poster=lambda u, h, b: (200, crudo))
+    resp = rem.enviar(_ENVELOPE_MIN)
+
+    assert resp.csv == "CSV-GOLDEN-PRUEBA"
+    assert resp.estado_envio == "ParcialmenteCorrecto"
+    assert resp.tiempo_espera_segundos == 60
+
+    por_num = {ln.num_serie_factura: ln for ln in resp.lineas}
+    # Las 4 series se leyeron (num_serie None era el sintoma del bug: no casaba en RemitirLote).
+    assert set(por_num) == {"T2026-000001", "T2026-000002", "T2026-000003", "T2026-000004"}
+
+    # Duplicado AceptadaConErrores -> aceptado_con_errores; el codigo de linea (3000) es el
+    # que se persiste, no el interno del bloque duplicado (2004).
+    assert por_num["T2026-000001"].resultado == "aceptado_con_errores"
+    assert por_num["T2026-000001"].duplicado is True
+    assert por_num["T2026-000001"].codigo_error == "3000"
+
+    # Duplicado Correcta -> aceptado.
+    assert por_num["T2026-000002"].resultado == "aceptado"
+    assert por_num["T2026-000002"].duplicado is True
+    assert por_num["T2026-000003"].resultado == "aceptado"
+    assert por_num["T2026-000003"].duplicado is True
+
+    # Alta nueva EstadoRegistro=Correcto -> aceptado, sin bloque duplicado.
+    assert por_num["T2026-000004"].resultado == "aceptado"
+    assert por_num["T2026-000004"].duplicado is False
 
 
 # --- Rechazo de cabecera (sin lineas) --------------------------------------------

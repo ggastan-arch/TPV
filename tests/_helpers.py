@@ -39,7 +39,10 @@ def respuesta_remision_xml(lineas, *, csv="CSV-OK", tiempo=60, estado="Correcto"
         num, estado_reg, codigo, desc, *resto = linea
         duplicado = resto[0] if resto else None
         ln = etree.SubElement(resp, _E_RESP + "RespuestaLinea")
-        idf = etree.SubElement(ln, _E_SF + "IDFactura")
+        # IDFactura es un elemento LOCAL de RespuestaSuministro.xsd (NS_RESP); solo sus
+        # hijos (IDFacturaExpedidaType) viven en SuministroInformacion.xsd (NS_SF). Esta
+        # es la estructura real de la respuesta de la AEAT.
+        idf = etree.SubElement(ln, _E_RESP + "IDFactura")
         etree.SubElement(idf, _E_SF + "IDEmisorFactura").text = "00000000T"
         etree.SubElement(idf, _E_SF + "NumSerieFactura").text = num
         etree.SubElement(idf, _E_SF + "FechaExpedicionFactura").text = "10-07-2026"
@@ -49,15 +52,18 @@ def respuesta_remision_xml(lineas, *, csv="CSV-OK", tiempo=60, estado="Correcto"
         if desc is not None:
             etree.SubElement(ln, _E_RESP + "DescripcionErrorRegistro").text = desc
         if duplicado is not None:
+            # RegistroDuplicado es local de RespuestaSuministro.xsd (NS_RESP), pero es de
+            # tipo RegistroDuplicadoType, definido en SuministroInformacion.xsd: todos sus
+            # hijos viven en NS_SF.
             dup = etree.SubElement(ln, _E_RESP + "RegistroDuplicado")
-            etree.SubElement(dup, _E_RESP + "IdPeticionRegistroDuplicado").text = (
+            etree.SubElement(dup, _E_SF + "IdPeticionRegistroDuplicado").text = (
                 duplicado.get("id_peticion", "PET-DUP-1")
             )
-            etree.SubElement(dup, _E_RESP + "EstadoRegistroDuplicado").text = duplicado["estado"]
+            etree.SubElement(dup, _E_SF + "EstadoRegistroDuplicado").text = duplicado["estado"]
             if duplicado.get("codigo") is not None:
-                etree.SubElement(dup, _E_RESP + "CodigoErrorRegistro").text = str(duplicado["codigo"])
+                etree.SubElement(dup, _E_SF + "CodigoErrorRegistro").text = str(duplicado["codigo"])
             if duplicado.get("descripcion") is not None:
-                etree.SubElement(dup, _E_RESP + "DescripcionErrorRegistro").text = duplicado["descripcion"]
+                etree.SubElement(dup, _E_SF + "DescripcionErrorRegistro").text = duplicado["descripcion"]
     return etree.tostring(env, xml_declaration=True, encoding="UTF-8")
 
 

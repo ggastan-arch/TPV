@@ -121,14 +121,20 @@ class RemitenteVerifactu(Remitente):
         verify=True,
         timeout: int = 60,
         poster=None,
+        captura_dir: str | None = None,
     ):
         self.endpoint = endpoint
         self._poster = poster or _poster_requests(cert, verify, timeout)
+        # Directorio opcional para volcar peticion/respuesta crudas (depuracion y
+        # golden tests). None = desactivado. Nunca se escribe el certificado.
+        self._captura_dir = captura_dir
 
     def enviar(self, envelope: bytes) -> RespuestaEnvio:
         cuerpo = _envolver_soap(envelope)
         headers = {"Content-Type": "text/xml; charset=utf-8", "SOAPAction": ""}
         estado, contenido = self._poster(self.endpoint, headers, cuerpo)
+        if self._captura_dir:
+            _capturar(self._captura_dir, cuerpo, contenido, estado)
         if estado != 200:
             # 200 con EstadoEnvio=Incorrecto sigue siendo respuesta valida a parsear;
             # un codigo != 200 es un fallo del servicio (o SOAP Fault).
@@ -158,7 +164,29 @@ def remitente_desde_settings(*, poster=None) -> RemitenteVerifactu:
         endpoint=endpoint_verifactu(settings.entorno_aeat, sello=settings.certificado_sello),
         cert=cert,
         poster=poster,
+        captura_dir=settings.captura_respuesta_dir,
     )
+
+
+def _capturar(directorio: str, peticion: bytes, respuesta: bytes, estado: int) -> None:
+    """Vuelca a disco el sobre enviado y la respuesta cruda de la AEAT, con timestamp.
+
+    Best-effort e INTENCIONADAMENTE a prueba de fallos: cualquier excepcion se traga
+    (la captura es una ayuda de depuracion y jamas puede afectar a la remision fiscal).
+    Solo escribe XML de peticion/respuesta: nunca el certificado (invariante 7)."""
+    try:
+        import os
+        from datetime import datetime
+
+        os.makedirs(directorio, exist_ok=True)
+        sello = datetime.now().strftime("%Y%m%dT%H%M%S_%f")
+        base = os.path.join(directorio, f"aeat-{sello}")
+        with open(f"{base}-peticion.xml", "wb") as fh:
+            fh.write(peticion)
+        with open(f"{base}-respuesta-http{estado}.xml", "wb") as fh:
+            fh.write(respuesta)
+    except Exception:  # noqa: BLE001 - best-effort: la captura nunca rompe la remision
+        pass
 
 
 # --- helpers de (de)serializacion SOAP -----------------------------------------
@@ -202,7 +230,11 @@ def _parsear_respuesta(contenido: bytes) -> RespuestaEnvio:
 
     lineas: list[ResultadoLinea] = []
     for ln in resp.findall(f"{{{NS_RESP}}}RespuestaLinea"):
-        idf = ln.find(f"{{{NS_SF}}}IDFactura")
+        # IDFactura es un elemento LOCAL de RespuestaSuministro.xsd (NS_RESP); solo sus
+        # hijos (IDFacturaExpedidaType) viven en SuministroInformacion.xsd (NS_SF). Buscarlo
+        # en NS_SF devolvia None -> num_serie None -> el registro no casaba en RemitirLote y
+        # quedaba como "no remitido" aunque la AEAT lo hubiera aceptado.
+        idf = ln.find(f"{{{NS_RESP}}}IDFactura")
         num_serie = idf.find(f"{{{NS_SF}}}NumSerieFactura").text if idf is not None else None
         estado_reg = ln.find(f"{{{NS_RESP}}}EstadoRegistro").text
         codigo_error = _texto(ln, f"{{{NS_RESP}}}CodigoErrorRegistro")
@@ -231,7 +263,9 @@ def _clasificar_linea(
     El nodo RegistroDuplicado solo llega cuando la AEAT rechazo por duplicado (cod 3000)."""
     duplicado_nodo = ln.find(f"{{{NS_RESP}}}RegistroDuplicado")
     if duplicado_nodo is not None:
-        estado_dup = _texto(duplicado_nodo, f"{{{NS_RESP}}}EstadoRegistroDuplicado") or ""
+        # RegistroDuplicado es local de RespuestaSuministro.xsd (NS_RESP), pero es de tipo
+        # RegistroDuplicadoType (SuministroInformacion.xsd): sus hijos viven en NS_SF.
+        estado_dup = _texto(duplicado_nodo, f"{{{NS_SF}}}EstadoRegistroDuplicado") or ""
         resultado_dup = _DUPLICADO_A_RESULTADO.get(estado_dup)
         if resultado_dup is not None:
             return ResultadoLinea(

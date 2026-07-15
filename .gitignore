@@ -39,6 +39,11 @@ tpv_demo.db*
 *.keystore
 *.der
 
+# Capturas crudas de la remision a la AEAT (TPV_CAPTURA_RESPUESTA_DIR): peticion y
+# respuesta SOAP volcadas para depuracion / muestras de golden tests. Contienen datos
+# fiscales reales (NIF de la persona titular): NUNCA versionar (repo publico).
+capturas_aeat/
+
 # Copias de seguridad
 *.bak
 backups/

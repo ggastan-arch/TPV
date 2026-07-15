@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     certificado_key_path: str | None = None   # PEM de la clave privada (si va aparte)
     certificado_sello: bool = False           # endpoint de certificado de sello (www10/prewww10)
 
+    # Directorio opcional para volcar la peticion y la respuesta CRUDAS de cada remision
+    # (depuracion y captura de muestras reales para golden tests). Vacio = desactivado.
+    # Las capturas contienen datos fiscales reales (NIF): usar solo una ruta gitignoreada.
+    captura_respuesta_dir: str | None = None
+
     # Control del reloj (invariante 6 de CLAUDE.md): desviacion maxima tolerada.
     max_desviacion_reloj_s: int = 60
 
