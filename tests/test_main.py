@@ -34,6 +34,16 @@ def test_crear_app_demo_con_tpv_demo_db_no_lanza(monkeypatch):
     main_module.crear_app()  # no debe lanzar
 
 
+# --- pagina de inicio (portada del despliegue) ---------------------------------
+def test_pagina_inicio_enruta_a_tpv_y_admin():
+    cliente = TestClient(main_module.crear_app())
+    r = cliente.get("/")
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    cuerpo = r.text
+    assert "/tpv" in cuerpo and "/admin" in cuerpo
+
+
 # --- /media servido como estatico (StaticFiles) --------------------------------
 def test_crear_app_no_falla_si_media_dir_no_existe_todavia(tmp_path, monkeypatch):
     monkeypatch.setattr(imagenes_mod, "MEDIA_DIR", tmp_path / "media_inexistente")

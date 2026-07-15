@@ -9,6 +9,7 @@ from starlette.staticfiles import StaticFiles
 
 from app.presentacion.admin import router as admin_router
 from app.presentacion.health import router as health_router
+from app.presentacion.landing import router as landing_router
 from app.presentacion.tpv import router as tpv_router
 from app.infraestructura import imagenes
 from app.infraestructura.config import DB_PATH_PRODUCCION, Settings, settings
@@ -34,6 +35,7 @@ def crear_app() -> FastAPI:
     # Sesion de la consola de administracion (cookie firmada).
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
                        same_site="lax", https_only=False)
+    app.include_router(landing_router)
     app.include_router(health_router)
     app.include_router(tpv_router)
     app.include_router(admin_router)

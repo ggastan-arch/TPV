@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TPV AcuaTPV — Facturación VERI*FACTU</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --accent:#0ea5e9; --ok:#16a34a; --line:#334155;
+          --txt:#e2e8f0; --muted:#94a3b8; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; min-height:100%; font-family:system-ui,Segoe UI,sans-serif;
+              background:var(--bg); color:var(--txt); }
+  body { display:flex; flex-direction:column; align-items:center; padding:32px 16px 48px; }
+  .wrap { width:100%; max-width:760px; }
+  .badge { display:inline-block; background:#b45309; color:#fff; font-weight:700; font-size:13px;
+           letter-spacing:.3px; padding:5px 14px; border-radius:999px; margin-bottom:18px; }
+  h1 { margin:0 0 6px; font-size:34px; }
+  .sub { color:var(--muted); font-size:18px; margin:0 0 22px; }
+  p.desc { line-height:1.6; color:#cbd5e1; }
+  .acciones { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:26px 0; }
+  @media (max-width:560px){ .acciones { grid-template-columns:1fr; } }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:16px;
+          padding:22px; text-decoration:none; color:inherit; display:block; transition:border-color .15s; }
+  .card:hover { border-color:var(--accent); }
+  .card h2 { margin:0 0 6px; font-size:22px; }
+  .card .ico { font-size:30px; }
+  .card small { color:var(--muted); }
+  .cred { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:22px; }
+  .cred h2 { margin:0 0 12px; font-size:18px; }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  td, th { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); font-weight:600; font-size:13px; }
+  code { background:#0f172a; border:1px solid var(--line); border-radius:6px; padding:2px 8px;
+         font-size:16px; font-weight:700; color:#7dd3fc; }
+  .nota { color:var(--muted); font-size:13px; margin-top:12px; line-height:1.5; }
+  footer { color:var(--muted); font-size:13px; margin-top:34px; text-align:center; line-height:1.6; }
+  footer a { color:var(--accent); }
+  #demoBlocks { display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge" id="demoBadge" style="display:none">MODO DEMO · datos de prueba · sin validez fiscal</span>
+  <h1>TPV AcuaTPV</h1>
+  <p class="sub">Sistema de facturación VERI*FACTU para comercio minorista</p>
+
+  <p class="desc">
+    Terminal punto de venta táctil para una tienda de acuariofilia. Sistema Informático de
+    Facturación (SIF) conforme al RD&nbsp;1007/2023 y la Orden&nbsp;HAC/1177/2024, en modalidad
+    VERI*FACTU: cada venta genera una factura simplificada con su registro fiscal encadenado por
+    huella SHA-256. Trabajo de Fin de Máster.
+  </p>
+
+  <div class="acciones">
+    <a class="card" href="/tpv/">
+      <div class="ico">🛒</div>
+      <h2>Abrir el TPV</h2>
+      <small>Pantalla de venta táctil (acceso por PIN)</small>
+    </a>
+    <a class="card" href="/admin/">
+      <div class="ico">⚙️</div>
+      <h2>Consola de administración</h2>
+      <small>Catálogo, botonera, cierre Z y panel fiscal</small>
+    </a>
+  </div>
+
+  <div id="demoBlocks">
+    <div class="cred">
+      <h2>Credenciales de prueba</h2>
+      <table>
+        <tr><th>Rol</th><th>Acceso</th><th>PIN / Contraseña</th></tr>
+        <tr><td>Administración</td><td>usuario <b>admin</b></td><td><code>1234</code></td></tr>
+        <tr><td>Venta (TPV)</td><td>dependiente</td><td><code>0000</code></td></tr>
+      </table>
+      <p class="nota">
+        El TPV pide solo el PIN. En la consola de administración el usuario es <b>admin</b> y la
+        contraseña es su PIN (<code>1234</code>). Los datos son ficticios y no tienen validez
+        fiscal; nada se remite a la AEAT.
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    Trabajo de Fin de Máster · Código en
+    <a href="https://github.com/ggastan-arch/TPV" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+</div>
+
+<script>
+  // Muestra el distintivo y las credenciales de prueba solo cuando el perfil activo es demo.
+  fetch("/health").then((r) => r.json()).then((h) => {
+    if (h.perfil === "demo") {
+      document.getElementById("demoBadge").style.display = "inline-block";
+      document.getElementById("demoBlocks").style.display = "block";
+    }
+  }).catch(() => {});
+</script>
+</body>
+</html>
