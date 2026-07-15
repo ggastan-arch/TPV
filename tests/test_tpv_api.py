@@ -6,6 +6,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
+from app.infraestructura.config import settings
 from app.presentacion.deps import get_motor, get_session, get_uow
 from app.infraestructura.fiscal.engine import NullEngine
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
@@ -224,6 +225,24 @@ def test_cobrar_emite_venta(cliente, crear_sesion, datos_tpv):
     # El QR de la venta se sirve como PNG.
     qr = cliente.get(f"/tpv/api/venta/{datos['venta_id']}/qr.png")
     assert qr.status_code == 200 and qr.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_qr_cotejo_no_disponible_en_modo_demo(cliente, crear_sesion, datos_tpv, monkeypatch):
+    """En modo demo el QR de cotejo tipo-AEAT NO se genera: el ticket digital es un
+    documento SIN VALIDEZ FISCAL. Defensa en profundidad — mas alla de que la UI lo
+    oculte, el endpoint nunca emite un QR de cotejo con datos de prueba (invariante 7)."""
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}],
+        "pagos": [{"medio": "efectivo", "importe": "5.00"}],
+    })
+    assert r.status_code == 200
+    venta_id = r.json()["venta_id"]
+
+    monkeypatch.setattr(settings, "perfil", "demo")
+    qr = cliente.get(f"/tpv/api/venta/{venta_id}/qr.png")
+    assert qr.status_code == 404
 
 
 def test_cobrar_acepta_pvp_y_descripcion_override(cliente, crear_sesion, datos_tpv):

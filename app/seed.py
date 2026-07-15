@@ -116,9 +116,9 @@ def _sembrar_catalogo_base(s: Session, ejercicio: int) -> None:
     # Fila 1: navegacion por familias.
     s.add(Boton(pagina_id=pagina.id, fila=1, columna=0, texto="Peces", familia_id=peces.id))
     s.add(Boton(pagina_id=pagina.id, fila=1, columna=1, texto="Plantas", familia_id=plantas.id))
-    # Fila 3: funciones.
-    s.add(Boton(pagina_id=pagina.id, fila=3, columna=3, texto="Convertir en factura",
-                funcion="convertir_factura"))
+    # Fila 3: funciones. Solo se siembran funciones ya implementadas en la botonera
+    # (ejecutarFuncion en tpv.html): "cobrar" y "abrir_cajon". No se siembra
+    # "convertir_factura" mientras la funcion no exista (evita un boton que no hace nada).
     s.add(Boton(pagina_id=pagina.id, fila=3, columna=4, texto="Abrir cajon",
                 funcion="abrir_cajon"))
 

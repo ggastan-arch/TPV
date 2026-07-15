@@ -25,6 +25,7 @@ from app.aplicacion.lineas import ArticuloNoExiste, DescripcionRequerida
 from app.aplicacion.lineas import ItemVenta as ItemAplicacion
 from app.aplicacion.lineas import resolver_items
 from app.presentacion.deps import get_motor, get_session, get_uow
+from app.infraestructura.config import settings
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.seguridad import verificar_pin
 from app.infraestructura.fiscal import qr as qr_mod
@@ -272,6 +273,11 @@ def abrir_cajon_sin_venta(req: CajonReq, s: Session = Depends(get_session)) -> d
 
 @router.get("/api/venta/{venta_id}/qr.png")
 def qr_venta(venta_id: int, s: Session = Depends(get_session)) -> Response:
+    if settings.perfil == "demo":
+        # El ticket digital del demo es un DOCUMENTO DE PRUEBA SIN VALIDEZ FISCAL: no se
+        # genera un QR de cotejo tipo-AEAT con datos de prueba (invariante 7, honestidad
+        # del demo). La UI /tpv oculta el QR en demo; esto es la defensa en profundidad.
+        raise HTTPException(404, "QR de cotejo no disponible en modo demo (sin validez fiscal)")
     registro = s.execute(
         select(RegistroFiscal).where(RegistroFiscal.venta_id == venta_id,
                                      RegistroFiscal.tipo_registro == "alta")

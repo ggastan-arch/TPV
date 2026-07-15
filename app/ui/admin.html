@@ -172,6 +172,9 @@ async function pintarFiscal() {
         <div class="dato"><b>Integridad</b>${cadena}</div>
       </div>
       <p><button class="accion" id="reintentar">Reintentar remisión</button> <span id="rmsg"></span></p>
+      ${window.esDemo ? `<p style="color:#94a3b8;font-size:13px;font-style:italic;margin:6px 0 0">
+        En modo demo no se remite a la AEAT (motor NullEngine): "pendientes" y "certificado NO
+        configurado" son el estado esperado, no un error.</p>` : ""}
     </div>
     ${bloqueIntervencion}
     <div class="card"><h2>Declaración responsable</h2><div class="grid2">
@@ -786,7 +789,8 @@ function renderErroresLayout() {
 async function pintarBannerDemo() {
   try {
     const salud = await api("/health");
-    $("#banner-demo").innerHTML = salud.perfil === "demo"
+    window.esDemo = salud.perfil === "demo";
+    $("#banner-demo").innerHTML = window.esDemo
       ? `<div class="banner-demo">MODO DEMO — datos de prueba, sin validez fiscal</div>` : "";
   } catch { /* si /health falla, no bloquea el resto de la consola */ }
 }

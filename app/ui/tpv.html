@@ -57,9 +57,17 @@
   .buscador .lupa { font-size:20px; }
   .campo-buscar { flex:1; font-size:18px; padding:10px 12px; border-radius:10px;
                   border:1px solid var(--line); background:#0f172a; color:#fff; }
+  /* banner de modo demo (documento de prueba, sin validez fiscal) */
+  #demoBanner { display:none; position:fixed; top:6px; left:50%; transform:translateX(-50%);
+                z-index:20; background:#b45309; color:#fff; padding:4px 16px; border-radius:999px;
+                font-size:13px; font-weight:700; letter-spacing:.3px; pointer-events:none;
+                box-shadow:0 2px 8px rgba(0,0,0,.4); }
+  .ticket-demo { margin:12px auto; padding:10px; border:2px dashed #f59e0b; border-radius:10px;
+                 color:#fbbf24; font-weight:700; line-height:1.4; }
 </style>
 </head>
 <body>
+<div id="demoBanner">MODO DEMO &middot; datos de prueba &middot; SIN VALIDEZ FISCAL</div>
 <div id="app">
   <div class="col-botonera">
     <header>
@@ -88,6 +96,7 @@
 "use strict";
 const $ = (id) => document.getElementById(id);
 let usuario = null;
+let esDemo = false;    // se resuelve contra /health; oculta el QR de cotejo y marca el ticket
 let carrito = [];      // {articulo_id, nombre_corto, modo_precio, cantidad, pvp?, descripcion?, editado}
 let ultimoCalculo = null;
 
@@ -346,12 +355,15 @@ async function cobrar(ov, medio) {
   try {
     const r = await api("/tpv/api/cobrar", { method:"POST", body: JSON.stringify({
       usuario_id: usuario.usuario_id, items, pagos: [{ medio, importe }] }) });
+    const comprobante = esDemo
+      ? `<div class="ticket-demo">DOCUMENTO DE PRUEBA<br>SIN VALIDEZ FISCAL</div>`
+      : `<img src="/tpv/api/venta/${r.venta_id}/qr.png" alt="QR" width="150" height="150">
+         <div style="font-size:13px;color:#94a3b8">Factura verificable en la sede electronica de la AEAT</div>`;
     ov.querySelector(".modal").innerHTML = `<div class="ticket-ok">
       <h2>&#10004; ${r.num_serie}</h2>
       <div>Total: <b>${eur(r.total)}</b></div>
       <div>Cambio: <b>${eur(r.cambio)}</b></div>
-      <img src="/tpv/api/venta/${r.venta_id}/qr.png" alt="QR" width="150" height="150">
-      <div style="font-size:13px;color:#94a3b8">Factura verificable en la sede electronica de la AEAT</div>
+      ${comprobante}
       <div class="fila-modal"><button class="btn b-cobrar" id="cierra">Nueva venta</button></div></div>`;
     ov.querySelector("#cierra").onclick = () => { ov.remove(); vaciar(); irInicio(); };
   } catch (e) { $("ce").textContent = e.message; }
@@ -375,6 +387,12 @@ document.addEventListener("keydown", async (e) => {
 
 /* ---------- ARRANQUE ---------- */
 function iniciar() { irInicio(); render(); }
+// Resuelve el perfil activo (fuente unica: /health) para marcar el demo como
+// documento de prueba y no pedir el QR de cotejo tipo-AEAT.
+fetch("/health").then((r) => r.json()).then((h) => {
+  esDemo = h.perfil === "demo";
+  if (esDemo) $("demoBanner").style.display = "block";
+}).catch(() => {});
 pantallaLogin();
 </script>
 </body>
