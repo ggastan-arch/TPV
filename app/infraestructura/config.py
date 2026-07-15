@@ -4,10 +4,17 @@ Variables con prefijo TPV_ o desde un fichero .env.
 """
 from __future__ import annotations
 
+import sys
 from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Bajo pytest se IGNORA el .env local del desarrollador: la suite debe ser determinista
+# (mismos valores por defecto que un clon limpio o CI). Sin esto, un .env con NIF real,
+# certificado o entorno=pruebas rompe tests que asumen los valores por defecto (p. ej.
+# "sin certificado" o NIF de emisor 00000000T). En produccion (uvicorn) si se lee el .env.
+_ENV_FILE = None if "pytest" in sys.modules else ".env"
 
 # Ruta de la BD de produccion (unica fuente de verdad fuera de modo demo). Se
 # expone como constante para que la salvaguarda de arranque (app/main.py) pueda
@@ -23,7 +30,7 @@ DEMO_NOMBRE = "AcuaTPV DEMO (documento de prueba)"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="TPV_", env_file=".env", extra="ignore"
+        env_prefix="TPV_", env_file=_ENV_FILE, extra="ignore"
     )
 
     # Perfil de arranque: 'produccion' (por defecto, comportamiento actual) o
