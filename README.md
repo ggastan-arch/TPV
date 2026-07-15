@@ -4,7 +4,7 @@ TPV táctil monopuesto para una tienda de acuariofilia (peces tropicales, planta
 complementos). Sistema Informático de Facturación (SIF) sujeto al RD 1007/2023 (RRSIF) y
 la Orden HAC/1177/2024, preparado para operar en modalidad **VERI\*FACTU**: cada venta
 genera una **factura simplificada** con su registro fiscal encadenado por huella SHA-256 y
-remisible a la AEAT. Trabajo de Fin de Máster.
+remisible a la AEAT. 
 
 > Contexto y decisiones de negocio: `docs/TPV_ACUATPV_consideraciones.md` ·
 > especificación fiscal: `docs/VERIFACTU_ESQUEMAS_HAC1177.md` ·
