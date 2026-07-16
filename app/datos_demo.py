@@ -313,3 +313,32 @@ ARTICULOS: list[dict] = [
          familia="Accesorios", iva="general", pvp="0.80",
          flags=("precio_libre",)),
 ]
+
+# Clientes de demostracion. Variedad deliberada para ejercitar los casos
+# fiscales del TPV:
+#   - sin NIF -> factura simplificada normal (art. 7 ROF)
+#   - con NIF + domicilio -> simplificada "cualificada" (art. 7.2 ROF) o
+#     factura completa (F1) cuando la venta supere 3.000 EUR o el cliente sea
+#     una empresa.
+# NIF/CIF y contactos son ficticios (datos de demostracion, no reales).
+CLIENTES: list[dict] = [
+    # Sin NIF: venta al contado, simplificada normal.
+    dict(nombre="Cliente al contado", rgpd=False),
+    # Particulares con NIF + domicilio completos (cualificable).
+    dict(nombre="María López García", nif="12345678Z",
+         domicilio="Gran Vía 20, 3ºB, Madrid",
+         email="maria.lopez@example.com", telefono="600123456", rgpd=True),
+    dict(nombre="Jon Etxeberria Aguirre", nif="47852369H",
+         domicilio="Av. de los Fueros 5, Vitoria-Gasteiz",
+         telefono="945112233", rgpd=True),
+    # Con NIF pero sin domicilio: datos parciales.
+    dict(nombre="Ainhoa Zubizarreta", nif="39284756C",
+         email="ainhoa.z@example.com", rgpd=True),
+    # Empresa (CIF): destino tipico de factura completa F1.
+    dict(nombre="Acuarios del Norte S.L.", nif="B95123456",
+         domicilio="Polígono Ansio, Nave 12, Barakaldo",
+         email="pedidos@acuariosnorte.example", telefono="944001122", rgpd=True),
+    # Cliente historico de la demo (se conserva).
+    dict(nombre="Cliente de prueba (demo)", nif="00000000T",
+         domicilio="Calle Demo 1, Bilbao", rgpd=True),
+]

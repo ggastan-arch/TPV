@@ -13,6 +13,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 import app.seed as seed_module
+from app.datos_demo import CLIENTES as CLIENTES_DEMO
 from app.infraestructura.persistencia.modelos import Articulo, Base, Cliente, TipoIVA
 
 
@@ -24,7 +25,7 @@ def _sesion_en_memoria(monkeypatch):
     return Sesion
 
 
-def test_sembrar_demo_sobre_bd_vacia_crea_catalogo_y_cliente(monkeypatch):
+def test_sembrar_demo_sobre_bd_vacia_crea_catalogo_y_clientes(monkeypatch):
     Sesion = _sesion_en_memoria(monkeypatch)
 
     seed_module.sembrar_demo()
@@ -33,8 +34,25 @@ def test_sembrar_demo_sobre_bd_vacia_crea_catalogo_y_cliente(monkeypatch):
         assert s.execute(select(TipoIVA)).scalars().all()
         assert s.execute(select(Articulo)).scalars().all()
         clientes = s.execute(select(Cliente)).scalars().all()
-        assert len(clientes) == 1
-        assert clientes[0].nombre
+        assert len(clientes) == len(CLIENTES_DEMO)
+        assert all(c.nombre for c in clientes)
+
+
+def test_sembrar_demo_clientes_con_y_sin_nif(monkeypatch):
+    """La demo incluye variedad para lucir los casos fiscales: al menos un
+    cliente sin NIF (factura simplificada normal, art. 7 ROF) y varios con NIF +
+    domicilio (simplificada cualificada del art. 7.2 / factura completa)."""
+    Sesion = _sesion_en_memoria(monkeypatch)
+
+    seed_module.sembrar_demo()
+
+    with Sesion() as s:
+        clientes = s.execute(select(Cliente)).scalars().all()
+
+    sin_nif = [c for c in clientes if not c.nif]
+    cualificables = [c for c in clientes if c.nif and c.domicilio]
+    assert len(sin_nif) >= 1
+    assert len(cualificables) >= 2
 
 
 def test_sembrar_demo_incluye_articulos_de_precio_libre(monkeypatch):

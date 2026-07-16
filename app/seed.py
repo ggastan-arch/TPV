@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.datos_demo import ARTICULOS as ARTICULOS_DEMO
+from app.datos_demo import CLIENTES as CLIENTES_DEMO
 from app.datos_demo import FAMILIAS as FAMILIAS_DEMO
 from app.infraestructura.db import SessionLocal
 from app.infraestructura.seguridad import hash_pin
@@ -277,19 +278,25 @@ def sembrar() -> None:
 def sembrar_demo() -> None:
     """Seed idempotente de `tpv_demo.db`: catalogo demo de agua dulce (arbol de
     familias real de la tienda, SIN acuario marino, con precios de
-    demostracion) mas un cliente de prueba. La "empresa demo" es el emisor de
-    `settings` (NIF/nombre ya resueltos por el perfil,
-    `Settings._resolver_perfil`); no existe una tabla de empresa separada."""
+    demostracion) mas una cartera de clientes de prueba variada (con y sin
+    NIF). La "empresa demo" es el emisor de `settings` (NIF/nombre ya resueltos
+    por el perfil, `Settings._resolver_perfil`); no existe una tabla de empresa
+    separada."""
     ejercicio = datetime.now().astimezone().year
     with SessionLocal() as s, s.begin():
         if _hay_datos(s):
             print("Ya hay datos demo; no se siembra de nuevo.")
             return
         _sembrar_catalogo_demo(s, ejercicio)
-        s.add(Cliente(
-            nombre="Cliente de prueba (demo)", nif="00000000T",
-            domicilio="Calle Demo 1, Bilbao", rgpd_consentimiento=True,
-        ))
+        for datos in CLIENTES_DEMO:
+            s.add(Cliente(
+                nombre=datos["nombre"],
+                nif=datos.get("nif"),
+                domicilio=datos.get("domicilio"),
+                email=datos.get("email"),
+                telefono=datos.get("telefono"),
+                rgpd_consentimiento=datos.get("rgpd", False),
+            ))
 
     print(f"Datos demo sembrados (ejercicio {ejercicio}).")
 
