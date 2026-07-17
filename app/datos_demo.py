@@ -178,7 +178,7 @@ ARTICULOS: list[dict] = [
     dict(nombre="Carpín cometa rojo 5-6 cm", corto="Cometa rojo",
          familia="Agua fría/Peces de agua fría", iva="general", pvp="2.50",
          flags=("control_stock",)),
-    dict(nombre="Oranda calico 6-7 cm", corto="Oranda calico",
+    dict(nombre="Cometa 6-7 cm", corto="Cometa",
          familia="Agua fría/Peces de agua fría", iva="general", pvp="7.90",
          flags=("control_stock",), imagen="/media-demo/carpa-roja.jpg"),
     # --- Plantas (IVA reducido 10 %) --------------------------------------

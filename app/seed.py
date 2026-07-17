@@ -231,7 +231,7 @@ def _sembrar_botonera_demo(
 
     # Filas 0-1: articulos con foto real (lucen el catalogo demo en los botones).
     directos_fila0 = ["Neón cardenal", "Guppy macho", "Disco turquesa", "Betta macho", "Anubias"]
-    directos_fila1 = ["Ancistrus", "Apisto. borellii", "Yellow", "Oranda calico", "Guppy delta"]
+    directos_fila1 = ["Ancistrus", "Apisto. borellii", "Yellow", "Cometa", "Guppy delta"]
     for fila, cortos in ((0, directos_fila0), (1, directos_fila1)):
         for col, corto in enumerate(cortos):
             art = articulos.get(corto)

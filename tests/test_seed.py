@@ -89,7 +89,7 @@ def test_sembrar_demo_pone_imagenes_a_peces_estrella(monkeypatch):
         articulos = {a.nombre_corto: a for a in s.execute(select(Articulo)).scalars()}
 
     con_foto = ["Guppy macho", "Neón cardenal", "Betta macho", "Ancistrus",
-                "Anubias", "Disco turquesa", "Oranda calico"]
+                "Anubias", "Disco turquesa", "Cometa"]
     for corto in con_foto:
         assert corto in articulos, f"falta el articulo demo {corto!r}"
         imagen = articulos[corto].imagen
