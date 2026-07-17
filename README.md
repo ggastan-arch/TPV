@@ -12,7 +12,11 @@ remisible a la AEAT.
 
 ## 🚀 Demo en vivo
 
-**URL:** _(pendiente de desplegar — se completa tras el deploy en Render)_
+**URL:** https://tpv-acuatpv-demo.onrender.com/
+
+> ⏳ La primera carga puede tardar ~50 s: el plan gratuito de Render duerme el
+> servicio tras un rato de inactividad y lo despierta bajo demanda. Recarga si ves
+> un error 503 momentáneo.
 
 El despliegue corre en **modo demo**: base de datos aislada con datos ficticios, sin
 certificado y sin remisión a la AEAT (nada tiene validez fiscal). Credenciales de prueba:
