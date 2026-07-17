@@ -20,7 +20,10 @@
          align-items:center; justify-content:center; gap:4px; text-align:center;
          box-shadow:0 2px 6px rgba(0,0,0,.35); transition:transform .06s ease, filter .06s ease; }
   .btn:active { transform:scale(.97); filter:brightness(1.15); }
-  .grid { flex:1; display:grid; gap:12px; grid-auto-rows:1fr; overflow-y:auto; padding:4px; }
+  /* Altura de tarjeta acotada: con pocos articulos los botones NO se estiran a
+     toda la columna. El inicio (botonera) fuerza filas 1fr aparte para llenar. */
+  .grid { flex:1; display:grid; gap:12px; grid-auto-rows:170px; align-content:start;
+          overflow-y:auto; padding:4px; }
   .b-articulo { background:#0369a1; }
   .b-familia { background:#7c3aed; }
   .b-funcion { background:#475569; }
@@ -176,6 +179,9 @@ async function pintarBotonera() {
   const data = await api("/tpv/api/botonera");
   const grid = $("grid");
   grid.style.gridTemplateColumns = `repeat(${data.pagina.columnas}, 1fr)`;
+  // El inicio SI llena la columna a lo alto: filas 1fr (a diferencia de la
+  // navegacion/buscador, que usan tarjetas de altura fija via grid-auto-rows).
+  grid.style.gridTemplateRows = `repeat(${data.pagina.filas}, minmax(0, 1fr))`;
   grid.innerHTML = "";
   for (const b of data.botones) {
     const btn = document.createElement("button");
@@ -202,6 +208,7 @@ async function abrirFamilia(id) {
   $("breadcrumb").textContent = "Venta › " + fam.nombre;
   const grid = $("grid");
   grid.style.gridTemplateColumns = "repeat(4, 1fr)";
+  grid.style.gridTemplateRows = "none";  // tarjetas de altura fija (grid-auto-rows)
   grid.innerHTML = "";
   for (const sf of fam.subfamilias) {
     const b = document.createElement("button");
@@ -233,6 +240,7 @@ async function buscar(q) {
   $("breadcrumb").textContent = "Venta › Buscar: " + q;
   const grid = $("grid");
   grid.style.gridTemplateColumns = "repeat(4, 1fr)";
+  grid.style.gridTemplateRows = "none";  // tarjetas de altura fija (grid-auto-rows)
   grid.innerHTML = "";
   for (const a of resultados) {
     const b = document.createElement("button");
