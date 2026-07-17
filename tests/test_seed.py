@@ -133,6 +133,39 @@ def test_sembrar_demo_pone_imagenes_a_familias_visibles(monkeypatch):
             f"la familia {nombre} deberia tener foto, tiene {imagen!r}"
 
 
+def test_sembrar_demo_articulos_navegables_heredan_foto_de_familia(monkeypatch):
+    """Ningun boton navegable queda sin foto: un articulo sin imagen propia en
+    una familia visible hereda la foto representativa de su familia."""
+    Sesion = _sesion_en_memoria(monkeypatch)
+
+    seed_module.sembrar_demo()
+
+    with Sesion() as s:
+        articulos = {a.nombre_corto: a for a in s.execute(select(Articulo)).scalars()}
+
+    # Estos no tienen foto propia, pero su familia (Viviparos/Ciclidos/Plantas) si.
+    for corto in ["Platy rojo", "Molly negro", "Escalar velo", "Vallisneria"]:
+        imagen = articulos[corto].imagen
+        assert imagen and imagen.startswith("/media-demo/"), \
+            f"{corto} deberia heredar la foto de su familia, tiene {imagen!r}"
+
+
+def test_sembrar_demo_incluye_articulo_bolsa(monkeypatch):
+    """La demo tiene un articulo 'Bolsa' de bajo importe (0,10 EUR) como boton
+    fijo de cobro rapido en la pagina de inicio."""
+    Sesion = _sesion_en_memoria(monkeypatch)
+
+    seed_module.sembrar_demo()
+
+    with Sesion() as s:
+        bolsa = s.execute(
+            select(Articulo).where(Articulo.nombre_corto == "Bolsa")
+        ).scalars().first()
+
+    assert bolsa is not None, "deberia existir un articulo 'Bolsa'"
+    assert bolsa.pvp == Decimal("0.10")
+
+
 def test_sembrar_demo_dos_veces_no_duplica(monkeypatch):
     Sesion = _sesion_en_memoria(monkeypatch)
 

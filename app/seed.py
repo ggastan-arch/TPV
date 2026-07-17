@@ -182,6 +182,19 @@ def _construir_familias(
     return familias
 
 
+def _imagen_familia_fallback(ruta: str, imagenes: dict[str, str]) -> str | None:
+    """Foto de la familia de `ruta`, subiendo por el arbol hasta encontrar una.
+    Permite que TODO articulo de una familia con foto tenga imagen (propia o
+    heredada), para que ningun boton navegable de la demo quede sin foto."""
+    partes = ruta.split("/")
+    while partes:
+        img = imagenes.get("/".join(partes))
+        if img:
+            return img
+        partes.pop()
+    return None
+
+
 def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
     """Catalogo demo de agua dulce (sin acuario marino) reconstruido a partir
     del arbol de familias real de la tienda. Precios de demostracion."""
@@ -205,7 +218,8 @@ def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
             control_stock="control_stock" in flags,
             modo_precio="libre" if "precio_libre" in flags else "fijo",
             requiere_cites="requiere_cites" in flags,
-            imagen=datos.get("imagen"),
+            imagen=datos.get("imagen")
+                   or _imagen_familia_fallback(datos["familia"], FAMILIAS_IMAGEN_DEMO),
         )
         s.add(articulo)
         s.flush()
@@ -263,9 +277,14 @@ def _sembrar_botonera_demo(
             s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
                         texto=art.nombre_corto, articulo_id=art.id))
 
-    # Fila 3: funciones. Solo funciones ya implementadas en la botonera
-    # (ejecutarFuncion en tpv.html): "abrir_cajon". No se siembra "convertir_factura"
-    # mientras la funcion no exista (evita un boton que no hace nada en el demo).
+    # Fila 3: boton fijo de cobro rapido de "Bolsa" (art. 0,10 EUR) + funciones.
+    # Solo funciones ya implementadas en la botonera (ejecutarFuncion en tpv.html):
+    # "abrir_cajon". No se siembra "convertir_factura" mientras la funcion no exista
+    # (evita un boton que no hace nada en el demo).
+    bolsa = articulos.get("Bolsa")
+    if bolsa is not None:
+        s.add(Boton(pagina_id=pagina.id, fila=3, columna=0,
+                    texto=bolsa.nombre_corto, articulo_id=bolsa.id))
     s.add(Boton(pagina_id=pagina.id, fila=3, columna=4, texto="Abrir cajón",
                 funcion="abrir_cajon"))
 

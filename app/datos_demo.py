@@ -349,6 +349,9 @@ ARTICULOS: list[dict] = [
          familia="Acuarios/Urnas de cristal", iva="general", pvp="45.00",
          flags=("control_stock",)),
     # --- Accesorios --------------------------------------------------------
+    # Bolsa de transporte: importe simbolico, boton fijo de cobro rapido en el inicio.
+    dict(nombre="Bolsa de transporte para peces", corto="Bolsa",
+         familia="Accesorios", iva="general", pvp="0.10"),
     dict(nombre="Red para peces 10 cm", corto="Red 10cm",
          familia="Accesorios", iva="general", pvp="2.50",
          flags=("control_stock",)),
