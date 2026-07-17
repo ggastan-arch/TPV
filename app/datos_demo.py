@@ -102,6 +102,33 @@ FAMILIAS_IMAGEN_TACTIL: dict[str, str] = {
     "Agua fría/Peces de agua fría": "/media-demo/carpa-roja.jpg",
 }
 
+# Foto por articulo (nombre_corto -> /media-demo/...) para especies sin foto propia
+# de la tienda: descargadas de Wikimedia Commons (licencia libre; ver
+# app/img_demo/CREDITS.md). Complementa las fotos reales que ya llevan los dicts de
+# ARTICULOS abajo; el seed usa `imagen del dict` OR esta tabla.
+ARTICULOS_IMAGEN_TACTIL: dict[str, str] = {
+    "Platy rojo": "/media-demo/platy.jpg",
+    "Molly negro": "/media-demo/molly-negro.jpg",
+    "Espada rojo": "/media-demo/espada.jpg",
+    "Neón": "/media-demo/neon-innesi.jpg",
+    "Tetra limón": "/media-demo/tetra-limon.jpg",
+    "Hacha mármol": "/media-demo/hacha-marmol.jpg",
+    "Escalar velo": "/media-demo/escalar.jpg",
+    "Ramirezi azul": "/media-demo/ramirezi.jpg",
+    "Ps. zebra": "/media-demo/pseudotropheus-zebra.jpg",
+    "Disco pigeon": "/media-demo/disco-pigeon.jpg",
+    "Gurami perla": "/media-demo/gurami-perla.jpg",
+    "Corydora": "/media-demo/corydora.jpg",
+    "Botia payaso": "/media-demo/botia-payaso.jpg",
+    "Raya motoro": "/media-demo/raya-motoro.jpg",
+    "Globo enano": "/media-demo/globo-enano.jpg",
+    "Cometa rojo": "/media-demo/cometa-rojo.jpg",
+    "Echinodorus": "/media-demo/echinodorus.jpg",
+    "Vallisneria": "/media-demo/vallisneria.jpg",
+    "Helecho Java": "/media-demo/helecho-java.jpg",
+    "Cladophora": "/media-demo/cladophora.jpg",
+}
+
 # Cada articulo: (nombre, nombre_corto, familia, iva, pvp, flags, ean)
 #   iva:    "general" (21 %) | "reducido" (10 %)
 #   flags:  claves opcionales -> control_stock, precio_libre, requiere_cites

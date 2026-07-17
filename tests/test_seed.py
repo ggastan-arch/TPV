@@ -133,9 +133,13 @@ def test_sembrar_demo_pone_imagenes_a_familias_visibles(monkeypatch):
             f"la familia {nombre} deberia tener foto, tiene {imagen!r}"
 
 
-def test_sembrar_demo_articulos_navegables_heredan_foto_de_familia(monkeypatch):
-    """Ningun boton navegable queda sin foto: un articulo sin imagen propia en
-    una familia visible hereda la foto representativa de su familia."""
+def test_sembrar_demo_todo_articulo_navegable_tiene_foto(monkeypatch):
+    """Ningun boton navegable queda sin foto: TODO articulo de una familia visible
+    en tactil tiene su propia imagen (foto real de la tienda o de Wikimedia). El
+    material de familias ocultas puede no tenerla (no se navega, solo escaner/buscador)."""
+    from app.datos_demo import ARTICULOS as ARTICULOS_DEMO
+    from app.datos_demo import FAMILIAS_OCULTAS_TACTIL
+
     Sesion = _sesion_en_memoria(monkeypatch)
 
     seed_module.sembrar_demo()
@@ -143,11 +147,12 @@ def test_sembrar_demo_articulos_navegables_heredan_foto_de_familia(monkeypatch):
     with Sesion() as s:
         articulos = {a.nombre_corto: a for a in s.execute(select(Articulo)).scalars()}
 
-    # Estos no tienen foto propia, pero su familia (Viviparos/Ciclidos/Plantas) si.
-    for corto in ["Platy rojo", "Molly negro", "Escalar velo", "Vallisneria"]:
-        imagen = articulos[corto].imagen
+    for datos in ARTICULOS_DEMO:
+        if datos["familia"].split("/")[0] in FAMILIAS_OCULTAS_TACTIL:
+            continue  # familia oculta: no se navega
+        imagen = articulos[datos["corto"]].imagen
         assert imagen and imagen.startswith("/media-demo/"), \
-            f"{corto} deberia heredar la foto de su familia, tiene {imagen!r}"
+            f"{datos['corto']} es navegable y deberia tener foto, tiene {imagen!r}"
 
 
 def test_sembrar_demo_incluye_articulo_bolsa(monkeypatch):
