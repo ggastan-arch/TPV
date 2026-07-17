@@ -147,6 +147,13 @@ function pantallaLogin() {
 /* ---------- BOTONERA / NAVEGACION ---------- */
 async function irInicio() {
   $("buscarInput").value = "";
+  await pintarBotonera();
+}
+
+// Pinta la botonera normal SIN tocar el campo de busqueda. La busqueda por
+// nombre la usa para restaurar la rejilla cuando el texto es demasiado corto,
+// sin borrar lo que la persona esta tecleando.
+async function pintarBotonera() {
   $("breadcrumb").textContent = "Venta";
   const data = await api("/tpv/api/botonera");
   const grid = $("grid");
@@ -197,8 +204,9 @@ let tBuscarDebounce = null;
 function onBuscarInput() {
   clearTimeout(tBuscarDebounce);
   const q = $("buscarInput").value.trim();
-  // Menos de 2 caracteres: no dispara peticion, restaura la botonera normal.
-  if (q.length < 2) { irInicio(); return; }
+  // Menos de 2 caracteres: no dispara peticion, restaura la botonera normal
+  // SIN borrar el campo (irInicio lo vaciaria y romperia el tecleo progresivo).
+  if (q.length < 2) { pintarBotonera(); return; }
   tBuscarDebounce = setTimeout(() => buscar(q), 250);
 }
 
