@@ -83,6 +83,25 @@ FAMILIAS_OCULTAS_TACTIL: set[str] = {
     "Accesorios",
 }
 
+# Foto representativa por familia (ruta completa -> /media-demo/...): la de un
+# articulo tipico de la familia, para que el boton de familia tambien luzca foto.
+# Solo se ponen a las familias VISIBLES en tactil (el material no se navega).
+FAMILIAS_IMAGEN_TACTIL: dict[str, str] = {
+    "Peces por familias": "/media-demo/disco.jpg",
+    "Peces por familias/Vivíparos": "/media-demo/guppy.jpg",
+    "Peces por familias/Carácidos": "/media-demo/neon-cardenal.jpg",
+    "Peces por familias/Cíclidos": "/media-demo/apistogramma.jpg",
+    "Peces por familias/Cíclidos africanos": "/media-demo/lamprologus.jpg",
+    "Peces por familias/Discos": "/media-demo/disco.jpg",
+    "Peces por familias/Anabántidos": "/media-demo/betta-macho.jpg",
+    "Peces por familias/Peces de fondo": "/media-demo/ancistrus.jpg",
+    "Peces por familias/Killis": "/media-demo/aphyosemion-australe.jpg",
+    "Peces por familias/Otras familias": "/media-demo/balantiocheilus.jpg",
+    "Plantas": "/media-demo/anubias.jpg",
+    "Agua fría": "/media-demo/carpa-roja.jpg",
+    "Agua fría/Peces de agua fría": "/media-demo/carpa-roja.jpg",
+}
+
 # Cada articulo: (nombre, nombre_corto, familia, iva, pvp, flags, ean)
 #   iva:    "general" (21 %) | "reducido" (10 %)
 #   flags:  claves opcionales -> control_stock, precio_libre, requiere_cites

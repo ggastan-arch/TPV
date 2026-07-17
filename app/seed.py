@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.datos_demo import ARTICULOS as ARTICULOS_DEMO
 from app.datos_demo import CLIENTES as CLIENTES_DEMO
 from app.datos_demo import FAMILIAS as FAMILIAS_DEMO
+from app.datos_demo import FAMILIAS_IMAGEN_TACTIL as FAMILIAS_IMAGEN_DEMO
 from app.datos_demo import FAMILIAS_OCULTAS_TACTIL as FAMILIAS_OCULTAS_DEMO
 from app.infraestructura.db import SessionLocal
 from app.infraestructura.seguridad import hash_pin
@@ -188,6 +189,9 @@ def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
     ivas = {"general": iva_general, "reducido": iva_reducido}
 
     familias = _construir_familias(s, FAMILIAS_DEMO, FAMILIAS_OCULTAS_DEMO)
+    for ruta, img in FAMILIAS_IMAGEN_DEMO.items():
+        if ruta in familias:
+            familias[ruta].imagen = img
 
     articulos: dict[str, Articulo] = {}
     for datos in ARTICULOS_DEMO:

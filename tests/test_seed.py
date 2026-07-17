@@ -117,6 +117,22 @@ def test_sembrar_demo_oculta_familias_de_material(monkeypatch):
             f"{visible} deberia ser visible en tactil"
 
 
+def test_sembrar_demo_pone_imagenes_a_familias_visibles(monkeypatch):
+    """Las familias visibles en tactil llevan foto representativa (la de un pez
+    tipico) para que el boton de familia tambien luzca imagen."""
+    Sesion = _sesion_en_memoria(monkeypatch)
+
+    seed_module.sembrar_demo()
+
+    with Sesion() as s:
+        familias = {f.nombre: f for f in s.execute(select(Familia)).scalars()}
+
+    for nombre in ["Peces por familias", "Plantas", "Vivíparos", "Discos"]:
+        imagen = familias[nombre].imagen
+        assert imagen and imagen.startswith("/media-demo/"), \
+            f"la familia {nombre} deberia tener foto, tiene {imagen!r}"
+
+
 def test_sembrar_demo_dos_veces_no_duplica(monkeypatch):
     Sesion = _sesion_en_memoria(monkeypatch)
 

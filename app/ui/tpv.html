@@ -14,17 +14,27 @@
   header { display:flex; align-items:center; gap:10px; padding:6px 10px; }
   header .breadcrumb { flex:1; font-size:18px; color:#94a3b8; }
   header .usuario { font-size:14px; color:#94a3b8; }
-  .btn { border:none; border-radius:12px; color:#fff; font-size:18px; font-weight:600;
-         padding:14px; cursor:pointer; min-height:90px; display:flex; flex-direction:column;
-         align-items:center; justify-content:center; gap:4px; }
-  .btn:active { filter:brightness(1.2); }
-  .grid { flex:1; display:grid; gap:10px; grid-auto-rows:1fr; overflow-y:auto; padding:4px; }
+  .btn { position:relative; overflow:hidden; border:1px solid rgba(148,163,184,.28);
+         border-radius:14px; color:#fff; font-size:18px; font-weight:600; padding:12px;
+         cursor:pointer; min-height:110px; display:flex; flex-direction:column;
+         align-items:center; justify-content:center; gap:4px; text-align:center;
+         box-shadow:0 2px 6px rgba(0,0,0,.35); transition:transform .06s ease, filter .06s ease; }
+  .btn:active { transform:scale(.97); filter:brightness(1.15); }
+  .grid { flex:1; display:grid; gap:12px; grid-auto-rows:1fr; overflow-y:auto; padding:4px; }
   .b-articulo { background:#0369a1; }
   .b-familia { background:#7c3aed; }
   .b-funcion { background:#475569; }
   .b-inicio { background:#0891b2; }
-  .b-precio { font-size:14px; opacity:.85; font-weight:400; }
-  .b-img { width:56px; height:56px; object-fit:cover; border-radius:8px; }
+  /* Boton con foto: la imagen llena el boton y el texto va en una franja inferior
+     sobre un degradado para que sea legible sobre cualquier foto. */
+  .btn.con-img { justify-content:flex-end; padding:0; }
+  .b-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+  .b-cap { position:relative; z-index:1; width:100%; display:flex; flex-direction:column;
+           align-items:center; gap:1px; }
+  .btn.con-img .b-cap { padding:8px 6px 7px;
+           background:linear-gradient(to top, rgba(2,6,23,.92) 25%, rgba(2,6,23,0)); }
+  .b-tit { line-height:1.15; text-shadow:0 1px 3px rgba(0,0,0,.75); }
+  .b-precio { font-size:15px; opacity:.95; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,.75); }
   .cites { font-size:12px; background:#b45309; border-radius:6px; padding:1px 6px; }
   /* carrito */
   .carrito-lineas { flex:1; overflow-y:auto; padding:10px; }
@@ -110,7 +120,15 @@ async function api(path, opts = {}) {
 }
 const eur = (s) => (s ?? "0.00").toString().replace(".", ",") + " €";
 // Imagen del destino (articulo/familia); "" cuando no hay -> el boton conserva su aspecto actual.
-const imgBoton = (ruta) => ruta ? `<img class="b-img" src="${ruta}" alt="">` : "";
+// Pinta el contenido de un boton: si hay imagen, la imagen llena el boton (clase
+// con-img) y el titulo (+ precio opcional) va en una franja inferior; si no, solo
+// el titulo centrado. Un unico punto para todos los botones (botonera, familia, buscador).
+function pintarContenido(btn, imagen, titulo, precioHtml = "") {
+  btn.classList.toggle("con-img", !!imagen);
+  const img = imagen ? `<img class="b-img" src="${imagen}" alt="">` : "";
+  const precio = precioHtml ? `<span class="b-precio">${precioHtml}</span>` : "";
+  btn.innerHTML = `${img}<span class="b-cap"><span class="b-tit">${titulo}</span>${precio}</span>`;
+}
 // Precio a mostrar en el boton: "/kg" cuando el articulo se vende al peso.
 const precioBoton = (a) => eur(a.pvp) + (a.modo_precio === "al_peso" ? "/kg" : "");
 
@@ -166,13 +184,13 @@ async function pintarBotonera() {
     btn.style.gridRow = `${b.fila + 1} / span ${b.alto}`;
     if (b.color) btn.style.background = b.color;
     if (b.tipo === "articulo") {
-      btn.innerHTML = `${imgBoton(b.articulo.imagen)}<span>${b.articulo.nombre_corto}</span><span class="b-precio">${precioBoton(b.articulo)}</span>`;
+      pintarContenido(btn, b.articulo.imagen, b.articulo.nombre_corto, precioBoton(b.articulo));
       btn.onclick = () => anadir(b.articulo);
     } else if (b.tipo === "familia") {
-      btn.innerHTML = `${imgBoton(b.familia.imagen)}<span>${b.texto || b.familia.nombre}</span>`;
+      pintarContenido(btn, b.familia.imagen, b.texto || b.familia.nombre);
       btn.onclick = () => abrirFamilia(b.familia.id);
     } else {
-      btn.textContent = b.texto || b.funcion;
+      pintarContenido(btn, null, b.texto || b.funcion);
       btn.onclick = () => ejecutarFuncion(b.funcion);
     }
     grid.appendChild(btn);
@@ -188,13 +206,13 @@ async function abrirFamilia(id) {
   for (const sf of fam.subfamilias) {
     const b = document.createElement("button");
     b.className = "btn b-familia";
-    b.innerHTML = `${imgBoton(sf.imagen)}<span>${sf.nombre}</span>`;
+    pintarContenido(b, sf.imagen, sf.nombre);
     b.onclick = () => abrirFamilia(sf.id); grid.appendChild(b);
   }
   for (const a of fam.articulos) {
     const b = document.createElement("button");
     b.className = "btn b-articulo";
-    b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${precioBoton(a)}</span>`;
+    pintarContenido(b, a.imagen, a.nombre_corto, precioBoton(a));
     b.onclick = () => anadir(a); grid.appendChild(b);
   }
 }
@@ -219,7 +237,7 @@ async function buscar(q) {
   for (const a of resultados) {
     const b = document.createElement("button");
     b.className = "btn b-articulo";
-    b.innerHTML = `${imgBoton(a.imagen)}<span>${a.nombre_corto}</span><span class="b-precio">${precioBoton(a)}</span>`;
+    pintarContenido(b, a.imagen, a.nombre_corto, precioBoton(a));
     b.onclick = () => anadir(a);
     grid.appendChild(b);
   }
