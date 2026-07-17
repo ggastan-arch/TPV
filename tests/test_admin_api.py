@@ -362,6 +362,22 @@ def test_listado_maestros_familias_expone_visible_en_tactil(cliente, admin, dato
     assert por_id[oculta_id]["visible_en_tactil"] is False
 
 
+def test_listado_maestros_familias_expone_orden_y_color(cliente, admin, datos_base):
+    # El modal de edicion de familia reemplaza la ficha completa (PUT); si el
+    # listado no expone `orden` y `color`, editar cualquier campo los resetearia
+    # (orden gobierna el ordenado de la navegacion tactil).
+    _login(cliente, admin)
+    fam_id = cliente.post("/admin/api/maestros/familias",
+                          json={"nombre": "Material", "orden": 7,
+                                "color": "#123456"}).json()["id"]
+
+    familias = cliente.get("/admin/api/maestros/familias").json()
+
+    por_id = {f["id"]: f for f in familias}
+    assert por_id[fam_id]["orden"] == 7
+    assert por_id[fam_id]["color"] == "#123456"
+
+
 # --- Maestros: clientes --------------------------------------------------------
 def test_crear_cliente_exige_sesion(cliente, datos_base):
     assert cliente.post("/admin/api/maestros/clientes",

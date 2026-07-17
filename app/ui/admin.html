@@ -278,7 +278,8 @@ async function pintarMaestros() {
     <thead><tr>${cols.map(c=>`<th>${c[0]}</th>`).join("")}</tr></thead>
     <tbody>${rows.map(r=>`<tr>${cols.map(c=>`<td>${c[1](r)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
   $("#main").innerHTML =
-    `<div class="card" style="display:flex;justify-content:flex-end">
+    `<div class="card" style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="accion" id="maNuevaFamilia">+ Nueva familia</button>
       <button class="accion" id="maNuevoArticulo">+ Nuevo artículo</button>
     </div>` +
     tabla("Artículos", [["Nombre",r=>r.nombre],["PVP",r=>eur(r.pvp)],["IVA",r=>r.tipo_iva+"%"],
@@ -287,8 +288,10 @@ async function pintarMaestros() {
       ["Imagen",r=>celdaImagen("articulos", r)],
       ["",r=>`<button class="accion" data-editar-articulo="${r.id}">Editar</button>`]], arts) +
     tabla("Tipos de IVA", [["Nombre",r=>r.nombre],["%",r=>r.porcentaje],["Activo",r=>r.activo?"sí":"no"]], ivas) +
-    tabla("Familias", [["Nombre",r=>r.nombre],["Padre",r=>r.parent_id??"—"],
-      ["Imagen",r=>celdaImagen("familias", r)]], fams) +
+    tabla("Familias", [["Nombre",r=>r.nombre],["Padre",r=>nombreFamilia(r.parent_id, fams)],
+      ["Visible táctil",r=>r.visible_en_tactil?"sí":"no"],["Activo",r=>r.activo?"sí":"no"],
+      ["Imagen",r=>celdaImagen("familias", r)],
+      ["",r=>`<button class="accion" data-editar-familia="${r.id}">Editar</button>`]], fams) +
     tabla("Usuarios", [["Nombre",r=>r.nombre],["Rol",r=>r.rol],["Activo",r=>r.activo?"sí":"no"]], users);
   activarSubidaImagenes();
   $("#maNuevoArticulo").onclick = () => modalArticulo(null);
@@ -296,6 +299,18 @@ async function pintarMaestros() {
     const art = arts.find((a) => a.id === Number(btn.dataset.editarArticulo));
     btn.onclick = () => modalArticulo(art);
   });
+  $("#maNuevaFamilia").onclick = () => modalFamilia(null);
+  document.querySelectorAll("[data-editar-familia]").forEach((btn) => {
+    const fam = fams.find((f) => f.id === Number(btn.dataset.editarFamilia));
+    btn.onclick = () => modalFamilia(fam);
+  });
+}
+
+// Nombre legible de una familia por id (para la columna "Padre"), con fallback.
+function nombreFamilia(id, fams) {
+  if (id == null) return "—";
+  const f = fams.find((x) => x.id === id);
+  return f ? f.nombre : ("#" + id);
 }
 
 /* -- alta / edicion de articulo (modo_precio: fijo|libre|al_peso) -- */
@@ -374,6 +389,58 @@ function modalArticulo(articulo) {
       ov.remove();
       await pintarMaestros();
     } catch (e) { $("#maError", ov).textContent = e.message; }
+  };
+}
+
+/* -- alta / edicion de familia (incluye "visible en tactil") -- */
+// El GET /admin/api/maestros/familias expone nombre, parent_id, orden, color y
+// visible_en_tactil, asi que el modal precarga la ficha completa y "Guardar" (PUT,
+// reemplazo total) conserva los valores no tocados. La imagen NO va aqui: se sube
+// por su endpoint dedicado desde la columna "Imagen".
+function modalFamilia(familia) {
+  const editando = !!familia;
+  const opcionesPadre = `<option value="">— sin padre (raíz) —</option>` +
+    maFamiliasCache
+      .filter((f) => !editando || f.id !== familia.id)  // no puede ser su propio padre
+      .map((f) =>
+        `<option value="${f.id}" ${editando && familia.parent_id === f.id ? "selected" : ""}>${f.nombre}</option>`
+      ).join("");
+
+  const ov = document.createElement("div");
+  ov.className = "overlay";
+  ov.innerHTML = `<div class="modal">
+    <h2>${editando ? "Editar familia" : "Nueva familia"}</h2>
+    <label>Nombre<input id="mfNombre" value="${editando ? (familia.nombre || "").replace(/"/g, "&quot;") : ""}"></label>
+    <label>Familia padre<select id="mfPadre">${opcionesPadre}</select></label>
+    <label>Orden<input id="mfOrden" inputmode="numeric" value="${editando ? familia.orden : 0}"></label>
+    <label>Color<input id="mfColor" type="color" value="${editando ? (familia.color || COLOR_BOTON_DEFAULT) : COLOR_BOTON_DEFAULT}"></label>
+    <label><input id="mfVisible" type="checkbox" style="width:auto" ${!editando || familia.visible_en_tactil ? "checked" : ""}> Visible en la navegación táctil</label>
+    <p style="font-size:12px;opacity:.7;margin:0">Desmárcalo para familias de código de barras (material, complementos…): no aparecen al navegar en el TPV, pero sus artículos se venden igual por escáner o buscador.</p>
+    <div class="msg-error" id="mfError"></div>
+    <div class="fila-modal">
+      <button class="accion" id="mfCancelar" style="background:#475569">Cancelar</button>
+      <button class="accion" id="mfGuardar">Guardar</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+
+  $("#mfCancelar", ov).onclick = () => ov.remove();
+  $("#mfGuardar", ov).onclick = async () => {
+    const datos = {
+      nombre: $("#mfNombre", ov).value,
+      parent_id: $("#mfPadre", ov).value ? Number($("#mfPadre", ov).value) : null,
+      orden: Number($("#mfOrden", ov).value) || 0,
+      color: $("#mfColor", ov).value || null,
+      visible_en_tactil: $("#mfVisible", ov).checked,
+    };
+    try {
+      if (editando) {
+        await api(`/admin/api/maestros/familias/${familia.id}`, { method: "PUT", body: JSON.stringify(datos) });
+      } else {
+        await api("/admin/api/maestros/familias", { method: "POST", body: JSON.stringify(datos) });
+      }
+      ov.remove();
+      await pintarMaestros();
+    } catch (e) { $("#mfError", ov).textContent = e.message; }
   };
 }
 

@@ -365,7 +365,11 @@ def maestros_iva(_: int = Depends(require_admin), s: Session = Depends(get_sessi
 
 @router.get("/api/maestros/familias")
 def maestros_familias(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> list[dict]:
+    # Expone TODOS los campos editables del formulario (ver FamiliaReq) para que el
+    # modal de edicion los precargue y no se pierdan al guardar (el PUT reemplaza la
+    # ficha completa): `orden` gobierna el ordenado de la navegacion tactil.
     return [{"id": f.id, "nombre": f.nombre, "parent_id": f.parent_id, "activo": f.activo,
+             "orden": f.orden, "color": f.color,
              "visible_en_tactil": f.visible_en_tactil, "imagen": f.imagen}
             for f in s.execute(select(Familia).order_by(Familia.orden)).scalars()]
 
