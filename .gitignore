@@ -53,6 +53,11 @@ backups/
 # la ruta, ver app/infraestructura/imagenes.py).
 media/
 
+# Carpeta de trabajo para dejar fotos originales (nombres con espacios, mezcla de
+# fotos y iconos). La version curada y servida esta en app/img_demo/ (SI versionada).
+Images/
+images/
+
 # Los XSD/WSDL oficiales de la AEAT (schemas/) SI se versionan: son publicos y los
 # tests los necesitan. Un certificado alli quedaria cubierto por los patrones de arriba.
 

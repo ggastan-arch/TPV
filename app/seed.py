@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.datos_demo import ARTICULOS as ARTICULOS_DEMO
 from app.datos_demo import CLIENTES as CLIENTES_DEMO
 from app.datos_demo import FAMILIAS as FAMILIAS_DEMO
+from app.datos_demo import FAMILIAS_OCULTAS_TACTIL as FAMILIAS_OCULTAS_DEMO
 from app.infraestructura.db import SessionLocal
 from app.infraestructura.seguridad import hash_pin
 from app.infraestructura.persistencia.modelos import (
@@ -147,12 +148,17 @@ def _sembrar_iva_series_usuarios(
     return iva_general, iva_reducido
 
 
-def _construir_familias(s: Session, rutas: list[str]) -> dict[str, Familia]:
+def _construir_familias(
+    s: Session, rutas: list[str], ocultas: set[str] | None = None
+) -> dict[str, Familia]:
     """Crea el arbol de familias a partir de rutas "Padre/Hijo/Nieto".
 
     Devuelve un mapa ruta_completa -> Familia. El campo `orden` se asigna por
-    orden de aparicion dentro de cada nivel (raiz o padre).
+    orden de aparicion dentro de cada nivel (raiz o padre). Las rutas en
+    `ocultas` se marcan `visible_en_tactil=False` (fuera de la navegacion tactil
+    por defecto; no afecta a la venta ni a botones explicitos).
     """
+    ocultas = ocultas or set()
     familias: dict[str, Familia] = {}
     ordenes: dict[int | None, int] = {}
     for ruta in rutas:
@@ -165,7 +171,8 @@ def _construir_familias(s: Session, rutas: list[str]) -> dict[str, Familia]:
                 parent_id = padre.id if padre is not None else None
                 ordenes[parent_id] = ordenes.get(parent_id, 0) + 1
                 fam = Familia(
-                    nombre=parte, parent_id=parent_id, orden=ordenes[parent_id]
+                    nombre=parte, parent_id=parent_id, orden=ordenes[parent_id],
+                    visible_en_tactil=acumulada not in ocultas,
                 )
                 s.add(fam)
                 s.flush()  # asigna id para que sirva de parent de sus hijos
@@ -180,7 +187,7 @@ def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
     iva_general, iva_reducido = _sembrar_iva_series_usuarios(s, ejercicio)
     ivas = {"general": iva_general, "reducido": iva_reducido}
 
-    familias = _construir_familias(s, FAMILIAS_DEMO)
+    familias = _construir_familias(s, FAMILIAS_DEMO, FAMILIAS_OCULTAS_DEMO)
 
     articulos: dict[str, Articulo] = {}
     for datos in ARTICULOS_DEMO:
@@ -194,6 +201,7 @@ def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
             control_stock="control_stock" in flags,
             modo_precio="libre" if "precio_libre" in flags else "fijo",
             requiere_cites="requiere_cites" in flags,
+            imagen=datos.get("imagen"),
         )
         s.add(articulo)
         s.flush()
@@ -221,41 +229,35 @@ def _sembrar_botonera_demo(
     s.add(pagina)
     s.flush()
 
-    # Fila 0: articulos directos frecuentes.
-    directos = ["Neón cardenal", "Guppy macho", "Escalar velo", "Anubias", "Betta macho"]
-    for col, corto in enumerate(directos):
-        art = articulos.get(corto)
-        if art is not None:
-            s.add(Boton(pagina_id=pagina.id, fila=0, columna=col,
-                        texto=art.nombre_corto, articulo_id=art.id))
+    # Filas 0-1: articulos con foto real (lucen el catalogo demo en los botones).
+    directos_fila0 = ["Neón cardenal", "Guppy macho", "Disco turquesa", "Betta macho", "Anubias"]
+    directos_fila1 = ["Ancistrus", "Apisto. borellii", "Yellow", "Oranda calico", "Guppy delta"]
+    for fila, cortos in ((0, directos_fila0), (1, directos_fila1)):
+        for col, corto in enumerate(cortos):
+            art = articulos.get(corto)
+            if art is not None:
+                s.add(Boton(pagina_id=pagina.id, fila=fila, columna=col,
+                            texto=art.nombre_corto, articulo_id=art.id))
 
-    # Fila 1: navegacion por familias principales.
-    fams = [
+    # Fila 2: navegacion por las familias VISIBLES en tactil (peces, plantas,
+    # agua fria) mas dos peces con foto. El material (alimento, filtracion,
+    # iluminacion, decoracion...) NO tiene boton: esas familias estan ocultas y
+    # se venden por escaner/buscador, no tocando la pantalla.
+    fams_visibles = [
         ("Peces", "Peces por familias"),
         ("Plantas", "Plantas"),
-        ("Alimento", "Alimento"),
-        ("Trat. agua", "Tratamiento del agua"),
-        ("Filtración", "Filtración"),
+        ("Agua fría", "Agua fría"),
     ]
-    for col, (texto, ruta) in enumerate(fams):
-        fam = familias.get(ruta)
-        if fam is not None:
-            s.add(Boton(pagina_id=pagina.id, fila=1, columna=col,
-                        texto=texto, familia_id=fam.id))
-
-    # Fila 2: mas familias.
-    fams2 = [
-        ("Decoración", "Decoración"),
-        ("Iluminación", "Iluminación"),
-        ("Acuarios", "Acuarios"),
-        ("Medicamentos", "Medicamentos"),
-        ("Accesorios", "Accesorios"),
-    ]
-    for col, (texto, ruta) in enumerate(fams2):
+    for col, (texto, ruta) in enumerate(fams_visibles):
         fam = familias.get(ruta)
         if fam is not None:
             s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
                         texto=texto, familia_id=fam.id))
+    for col, corto in ((3, "Aphyosemion"), (4, "Tiburón bala")):
+        art = articulos.get(corto)
+        if art is not None:
+            s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
+                        texto=art.nombre_corto, articulo_id=art.id))
 
     # Fila 3: funciones. Solo funciones ya implementadas en la botonera
     # (ejecutarFuncion en tpv.html): "abrir_cajon". No se siembra "convertir_factura"

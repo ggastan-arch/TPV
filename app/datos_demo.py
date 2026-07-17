@@ -64,6 +64,25 @@ FAMILIAS: list[str] = [
     "Accesorios",
 ]
 
+# Familias (rutas completas) OCULTAS en la navegacion tactil por defecto: material
+# con codigo de barras que satura la pantalla y se vende por escaner/buscador, no
+# tocando botones. Ocultar el nodo raiz basta para sacar todo su subarbol del
+# drill-down. NO afecta a la venta (los articulos siguen accesibles por EAN/nombre)
+# ni a botones explicitos (el seed de la botonera demo tampoco les pone boton).
+FAMILIAS_OCULTAS_TACTIL: set[str] = {
+    "Alimento",
+    "Tratamiento del agua",
+    "Medicamentos",
+    "Filtración",
+    "Iluminación",
+    "Calentadores",
+    "Aireadores",
+    "Comederos",
+    "Decoración",
+    "Acuarios",
+    "Accesorios",
+}
+
 # Cada articulo: (nombre, nombre_corto, familia, iva, pvp, flags, ean)
 #   iva:    "general" (21 %) | "reducido" (10 %)
 #   flags:  claves opcionales -> control_stock, precio_libre, requiere_cites
@@ -74,7 +93,10 @@ ARTICULOS: list[dict] = [
     # --- Peces / Vivíparos -------------------------------------------------
     dict(nombre="Guppy macho colores surtidos", corto="Guppy macho",
          familia="Peces por familias/Vivíparos", iva="general", pvp="2.95",
-         flags=("control_stock",)),
+         flags=("control_stock",), imagen="/media-demo/guppy.jpg"),
+    dict(nombre="Guppy Delta variado", corto="Guppy delta",
+         familia="Peces por familias/Vivíparos", iva="general", pvp="3.10",
+         flags=("control_stock",), imagen="/media-demo/guppy-delta.jpg"),
     dict(nombre="Platy rojo", corto="Platy rojo",
          familia="Peces por familias/Vivíparos", iva="general", pvp="2.75",
          flags=("control_stock",)),
@@ -90,7 +112,7 @@ ARTICULOS: list[dict] = [
          flags=("control_stock",)),
     dict(nombre="Neón cardenal (Paracheirodon axelrodi)", corto="Neón cardenal",
          familia="Peces por familias/Carácidos", iva="general", pvp="3.40",
-         flags=("control_stock",)),
+         flags=("control_stock",), imagen="/media-demo/neon-cardenal.jpg"),
     dict(nombre="Tetra limón (Hyphessobrycon pulchripinnis)", corto="Tetra limón",
          familia="Peces por familias/Carácidos", iva="general", pvp="2.60",
          flags=("control_stock",)),
@@ -106,25 +128,25 @@ ARTICULOS: list[dict] = [
          flags=("control_stock",)),
     dict(nombre="Apistogramma borellii", corto="Apisto. borellii",
          familia="Peces por familias/Cíclidos", iva="general", pvp="11.50",
-         flags=("control_stock",)),
+         flags=("control_stock",), imagen="/media-demo/apistogramma.jpg"),
     # --- Peces / Cíclidos africanos ---------------------------------------
     dict(nombre="Pseudotropheus zebra (Malawi)", corto="Ps. zebra",
          familia="Peces por familias/Cíclidos africanos", iva="general", pvp="7.50",
          flags=("control_stock",)),
     dict(nombre="Labidochromis caeruleus (yellow)", corto="Yellow",
          familia="Peces por familias/Cíclidos africanos", iva="general", pvp="8.20",
-         flags=("control_stock",)),
+         flags=("control_stock",), imagen="/media-demo/lamprologus.jpg"),
     # --- Peces / Discos ----------------------------------------------------
     dict(nombre="Disco Turquesa 8 cm", corto="Disco turquesa",
          familia="Peces por familias/Discos", iva="general", pvp="49.00",
-         flags=("control_stock", "precio_libre")),
+         flags=("control_stock", "precio_libre"), imagen="/media-demo/disco.jpg"),
     dict(nombre="Disco Pigeon Blood 10 cm", corto="Disco pigeon",
          familia="Peces por familias/Discos", iva="general", pvp="69.00",
          flags=("control_stock", "precio_libre")),
     # --- Peces / Anabántidos ----------------------------------------------
     dict(nombre="Betta splendens macho corona", corto="Betta macho",
          familia="Peces por familias/Anabántidos", iva="general", pvp="8.90",
-         flags=("control_stock",)),
+         flags=("control_stock",), imagen="/media-demo/betta-macho.jpg"),
     dict(nombre="Gurami perla (Trichopodus leerii)", corto="Gurami perla",
          familia="Peces por familias/Anabántidos", iva="general", pvp="6.50",
          flags=("control_stock",)),
@@ -134,7 +156,7 @@ ARTICULOS: list[dict] = [
          flags=("control_stock",)),
     dict(nombre="Ancistrus común 5-6 cm", corto="Ancistrus",
          familia="Peces por familias/Peces de fondo", iva="general", pvp="6.90",
-         flags=("control_stock",)),
+         flags=("control_stock",), imagen="/media-demo/ancistrus.jpg"),
     dict(nombre="Botia payaso (Chromobotia macracanthus)", corto="Botia payaso",
          familia="Peces por familias/Peces de fondo", iva="general", pvp="9.50",
          flags=("control_stock",)),
@@ -145,16 +167,24 @@ ARTICULOS: list[dict] = [
     dict(nombre="Pez globo enano (Carinotetraodon travancoricus)", corto="Globo enano",
          familia="Peces por familias/Otras familias", iva="general", pvp="5.90",
          flags=("control_stock",)),
+    dict(nombre="Tiburón bala (Balantiocheilos melanopterus)", corto="Tiburón bala",
+         familia="Peces por familias/Otras familias", iva="general", pvp="9.90",
+         flags=("control_stock",), imagen="/media-demo/balantiocheilus.jpg"),
+    # --- Peces / Killis ----------------------------------------------------
+    dict(nombre="Aphyosemion australe (killi cola de lira)", corto="Aphyosemion",
+         familia="Peces por familias/Killis", iva="general", pvp="7.50",
+         flags=("control_stock",), imagen="/media-demo/aphyosemion-australe.jpg"),
     # --- Agua fría ---------------------------------------------------------
     dict(nombre="Carpín cometa rojo 5-6 cm", corto="Cometa rojo",
          familia="Agua fría/Peces de agua fría", iva="general", pvp="2.50",
          flags=("control_stock",)),
     dict(nombre="Oranda calico 6-7 cm", corto="Oranda calico",
          familia="Agua fría/Peces de agua fría", iva="general", pvp="7.90",
-         flags=("control_stock",)),
+         flags=("control_stock",), imagen="/media-demo/carpa-roja.jpg"),
     # --- Plantas (IVA reducido 10 %) --------------------------------------
     dict(nombre="Anubias barteri", corto="Anubias",
-         familia="Plantas", iva="reducido", pvp="6.90", flags=("control_stock",)),
+         familia="Plantas", iva="reducido", pvp="6.90", flags=("control_stock",),
+         imagen="/media-demo/anubias.jpg"),
     dict(nombre="Echinodorus bleheri", corto="Echinodorus",
          familia="Plantas", iva="reducido", pvp="5.50", flags=("control_stock",)),
     dict(nombre="Vallisneria spiralis", corto="Vallisneria",

@@ -14,7 +14,13 @@ from sqlalchemy.orm import sessionmaker
 
 import app.seed as seed_module
 from app.datos_demo import CLIENTES as CLIENTES_DEMO
-from app.infraestructura.persistencia.modelos import Articulo, Base, Cliente, TipoIVA
+from app.infraestructura.persistencia.modelos import (
+    Articulo,
+    Base,
+    Cliente,
+    Familia,
+    TipoIVA,
+)
 
 
 def _sesion_en_memoria(monkeypatch):
@@ -69,6 +75,46 @@ def test_sembrar_demo_incluye_articulos_de_precio_libre(monkeypatch):
     libres = [a for a in articulos if a.modo_precio == "libre"]
     assert len(libres) >= 3
     assert all(a.pvp >= Decimal("0.00") for a in libres)
+
+
+def test_sembrar_demo_pone_imagenes_a_peces_estrella(monkeypatch):
+    """La demo luce fotos reales en los botones: los peces/plantas destacados
+    llevan `imagen` bajo /media-demo (servido como estatico, commiteado en el
+    repo para que persista en el despliegue)."""
+    Sesion = _sesion_en_memoria(monkeypatch)
+
+    seed_module.sembrar_demo()
+
+    with Sesion() as s:
+        articulos = {a.nombre_corto: a for a in s.execute(select(Articulo)).scalars()}
+
+    con_foto = ["Guppy macho", "Neón cardenal", "Betta macho", "Ancistrus",
+                "Anubias", "Disco turquesa", "Oranda calico"]
+    for corto in con_foto:
+        assert corto in articulos, f"falta el articulo demo {corto!r}"
+        imagen = articulos[corto].imagen
+        assert imagen and imagen.startswith("/media-demo/"), \
+            f"{corto} deberia tener imagen /media-demo, tiene {imagen!r}"
+
+
+def test_sembrar_demo_oculta_familias_de_material(monkeypatch):
+    """Las familias de material con codigo de barras (filtracion, alimento,
+    iluminacion, decoracion...) NO aparecen en la navegacion tactil por defecto
+    (se venden por escaner/buscador); los peces y plantas si son visibles."""
+    Sesion = _sesion_en_memoria(monkeypatch)
+
+    seed_module.sembrar_demo()
+
+    with Sesion() as s:
+        familias = {f.nombre: f for f in s.execute(select(Familia)).scalars()}
+
+    for oculta in ["Alimento", "Filtración", "Iluminación", "Decoración",
+                   "Medicamentos", "Accesorios"]:
+        assert familias[oculta].visible_en_tactil is False, \
+            f"{oculta} deberia estar oculta en tactil"
+    for visible in ["Peces por familias", "Plantas"]:
+        assert familias[visible].visible_en_tactil is True, \
+            f"{visible} deberia ser visible en tactil"
 
 
 def test_sembrar_demo_dos_veces_no_duplica(monkeypatch):

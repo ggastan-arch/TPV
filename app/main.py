@@ -45,6 +45,13 @@ def crear_app() -> FastAPI:
     # arranque nunca falle por un `media/` ausente en una instalacion nueva.
     imagenes.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/media", StaticFiles(directory=str(imagenes.MEDIA_DIR)), name="media")
+    # Fotos de la demo: catalogo real de la tienda, COMMITEADO en el repo (a
+    # diferencia de /media, efimero) para que persista en el despliegue. Solo lo
+    # referencia el seed demo (articulo.imagen == /media-demo/...); en produccion
+    # el mount queda inerte porque el catalogo real no apunta ahi.
+    img_demo = Path(__file__).resolve().parent / "img_demo"
+    if img_demo.is_dir():
+        app.mount("/media-demo", StaticFiles(directory=str(img_demo)), name="media-demo")
     return app
 
 
