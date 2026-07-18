@@ -3,6 +3,10 @@ idempotente, acceso libre solo en perfil demo, enlaces cruzados y ajuste del
 boton "Salir" segun perfil. Produccion queda intacta en todos los casos."""
 from __future__ import annotations
 
+from contextlib import contextmanager
+
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -23,11 +27,17 @@ def _settings_demo(tmp_path) -> Settings:
     return s
 
 
-def _cliente_demo(tmp_path, monkeypatch) -> TestClient:
-    """`crear_app()` con perfil demo: el reset de arranque siembra
-    `tmp_path/tpv_demo.db`. Las dependencias `get_session`/`get_uow` se
-    redirigen a ESE mismo fichero (el singleton global de `app/infraestructura/db.py`
-    se liga a otra BD en tiempo de import y no sirve para las peticiones de test)."""
+@contextmanager
+def _cliente_demo(tmp_path, monkeypatch, *, overrides: dict | None = None):
+    """`crear_app()` con perfil demo: el reset de arranque (lifespan ASGI,
+    disparado al entrar como gestor de contexto) siembra `tmp_path/tpv_demo.db`.
+    Las dependencias `get_session`/`get_uow` se redirigen a ESE mismo fichero
+    (el singleton global de `app/infraestructura/db.py` se liga a otra BD en
+    tiempo de import y no sirve para las peticiones de test).
+
+    `overrides` permite anadir/pisar `dependency_overrides` adicionales (p. ej.
+    forzar `require_admin` para aislar un test de un problema no relacionado
+    con `require_admin_demo`)."""
     s = _settings_demo(tmp_path)
     monkeypatch.setattr(main_module, "settings", s)
 
@@ -52,7 +62,13 @@ def _cliente_demo(tmp_path, monkeypatch) -> TestClient:
 
     app.dependency_overrides[get_session] = _get_session
     app.dependency_overrides[get_uow] = _get_uow
-    return TestClient(app)
+    if overrides:
+        app.dependency_overrides.update(overrides)
+    try:
+        with TestClient(app) as cliente:
+            yield cliente
+    finally:
+        engine.dispose()
 
 
 # --- Fase 2: reset de arranque (continuacion de tests/test_modo_demo.py) -------
@@ -85,7 +101,7 @@ def test_rearranque_demo_descarta_cambios(tmp_path):
 def test_reset_no_ocurre_sin_reiniciar(tmp_path, monkeypatch):
     """Dentro de una misma instancia de `crear_app()` (perfil demo), varias
     peticiones no disparan un segundo reset: `_resetear_demo` corre UNA vez, en
-    el arranque, no por peticion."""
+    el arranque del lifespan ASGI, no por peticion."""
     s = _settings_demo(tmp_path)
     monkeypatch.setattr(main_module, "settings", s)
     llamadas = {"n": 0}
@@ -98,18 +114,18 @@ def test_reset_no_ocurre_sin_reiniciar(tmp_path, monkeypatch):
     monkeypatch.setattr(main_module, "_resetear_demo", _spy)
 
     app = crear_app()
-    cliente = TestClient(app)
-    cliente.get("/health")
-    cliente.get("/health")
-    cliente.get("/health")
+    with TestClient(app) as cliente:
+        cliente.get("/health")
+        cliente.get("/health")
+        cliente.get("/health")
 
     assert llamadas["n"] == 1
 
 
 def test_produccion_no_resetea_en_reinicio(tmp_path, monkeypatch, aplicar_migraciones):
-    """Dos `crear_app()` sucesivos con perfil produccion (datos ya presentes en
-    `tmp_path`) conservan los datos sin wipe ni reseed: `_resetear_demo` nunca
-    se invoca (invariante 1)."""
+    """Dos arranques sucesivos (lifespan ASGI) con perfil produccion (datos ya
+    presentes en `tmp_path`) conservan los datos sin wipe ni reseed:
+    `_resetear_demo` nunca se invoca (invariante 1)."""
     from decimal import Decimal
 
     from app.infraestructura.persistencia.modelos import TipoIVA
@@ -132,8 +148,10 @@ def test_produccion_no_resetea_en_reinicio(tmp_path, monkeypatch, aplicar_migrac
         lambda _s: llamadas.__setitem__("n", llamadas["n"] + 1),
     )
 
-    crear_app()
-    crear_app()
+    with TestClient(crear_app()):
+        pass
+    with TestClient(crear_app()):
+        pass
 
     assert llamadas["n"] == 0
     engine2 = crear_engine(url, poolclass=NullPool)
@@ -148,10 +166,70 @@ def test_produccion_no_resetea_en_reinicio(tmp_path, monkeypatch, aplicar_migrac
 def test_demo_acceso_libre_sin_login(tmp_path, monkeypatch):
     """En perfil demo, `/admin/api/me` y una ruta protegida devuelven 200 SIN
     sesion (acceso libre gateado en `crear_app`, nunca en produccion)."""
-    cliente = _cliente_demo(tmp_path, monkeypatch)
+    with _cliente_demo(tmp_path, monkeypatch) as cliente:
+        assert cliente.get("/admin/api/me").status_code == 200
+        assert cliente.get("/admin/api/informes/dia").status_code == 200
 
-    assert cliente.get("/admin/api/me").status_code == 200
-    assert cliente.get("/admin/api/informes/dia").status_code == 200
+
+# --- Regresion: reset de demo por lifespan (no import-time) -------------------
+def test_demo_panel_fiscal_no_falla_por_reset_concurrente(tmp_path, monkeypatch):
+    """Regresion del bug: antes, `_resetear_demo` corria en el CUERPO de
+    `crear_app()`, que se ejecuta en tiempo de IMPORT (`app = crear_app()` a
+    nivel de modulo en `app/main.py`). Con `python -m uvicorn app.main:app`
+    (y el arranque en Render) el modulo se importa en el proceso lanzador Y en
+    el proceso hijo que sirve, disparando el reset DOS VECES en paralelo sobre
+    el mismo `tpv_demo.db` -> `sqlite3.OperationalError: database is locked`,
+    y `/admin/api/fiscal/estado` (invoca `NullEngine.verify_chain`) devolvia
+    500. Con el reset movido al lifespan ASGI (una unica vez, en el proceso
+    que sirve), el panel fiscal responde 200 en un unico proceso sin lock.
+
+    Usa el `require_admin_demo` REAL que registra `crear_app()` (sin override
+    de aislamiento): ver `test_demo_get_uow_no_se_autobloquea_contra_require_admin_demo`
+    para el bug distinto (y ya corregido) del auto-bloqueo `get_uow`/`get_session`."""
+    with _cliente_demo(tmp_path, monkeypatch) as cliente:
+        assert cliente.get("/admin/api/fiscal/estado").status_code == 200
+
+
+def test_demo_get_uow_no_se_autobloquea_contra_require_admin_demo(tmp_path, monkeypatch):
+    """Bug real (distinto del anterior): `require_admin_demo` abria su PROPIA
+    sesion via `Depends(get_session)`, que FastAPI NO deduplica con la sesion
+    de `Depends(get_uow)` que usan los endpoints admin de escritura/fiscal (son
+    callables DISTINTOS, cada uno abre su propia conexion). Ambas sesiones
+    fuerzan `BEGIN IMMEDIATE` (ver `app/infraestructura/db.py::
+    _configurar_begin_immediate`) sobre el MISMO fichero SQLite dentro de la
+    MISMA peticion -> auto-bloqueo real (`sqlite3.OperationalError: database
+    is locked` -> 500 via el manejador de excepciones), independiente del
+    orden de arranque. Afecta a TODO endpoint admin que dependa de `get_uow`
+    (panel fiscal, cierres Z, stock, maestros de escritura...).
+
+    Fix: `require_admin_demo` ya no abre conexion propia; resuelve el id del
+    administrador demo cacheado en el lifespan de arranque
+    (`admin.fijar_id_admin_demo`, ver `app/main.py`)."""
+    with _cliente_demo(tmp_path, monkeypatch) as cliente:
+        # Los dos endpoints confirmados en produccion con 500 (ambos get_uow).
+        assert cliente.get("/admin/api/fiscal/estado").status_code == 200
+        assert cliente.get("/admin/api/maestros/cierres-z").status_code == 200
+        # No regresion: los endpoints get_session (mismo callable que
+        # require_admin_demo, deduplicados por FastAPI) siguen en 200.
+        assert cliente.get("/admin/api/me").status_code == 200
+        assert cliente.get("/admin/api/informes/dia").status_code == 200
+        assert cliente.get("/admin/api/maestros/clientes").status_code == 200
+
+
+def test_demo_admin_cacheado_es_el_sembrado_y_se_limpia_al_apagar(tmp_path, monkeypatch):
+    """El lifespan de arranque (demo) cachea el id del PRIMER `Usuario`
+    `rol='administracion'` activo sembrado por `sembrar_demo` (nombre "admin",
+    ver `app/seed.py::_sembrar_iva_series_usuarios`) y lo limpia al apagar
+    (fin del `with TestClient(...)`), para no dejar estado global filtrado
+    entre arranques/tests."""
+    from app.presentacion import admin as admin_module
+
+    with _cliente_demo(tmp_path, monkeypatch) as cliente:
+        assert cliente.get("/admin/api/me").json()["nombre"] == "admin"
+
+    with pytest.raises(HTTPException) as exc:
+        admin_module.require_admin_demo()
+    assert exc.value.status_code == 503
 
 
 def test_produccion_sigue_exigiendo_login():

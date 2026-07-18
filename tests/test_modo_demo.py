@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pytest
 import sqlalchemy as sa
+from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
@@ -105,8 +106,10 @@ def test_resetear_demo_rechaza_ruta_produccion():
 
 
 def test_produccion_sin_cambios(tmp_path, monkeypatch, aplicar_migraciones):
-    """`crear_app()` con perfil produccion NO invoca `_resetear_demo`
-    (invariante 1: ningun reset en el SIF real); los datos previos persisten."""
+    """El ciclo de vida ASGI completo (lifespan de arranque, disparado al usar
+    `TestClient` como gestor de contexto) con perfil produccion NO invoca
+    `_resetear_demo` (invariante 1: ningun reset en el SIF real); los datos
+    previos persisten."""
     db_path = tmp_path / "tpv.db"
     url = f"sqlite:///{db_path}"
     aplicar_migraciones(url)
@@ -125,7 +128,8 @@ def test_produccion_sin_cambios(tmp_path, monkeypatch, aplicar_migraciones):
         lambda _s: llamadas.__setitem__("n", llamadas["n"] + 1),
     )
 
-    main_module.crear_app()
+    with TestClient(main_module.crear_app()):
+        pass
 
     assert llamadas["n"] == 0
     engine2 = crear_engine(url, poolclass=NullPool)
@@ -134,3 +138,57 @@ def test_produccion_sin_cambios(tmp_path, monkeypatch, aplicar_migraciones):
             select(TipoIVA).where(TipoIVA.nombre == "Marcador")
         ).scalars().first() is not None
     engine2.dispose()
+
+
+# --- Reset de arranque via lifespan ASGI (no en crear_app()/tiempo de import) --
+def test_crear_app_no_resetea_al_construir(tmp_path, monkeypatch):
+    """El bug corregido: `crear_app()` (y por tanto `import app.main`, que
+    ejecuta `app = crear_app()` a nivel de modulo) NO debe ejecutar
+    `_resetear_demo` en su cuerpo. Antes, lanzar con
+    `python -m uvicorn app.main:app` importaba el modulo en el proceso
+    lanzador Y en el proceso hijo que sirve, disparando el reset DOS veces en
+    paralelo contra el mismo `tpv_demo.db` -> `sqlite3.OperationalError:
+    database is locked` (panel fiscal en 500). El reset se difiere al
+    lifespan ASGI, que arranca una unica vez en el proceso que realmente
+    sirve peticiones."""
+    s = Settings(_env_file=None, TPV_PROFILE="demo")
+    s.db_path = str(tmp_path / "tpv_demo.db")
+    monkeypatch.setattr(main_module, "settings", s)
+    llamadas = {"n": 0}
+    original = main_module._resetear_demo
+
+    def _spy(settings_arg):
+        llamadas["n"] += 1
+        original(settings_arg)
+
+    monkeypatch.setattr(main_module, "_resetear_demo", _spy)
+
+    main_module.crear_app()
+
+    assert llamadas["n"] == 0  # construir la app no toca la BD
+
+
+def test_lifespan_resetea_demo_una_vez_al_arrancar(tmp_path, monkeypatch):
+    """El reset de demo vive en el lifespan de arranque: se dispara UNA vez
+    al entrar en el ciclo de vida ASGI (`with TestClient(app) as c:`), no en
+    cada import ni en cada peticion posterior."""
+    s = Settings(_env_file=None, TPV_PROFILE="demo")
+    s.db_path = str(tmp_path / "tpv_demo.db")
+    monkeypatch.setattr(main_module, "settings", s)
+    llamadas = {"n": 0}
+    original = main_module._resetear_demo
+
+    def _spy(settings_arg):
+        llamadas["n"] += 1
+        original(settings_arg)
+
+    monkeypatch.setattr(main_module, "_resetear_demo", _spy)
+
+    app = main_module.crear_app()
+    assert llamadas["n"] == 0
+
+    with TestClient(app) as cliente:
+        assert llamadas["n"] == 1
+        cliente.get("/health")
+
+    assert llamadas["n"] == 1

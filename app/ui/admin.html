@@ -4,73 +4,87 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Consola · TPV AcuaTPV</title>
+<link rel="stylesheet" href="/static/nocturne.css">
 <style>
-  :root { --bg:#0b1220; --panel:#111c30; --line:#243247; --txt:#e2e8f0; --accent:#0ea5e9;
-          --ok:#16a34a; --warn:#d97706; --err:#dc2626; }
-  * { box-sizing:border-box; } body { margin:0; font-family:system-ui,Segoe UI,sans-serif;
-      background:var(--bg); color:var(--txt); }
-  header { display:flex; align-items:center; gap:12px; padding:12px 20px; background:var(--panel);
-           border-bottom:1px solid var(--line); }
-  header h1 { font-size:18px; margin:0; flex:1; }
-  .tabs { display:flex; gap:6px; padding:10px 20px 0; }
-  .tabs button { background:var(--panel); color:var(--txt); border:1px solid var(--line);
-                 border-bottom:none; border-radius:8px 8px 0 0; padding:10px 18px; cursor:pointer; }
-  .tabs button.activa { background:var(--accent); color:#01121f; font-weight:700; }
-  main { padding:20px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
-          padding:16px 20px; margin-bottom:16px; }
-  .kpi { font-size:40px; font-weight:800; }
-  .alarma { color:#fff; background:var(--err); padding:2px 10px; border-radius:8px; font-weight:700; }
-  .ok { color:var(--ok); } .warn { color:var(--warn); }
+  /* Hoja puente (page-scoped) de admin.html: remapea sobre los tokens y
+     componentes de Nocturne las clases que el <script> de esta pagina genera
+     via innerHTML (dashboard/pintarFiscal/pintarDia/pintarMaestros/
+     modalArticulo/modalFamilia/pintarBotoneras/vistaLogin), SIN tocar esos
+     <script> en el camino de login/gestion (ver design.md). Los paneles
+     NUEVOS (Cierres Z, Clientes) adoptan clases Nocturne directas
+     (.card/.table/.btn/.field/.input/.dialog), sin puente. */
+  * { box-sizing:border-box; }
+  body { margin:0; }
+  header { display:flex; align-items:center; gap:var(--space-3); padding:var(--space-3) var(--space-4);
+           background:var(--color-surface); border-bottom:1px solid var(--color-divider); }
+  header h1 { font-size:18px; margin:0; flex:1; font-family:var(--font-heading); font-weight:var(--font-heading-weight); }
+  /* Marca compacta de AcuaTPV antes del h1, para consistencia con tpv.html/landing.html. */
+  .brand-mark-sm { flex:none; width:40px; height:40px; border-radius:var(--radius-md); background:#f4fafe;
+                   box-shadow:var(--shadow-sm); display:flex; align-items:center; justify-content:center;
+                   padding:4px; overflow:hidden; }
+  .brand-mark-sm img { width:100%; height:100%; object-fit:contain; display:block; }
+  .tabs { display:flex; gap:6px; padding:var(--space-3) var(--space-4) 0; flex-wrap:wrap; }
+  .tabs button { background:var(--color-surface); color:var(--color-text); border:1px solid var(--color-divider);
+                 border-bottom:none; border-radius:var(--radius-md) var(--radius-md) 0 0; padding:10px 18px;
+                 cursor:pointer; font:inherit; }
+  .tabs button.activa { background:var(--color-accent); color:var(--color-bg); font-weight:700; }
+  main { padding:var(--space-4); }
+  .card { margin-bottom:var(--space-4); }
+  .kpi { font-size:40px; font-weight:800; font-family:var(--font-heading); }
+  .alarma { color:#fff; background:#dc2626; padding:2px 10px; border-radius:var(--radius-sm); font-weight:700; }
+  .ok { color:#16a34a; } .warn { color:#d97706; }
   table { width:100%; border-collapse:collapse; } th,td { text-align:left; padding:8px 10px;
-          border-bottom:1px solid var(--line); font-size:14px; } th { color:#94a3b8; }
-  button.accion { background:var(--accent); color:#01121f; border:none; border-radius:8px;
-                  padding:10px 16px; font-weight:700; cursor:pointer; }
+          border-bottom:1px solid var(--color-divider); font-size:14px; }
+  th { color:color-mix(in srgb, var(--color-text) 60%, transparent); }
+  button.accion { background:var(--color-accent); color:var(--color-bg); border:none; border-radius:var(--radius-md);
+                  padding:10px 16px; font-weight:700; cursor:pointer; font:inherit; }
+  button.accion:disabled { opacity:.45; cursor:not-allowed; }
   .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
-  .dato b { display:block; color:#94a3b8; font-weight:500; font-size:13px; }
+  .dato b { display:block; color:color-mix(in srgb, var(--color-text) 60%, transparent); font-weight:500; font-size:13px; }
   /* imagen de articulo/familia (subida + preview) */
   .img-cell { display:flex; align-items:center; gap:8px; }
-  .thumb-imagen { width:40px; height:40px; object-fit:cover; border-radius:6px; border:1px solid var(--line); }
-  .thumb-vacio { font-size:12px; color:#94a3b8; }
-  .btn-subir-imagen { background:var(--accent); color:#01121f; border:none; border-radius:6px;
+  .thumb-imagen { width:40px; height:40px; object-fit:cover; border-radius:var(--radius-sm); border:1px solid var(--color-divider); }
+  .thumb-vacio { font-size:12px; color:color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .btn-subir-imagen { background:var(--color-accent); color:var(--color-bg); border:none; border-radius:var(--radius-sm);
                       padding:4px 8px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
   .msg-imagen { font-size:12px; color:#fca5a5; min-width:120px; }
   /* login */
   .login { max-width:360px; margin:12vh auto; }
-  .login input { width:100%; padding:12px; margin:8px 0; border-radius:8px; border:1px solid var(--line);
-                 background:#0b1220; color:#fff; font-size:16px; }
+  .login input { width:100%; padding:12px; margin:8px 0; border-radius:var(--radius-md); border:1px solid var(--color-divider);
+                 background:var(--color-bg); color:var(--color-text); font-size:16px; }
   .login button { width:100%; padding:12px; }
   .msg-error { color:#fca5a5; min-height:20px; }
-  .banner-demo { background:var(--err); color:#fff; text-align:center; font-weight:800;
-                 letter-spacing:.5px; padding:6px 10px; }
+  .banner-demo { background:color-mix(in srgb, var(--color-accent) 20%, var(--color-neutral-900));
+                 border:1px solid var(--color-accent); color:var(--color-accent-100);
+                 text-align:center; font-weight:800; letter-spacing:.5px; padding:6px 10px; }
   /* botoneras (editor drag & drop) */
-  .rejilla-botonera { position:relative; display:grid; gap:6px; background:#0b1220;
-                       padding:6px; border-radius:8px; min-height:200px; }
-  .celda-vacia { background:rgba(255,255,255,.03); border:1px dashed var(--line); border-radius:6px; }
-  .boton-editor { position:relative; border-radius:8px; padding:8px; color:#fff; font-size:13px;
+  .rejilla-botonera { position:relative; display:grid; gap:6px; background:var(--color-bg);
+                       padding:6px; border-radius:var(--radius-md); min-height:200px; }
+  .celda-vacia { background:color-mix(in srgb, var(--color-text) 3%, transparent); border:1px dashed var(--color-divider); border-radius:var(--radius-sm); }
+  .boton-editor { position:relative; border-radius:var(--radius-md); padding:8px; color:#fff; font-size:13px;
                   cursor:grab; display:flex; align-items:center; justify-content:center;
                   overflow:hidden; text-align:center; }
-  .boton-editor.seleccionado { outline:3px solid var(--accent); }
-  .boton-editor.boton-error { outline:3px solid var(--err); }
+  .boton-editor.seleccionado { outline:3px solid var(--color-accent); }
+  .boton-editor.boton-error { outline:3px solid #dc2626; }
   .boton-editor .quitar { position:absolute; top:2px; right:2px; background:rgba(0,0,0,.45);
                            color:#fff; border:none; border-radius:4px; width:20px; height:20px;
                            cursor:pointer; line-height:1; }
   .boton-editor .resize { position:absolute; right:0; bottom:0; width:16px; height:16px;
                            cursor:nwse-resize; background:rgba(255,255,255,.35);
                            border-top-left-radius:6px; }
-  .paleta-item { padding:8px 10px; margin-bottom:6px; border-radius:8px; cursor:grab; font-size:13px; }
-  .paleta-articulo { background:#0369a1; color:#fff; }
-  .paleta-familia { background:#7c3aed; color:#fff; }
-  .paleta-funcion { background:#475569; color:#fff; }
-  .panel-edicion label { display:block; margin-top:8px; font-size:13px; color:#94a3b8; }
-  .panel-edicion input { width:100%; padding:8px; border-radius:8px; border:1px solid var(--line);
-                          background:#0b1220; color:#fff; margin-top:4px; }
-  .overlay { position:fixed; inset:0; background:rgba(2,6,23,.85); display:flex;
+  .paleta-item { padding:8px 10px; margin-bottom:6px; border-radius:var(--radius-md); cursor:grab; font-size:13px; }
+  .paleta-articulo { background:var(--color-accent-700); color:#fff; }
+  .paleta-familia { background:var(--color-accent-2-700); color:#fff; }
+  .paleta-funcion { background:var(--color-neutral-700); color:#fff; }
+  .panel-edicion label { display:block; margin-top:8px; font-size:13px; color:color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .panel-edicion input { width:100%; padding:8px; border-radius:var(--radius-md); border:1px solid var(--color-divider);
+                          background:var(--color-bg); color:var(--color-text); margin-top:4px; }
+  .overlay { position:fixed; inset:0; background:color-mix(in srgb, var(--color-neutral-900) 85%, transparent); display:flex;
              align-items:center; justify-content:center; z-index:20; }
-  .modal { background:var(--panel); border-radius:16px; padding:24px; width:min(92vw,420px); }
-  .modal label { display:block; margin-top:10px; font-size:13px; color:#94a3b8; }
-  .modal input { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line);
-                 background:#0b1220; color:#fff; font-size:15px; margin-top:4px; }
+  .modal { background:var(--color-surface); border-radius:var(--radius-lg); padding:24px; width:min(92vw,420px); box-shadow:var(--shadow-lg); }
+  .modal label { display:block; margin-top:10px; font-size:13px; color:color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .modal input { width:100%; padding:10px; border-radius:var(--radius-md); border:1px solid var(--color-divider);
+                 background:var(--color-bg); color:var(--color-text); font-size:15px; margin-top:4px; }
   .fila-modal { display:flex; gap:10px; margin-top:16px; }
   .fila-modal .accion { flex:1; }
 </style>
@@ -111,7 +125,7 @@ let pestanaActual = "fiscal";
 async function dashboard() {
   const me = await api("/admin/api/me");
   $("#root").innerHTML = `
-    <header><h1>TPV AcuaTPV · Administración</h1>
+    <header><span class="brand-mark-sm"><img src="/static/img/logo-mark.png" alt="AcuaTPV"></span><h1>TPV AcuaTPV · Administración</h1>
       <span>${me.nombre}</span>
       <a href="/tpv/" class="accion" id="irTpv" style="text-decoration:none;display:inline-block">Ir al TPV</a>
       ${window.esDemo ? "" : '<button class="accion" id="salir">Salir</button>'}
@@ -119,7 +133,9 @@ async function dashboard() {
     <div class="tabs">
       <button data-t="fiscal">Fiscal</button>
       <button data-t="dia">Día</button>
+      <button data-t="cierres">Cierres Z</button>
       <button data-t="maestros">Maestros</button>
+      <button data-t="clientes">Clientes</button>
       <button data-t="botoneras">Botoneras</button>
     </div><main id="main"></main>`;
   // En demo el acceso es libre (sin sesion que cerrar, ver require_admin_demo);
@@ -141,6 +157,8 @@ async function pintarPestana() {
   marcarTab();
   if (pestanaActual === "fiscal") return pintarFiscal();
   if (pestanaActual === "dia") return pintarDia();
+  if (pestanaActual === "cierres") return pintarCierresZ();
+  if (pestanaActual === "clientes") return pintarClientes();
   if (pestanaActual === "botoneras") return pintarBotoneras();
   return pintarMaestros();
 }
@@ -224,6 +242,69 @@ async function pintarDia() {
       <div><div class="kpi">${d.num_ventas}</div>ventas cobradas</div>
       <div><div class="kpi">${eur(d.total)}</div>total facturado</div>
     </div><h3>Por forma de pago</h3><div class="grid2">${medios}</div></div>`;
+}
+
+/* ---- CIERRES Z ---- */
+// GenerarCierreZ NO rechaza un segundo cierre el mismo dia (docstring del
+// caso de uso): varios Z/dia son legales. El guardarrail de UI es SOLO
+// advisory (aviso + doble confirmacion), NUNCA deshabilita "Generar".
+async function pintarCierresZ() {
+  const lista = await api("/admin/api/maestros/cierres-z");
+  const hoy = new Date().toISOString().slice(0, 10);
+  const yaHoy = lista.some((c) => (c.fecha_hora_huso || "").slice(0, 10) === hoy);
+  const filas = lista.slice().reverse().map((c) => `<tr>
+      <td>${c.numero}</td><td>${c.fecha_hora_huso}</td><td>${c.num_tickets}</td>
+      <td>${eur(c.total_con_iva)}</td>
+      <td><button class="accion" data-detalle-cierre="${c.numero}">Ver detalle</button></td>
+    </tr>`).join("");
+  $("#main").innerHTML = `
+    <div class="card"><h2>Cierres Z</h2>
+      ${yaHoy ? `<p class="msg-error" id="czAviso">Ya existe un Cierre Z de hoy en el listado.
+        Generar otro es posible (el backend permite varios Z por dia), pero confirma dos veces
+        si no era la intencion.</p>` : ""}
+      <p><button class="accion" id="czGenerar">Generar cierre Z</button> <span id="czMsg"></span></p>
+    </div>
+    <div class="card"><h2>Histórico</h2>
+      <table><thead><tr><th>Nº</th><th>Fecha</th><th>Tickets</th><th>Total</th><th></th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="5">Sin cierres generados.</td></tr>'}</tbody></table>
+    </div>
+    <div id="czDetalle"></div>`;
+  $("#czGenerar").onclick = async () => {
+    if (!confirm("¿Generar un nuevo Cierre Z ahora? Esta acción no se puede deshacer.")) return;
+    if (yaHoy && !confirm("Ya existe un Cierre Z con fecha de hoy. ¿Confirmas que quieres generar OTRO cierre para hoy?")) return;
+    try {
+      const r = await api("/admin/api/maestros/cierres-z", { method: "POST" });
+      $("#czMsg").textContent = `Generado Z-${r.numero}`;
+      await pintarCierresZ();
+      await detalleCierreZ(r.numero);
+    } catch (e) { $("#czMsg").textContent = e.message; }
+  };
+  document.querySelectorAll("[data-detalle-cierre]").forEach((btn) => {
+    btn.onclick = () => detalleCierreZ(Number(btn.dataset.detalleCierre));
+  });
+}
+
+async function detalleCierreZ(numero) {
+  const d = await api(`/admin/api/maestros/cierres-z/${numero}`);
+  const filasIva = d.desglose_iva.map((x) =>
+    `<tr><td>${x.tipo_impositivo}%</td><td>${eur(x.base_imponible)}</td><td>${eur(x.cuota_repercutida)}</td></tr>`
+  ).join("") || '<tr><td colspan="3">—</td></tr>';
+  const filasPago = d.desglose_pago.map((x) =>
+    `<tr><td>${x.medio}</td><td>${eur(x.importe)}</td></tr>`
+  ).join("") || '<tr><td colspan="2">—</td></tr>';
+  $("#czDetalle").innerHTML = `<div class="card"><h2>Detalle Z-${d.numero}</h2>
+    <div class="grid2">
+      <div class="dato"><b>Fecha</b>${d.fecha_hora_huso}</div>
+      <div class="dato"><b>Tickets</b>${d.num_tickets}</div>
+      <div class="dato"><b>Base</b>${eur(d.base_total)}</div>
+      <div class="dato"><b>Cuota</b>${eur(d.cuota_total)}</div>
+      <div class="dato"><b>Total</b>${eur(d.total_con_iva)}</div>
+    </div>
+    <h3>Desglose IVA</h3>
+    <table><thead><tr><th>Tipo</th><th>Base</th><th>Cuota</th></tr></thead><tbody>${filasIva}</tbody></table>
+    <h3>Desglose por forma de pago</h3>
+    <table><thead><tr><th>Medio</th><th>Importe</th></tr></thead><tbody>${filasPago}</tbody></table>
+  </div>`;
 }
 
 /* ---- MAESTROS ---- */
@@ -447,6 +528,88 @@ function modalFamilia(familia) {
       ov.remove();
       await pintarMaestros();
     } catch (e) { $("#mfError", ov).textContent = e.message; }
+  };
+}
+
+/* ---- CLIENTES (CRUD) ---- */
+// Desactivar/Activar es SOLO el toggle de `activo` que ya existe hoy en el
+// backend: sin bloqueo ni confirmacion adicional (a diferencia del borrado de
+// perfiles/paginas de botonera, que si pide confirm() por ser destructivo).
+async function pintarClientes() {
+  const clientes = await api("/admin/api/maestros/clientes");
+  const filas = clientes.map((c) => `<tr>
+      <td>${c.nombre}</td><td>${c.nif || "—"}</td><td>${c.email || "—"}</td>
+      <td>${c.telefono || "—"}</td><td>${c.activo ? "sí" : "no"}</td>
+      <td><button class="accion" data-editar-cliente="${c.id}">Editar</button>
+      <button class="accion" data-toggle-cliente="${c.id}" data-activo="${c.activo}">${c.activo ? "Desactivar" : "Activar"}</button></td>
+    </tr>`).join("");
+  $("#main").innerHTML =
+    `<div class="card" style="display:flex;justify-content:flex-end">
+      <button class="accion" id="clNuevo">+ Nuevo cliente</button>
+    </div>` +
+    `<div class="card"><h2>Clientes</h2>
+      <table><thead><tr><th>Nombre</th><th>NIF</th><th>Email</th><th>Teléfono</th><th>Activo</th><th></th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="6">Sin clientes.</td></tr>'}</tbody></table>
+    </div>`;
+  $("#clNuevo").onclick = () => modalCliente(null);
+  document.querySelectorAll("[data-editar-cliente]").forEach((btn) => {
+    const cli = clientes.find((c) => c.id === Number(btn.dataset.editarCliente));
+    btn.onclick = () => modalCliente(cli);
+  });
+  document.querySelectorAll("[data-toggle-cliente]").forEach((btn) => {
+    btn.onclick = async () => {
+      const id = Number(btn.dataset.toggleCliente);
+      const activo = btn.dataset.activo === "true";
+      await api(`/admin/api/maestros/clientes/${id}/${activo ? "desactivar" : "activar"}`, { method: "POST" });
+      await pintarClientes();
+    };
+  });
+}
+
+/* -- alta / edicion de cliente (dialogo Nocturne .dialog-backdrop/.dialog) -- */
+function modalCliente(cliente) {
+  const editando = !!cliente;
+  const ov = document.createElement("div");
+  ov.className = "dialog-backdrop";
+  ov.innerHTML = `<div class="dialog">
+    <h2 class="dialog-title">${editando ? "Editar cliente" : "Nuevo cliente"}</h2>
+    <div class="field"><label>Nombre</label>
+      <input id="clNombre" class="input" value="${editando ? (cliente.nombre || "").replace(/"/g, "&quot;") : ""}"></div>
+    <div class="field"><label>NIF/NIE/CIF</label>
+      <input id="clNif" class="input" value="${editando ? (cliente.nif || "").replace(/"/g, "&quot;") : ""}"></div>
+    <div class="field"><label>Domicilio</label>
+      <input id="clDomicilio" class="input" value="${editando ? (cliente.domicilio || "").replace(/"/g, "&quot;") : ""}"></div>
+    <div class="field"><label>Email</label>
+      <input id="clEmail" class="input" value="${editando ? (cliente.email || "").replace(/"/g, "&quot;") : ""}"></div>
+    <div class="field"><label>Teléfono</label>
+      <input id="clTelefono" class="input" value="${editando ? (cliente.telefono || "").replace(/"/g, "&quot;") : ""}"></div>
+    <label class="radio"><input id="clRgpd" type="checkbox" ${editando && cliente.rgpd_consentimiento ? "checked" : ""}><span class="dot"></span> Consentimiento RGPD</label>
+    <div class="msg-error" id="clError"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" id="clCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="clGuardar">Guardar</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+
+  $("#clCancelar", ov).onclick = () => ov.remove();
+  $("#clGuardar", ov).onclick = async () => {
+    const datos = {
+      nombre: $("#clNombre", ov).value,
+      nif: $("#clNif", ov).value || null,
+      domicilio: $("#clDomicilio", ov).value || null,
+      email: $("#clEmail", ov).value || null,
+      telefono: $("#clTelefono", ov).value || null,
+      rgpd_consentimiento: $("#clRgpd", ov).checked,
+    };
+    try {
+      if (editando) {
+        await api(`/admin/api/maestros/clientes/${cliente.id}`, { method: "PUT", body: JSON.stringify(datos) });
+      } else {
+        await api("/admin/api/maestros/clientes", { method: "POST", body: JSON.stringify(datos) });
+      }
+      ov.remove();
+      await pintarClientes();
+    } catch (e) { $("#clError", ov).textContent = e.message; }
   };
 }
 
