@@ -146,6 +146,75 @@ mantener "Salir" funcional, sin cambios, cuando el perfil sea `produccion`.
 **Tests**: `tests/test_navegacion.py::test_salir_oculto_en_demo`,
 `::test_salir_presente_en_produccion`
 
+### Requirement: Panel de Cierre Z en la consola (generar, listar, detalle)
+
+La consola MUST exponer un panel de Cierre Z cableado a los endpoints
+existentes (`POST`/`GET /admin/api/maestros/cierres-z`,
+`GET /admin/api/maestros/cierres-z/{numero}`) que permita generar un nuevo
+cierre con confirmación previa, listar el histórico (número, fecha, totales)
+y ver el detalle de un cierre. Cuando ya exista un Cierre Z cuya fecha
+(`fecha_hora_huso`) sea la del día en curso, el sistema MUST mostrar un aviso
+advisory junto a "Generar" y exigir una segunda confirmación explícita antes
+de invocar el `POST`, pero sin deshabilitar la acción — guardarraíl de UI
+NO bloqueante, coherente con el backend (`GenerarCierreZ` no impone "uno por
+día"; permite legalmente varios Z el mismo día).
+
+#### Scenario: Confirmación antes de generar
+- GIVEN el panel de Cierre Z abierto y sin cierre generado hoy
+- WHEN el administrador pulsa "Generar"
+- THEN se muestra una confirmación antes de invocar el `POST` de generación
+
+#### Scenario: Histórico y detalle tras generar
+- GIVEN la generación confirmada y exitosa
+- WHEN el panel se actualiza
+- THEN el nuevo cierre aparece en el listado histórico y su detalle es
+  consultable
+
+#### Scenario: Aviso advisory de un segundo cierre el mismo día
+- GIVEN que ya existe un Cierre Z con fecha de hoy en el listado
+- WHEN se abre o refresca el panel
+- THEN se muestra un aviso junto a "Generar" explicando que ya existe un
+  cierre para el día en curso, y pulsar "Generar" exige una segunda
+  confirmación además de la habitual, PERO la acción sigue habilitada
+
+#### Scenario: Sin aviso si no hay cierre hoy
+- GIVEN que el último Cierre Z (si existe) es de una fecha distinta a hoy
+- WHEN se abre el panel
+- THEN la acción "Generar" está habilitada y no se muestra el aviso de
+  duplicado
+
+**Tests**: `tests/test_admin_ui.py` (o equivalente) — cubrir las cuatro
+escenas anteriores contra el HTML/JS servido.
+
+### Requirement: Gestión de clientes (CRUD) en la consola
+
+La consola MUST exponer un panel de clientes cableado a los endpoints
+existentes (`GET`/`POST`/`PUT /admin/api/maestros/clientes`,
+`POST .../activar`, `POST .../desactivar`) que permita listar, crear,
+editar, desactivar y reactivar clientes. Desactivar/activar MUST limitarse a
+alternar el `activo` ya existente en el backend, sin bloqueo ni confirmación
+adicional más allá del comportamiento actual.
+
+#### Scenario: Alta de cliente válido
+- GIVEN el panel de clientes abierto
+- WHEN el administrador crea un cliente con NIF válido
+- THEN el `POST` se envía y el cliente aparece en el listado
+
+#### Scenario: Alta rechazada por NIF inválido
+- GIVEN el formulario de alta de cliente
+- WHEN se envía un NIF/NIE/CIF inválido
+- THEN se muestra el mensaje de error devuelto por el backend y no se crea
+  el cliente
+
+#### Scenario: Desactivar y reactivar sin bloqueo nuevo
+- GIVEN un cliente activo listado
+- WHEN el administrador pulsa "Desactivar" y luego "Activar"
+- THEN el campo `activo` cambia a `false` y luego a `true`, igual que hace
+  hoy el backend, sin condiciones adicionales
+
+**Tests**: `tests/test_admin_ui.py` (o equivalente) — cubrir alta válida,
+rechazo por NIF inválido y el ciclo desactivar/activar.
+
 ## Constraints (no debilitar)
 
 - El certificado electrónico nunca sale del servidor ni se registra en logs.
@@ -155,5 +224,8 @@ mantener "Salir" funcional, sin cambios, cuando el perfil sea `produccion`.
 ## Out of Scope
 
 CRUD de usuarios (alta/edición de operadores desde la consola): trabajo futuro,
-no entregado. Editor visual de botoneras y cierre Z/arqueo de caja: fuera de esta
+no entregado. Editor visual de botoneras y arqueo de caja: fuera de esta
+capacidad. Buscar y asignar cliente durante la venta (entrada de UI visible
+pero deshabilitada; ver `interfaz-nocturne`). Cualquier cambio al motor
+fiscal, cobro/emisión, huella/cadena o numeración queda fuera de esta
 capacidad.
