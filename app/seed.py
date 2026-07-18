@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.datos_demo import ARTICULOS as ARTICULOS_DEMO
 from app.datos_demo import CLIENTES as CLIENTES_DEMO
@@ -287,15 +287,22 @@ def sembrar() -> None:
     print(f"Datos de ejemplo sembrados (ejercicio {ejercicio}).")
 
 
-def sembrar_demo() -> None:
+def sembrar_demo(session_factory: sessionmaker = SessionLocal) -> None:
     """Seed idempotente de `tpv_demo.db`: catalogo demo de agua dulce (arbol de
     familias real de la tienda, SIN acuario marino, con precios de
     demostracion) mas una cartera de clientes de prueba variada (con y sin
     NIF). La "empresa demo" es el emisor de `settings` (NIF/nombre ya resueltos
     por el perfil, `Settings._resolver_perfil`); no existe una tabla de empresa
-    separada."""
+    separada.
+
+    `session_factory` es inyectable (usado por `_resetear_demo` en `app/main.py`
+    con un engine local propio, y por los tests con una BD en memoria). El valor
+    por defecto se resuelve en tiempo de IMPORTACION del modulo: quien necesite
+    apuntar a otra BD debe pasar `session_factory` explicito (monkeypatchear
+    `seed_module.SessionLocal` despues de importar el modulo NO alcanza a este
+    default ya fijado)."""
     ejercicio = datetime.now().astimezone().year
-    with SessionLocal() as s, s.begin():
+    with session_factory() as s, s.begin():
         if _hay_datos(s):
             print("Ya hay datos demo; no se siembra de nuevo.")
             return

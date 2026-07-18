@@ -26,9 +26,12 @@ def test_crear_app_rechaza_demo_apuntando_a_produccion(monkeypatch):
         main_module.crear_app()
 
 
-def test_crear_app_demo_con_tpv_demo_db_no_lanza(monkeypatch):
+def test_crear_app_demo_con_tpv_demo_db_no_lanza(tmp_path, monkeypatch):
     s = Settings(_env_file=None, TPV_PROFILE="demo")
     assert s.db_path == DEMO_DB_PATH  # resolucion normal, sin forzar nada
+    # Aislar del repo: crear_app() ejecuta _resetear_demo (borra + migra + siembra),
+    # que sobre DEMO_DB_PATH tocaria el tpv_demo.db real de la raiz del repo.
+    s.db_path = str(tmp_path / "tpv_demo.db")
     monkeypatch.setattr(main_module, "settings", s)
 
     main_module.crear_app()  # no debe lanzar

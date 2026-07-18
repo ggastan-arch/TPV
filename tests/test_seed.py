@@ -34,7 +34,7 @@ def _sesion_en_memoria(monkeypatch):
 def test_sembrar_demo_sobre_bd_vacia_crea_catalogo_y_clientes(monkeypatch):
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
 
     with Sesion() as s:
         assert s.execute(select(TipoIVA)).scalars().all()
@@ -50,7 +50,7 @@ def test_sembrar_demo_clientes_con_y_sin_nif(monkeypatch):
     domicilio (simplificada cualificada del art. 7.2 / factura completa)."""
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
 
     with Sesion() as s:
         clientes = s.execute(select(Cliente)).scalars().all()
@@ -67,7 +67,7 @@ def test_sembrar_demo_incluye_articulos_de_precio_libre(monkeypatch):
     de modo que la demo muestre esa funcionalidad del TPV."""
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
 
     with Sesion() as s:
         articulos = s.execute(select(Articulo)).scalars().all()
@@ -83,7 +83,7 @@ def test_sembrar_demo_pone_imagenes_a_peces_estrella(monkeypatch):
     repo para que persista en el despliegue)."""
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
 
     with Sesion() as s:
         articulos = {a.nombre_corto: a for a in s.execute(select(Articulo)).scalars()}
@@ -103,7 +103,7 @@ def test_sembrar_demo_oculta_familias_de_material(monkeypatch):
     (se venden por escaner/buscador); los peces y plantas si son visibles."""
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
 
     with Sesion() as s:
         familias = {f.nombre: f for f in s.execute(select(Familia)).scalars()}
@@ -122,7 +122,7 @@ def test_sembrar_demo_pone_imagenes_a_familias_visibles(monkeypatch):
     tipico) para que el boton de familia tambien luzca imagen."""
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
 
     with Sesion() as s:
         familias = {f.nombre: f for f in s.execute(select(Familia)).scalars()}
@@ -142,7 +142,7 @@ def test_sembrar_demo_todo_articulo_navegable_tiene_foto(monkeypatch):
 
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
 
     with Sesion() as s:
         articulos = {a.nombre_corto: a for a in s.execute(select(Articulo)).scalars()}
@@ -160,7 +160,7 @@ def test_sembrar_demo_incluye_articulo_bolsa(monkeypatch):
     fijo de cobro rapido en la pagina de inicio."""
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
 
     with Sesion() as s:
         bolsa = s.execute(
@@ -174,7 +174,7 @@ def test_sembrar_demo_incluye_articulo_bolsa(monkeypatch):
 def test_sembrar_demo_dos_veces_no_duplica(monkeypatch):
     Sesion = _sesion_en_memoria(monkeypatch)
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
     with Sesion() as s:
         conteo_1 = (
             len(s.execute(select(TipoIVA)).scalars().all()),
@@ -182,7 +182,7 @@ def test_sembrar_demo_dos_veces_no_duplica(monkeypatch):
             len(s.execute(select(Cliente)).scalars().all()),
         )
 
-    seed_module.sembrar_demo()
+    seed_module.sembrar_demo(session_factory=Sesion)
     with Sesion() as s:
         conteo_2 = (
             len(s.execute(select(TipoIVA)).scalars().all()),

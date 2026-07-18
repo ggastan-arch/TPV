@@ -65,6 +65,20 @@ def test_login_solo_admin(cliente, admin, datos_base):
     assert _login(cliente, admin).status_code == 200
 
 
+def test_require_admin_demo_devuelve_primer_administrador_activo(session, datos_base):
+    """`require_admin_demo` (acceso libre en modo demo, ver `crear_app`) resuelve
+    el usuario_id SIN sesion: siempre el primer `Usuario` `rol='administracion'`
+    activo sembrado (menor id)."""
+    from app.presentacion.admin import require_admin_demo
+
+    admin1 = Usuario(nombre="admin1", pin_hash=hash_pin("1111"), rol="administracion")
+    admin2 = Usuario(nombre="admin2", pin_hash=hash_pin("2222"), rol="administracion")
+    session.add_all([admin1, admin2])
+    session.commit()
+
+    assert require_admin_demo(session) == admin1.id
+
+
 def test_flujo_completo(cliente, admin):
     assert _login(cliente, admin).status_code == 200
     assert cliente.get("/admin/api/me").json()["nombre"] == "jefa"

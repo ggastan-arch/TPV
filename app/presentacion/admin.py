@@ -226,6 +226,23 @@ def require_admin(request: Request) -> int:
     return usuario_id
 
 
+def require_admin_demo(s: Session = Depends(get_session)) -> int:
+    """Dependencia de acceso libre (SOLO perfil demo): sin sesion, autoriza
+    siempre como el primer `Usuario` `rol='administracion'` activo sembrado.
+
+    `crear_app` la registra como `dependency_overrides[require_admin]`
+    UNICAMENTE cuando `settings.perfil == 'demo'`; produccion nunca la carga y
+    su login por sesion queda intacto (invariante 5: nada de "modo formacion")."""
+    usuario = s.execute(
+        select(Usuario)
+        .where(Usuario.rol == "administracion", Usuario.activo.is_(True))
+        .order_by(Usuario.id)
+    ).scalars().first()
+    if usuario is None:
+        raise HTTPException(500, "Modo demo sin administrador sembrado")
+    return usuario.id
+
+
 @router.get("/", include_in_schema=False)
 def pagina_admin() -> FileResponse:
     return FileResponse(_UI)
@@ -254,8 +271,7 @@ def logout(request: Request) -> dict:
 
 
 @router.get("/api/me")
-def me(request: Request, s: Session = Depends(get_session)) -> dict:
-    usuario_id = require_admin(request)
+def me(usuario_id: int = Depends(require_admin), s: Session = Depends(get_session)) -> dict:
     usuario = s.get(Usuario, usuario_id)
     return {"usuario_id": usuario.id, "nombre": usuario.nombre, "rol": usuario.rol}
 
