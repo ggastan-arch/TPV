@@ -82,6 +82,20 @@ def bajar_migraciones():
     return _bajar_migraciones
 
 
+@pytest.fixture(autouse=True)
+def _reset_id_admin_demo():
+    """Defensa en profundidad: `app.presentacion.admin._id_admin_demo` es un
+    global de modulo cacheado por el lifespan de arranque en perfil demo
+    (`app/main.py`). El propio lifespan ya lo limpia al apagar, pero esta
+    fixture autouse garantiza que NINGUN test (incluso uno que manipule el
+    cache directamente o que falle a mitad del `with TestClient(...)`) deje
+    ese estado filtrado al siguiente test."""
+    yield
+    from app.presentacion import admin as admin_module
+
+    admin_module.fijar_id_admin_demo(None)
+
+
 @pytest.fixture
 def datos_base(session):
     """Usuario, tipos de IVA (21/10), serie T y su contador para el ejercicio."""

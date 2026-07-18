@@ -65,18 +65,34 @@ def test_login_solo_admin(cliente, admin, datos_base):
     assert _login(cliente, admin).status_code == 200
 
 
-def test_require_admin_demo_devuelve_primer_administrador_activo(session, datos_base):
-    """`require_admin_demo` (acceso libre en modo demo, ver `crear_app`) resuelve
-    el usuario_id SIN sesion: siempre el primer `Usuario` `rol='administracion'`
-    activo sembrado (menor id)."""
-    from app.presentacion.admin import require_admin_demo
+def test_require_admin_demo_devuelve_id_cacheado_en_arranque():
+    """`require_admin_demo` (acceso libre en modo demo, ver `crear_app`) YA NO
+    abre conexion de BD propia por peticion (eso autobloqueaba cualquier
+    endpoint `get_uow` en la MISMA peticion, ver `test_navegacion.py::
+    test_demo_get_uow_no_se_autobloquea_contra_require_admin_demo`): devuelve
+    el id cacheado por `fijar_id_admin_demo`, que el lifespan de arranque
+    (`app/main.py`) resuelve UNA vez tras `_resetear_demo`."""
+    from app.presentacion import admin as admin_module
 
-    admin1 = Usuario(nombre="admin1", pin_hash=hash_pin("1111"), rol="administracion")
-    admin2 = Usuario(nombre="admin2", pin_hash=hash_pin("2222"), rol="administracion")
-    session.add_all([admin1, admin2])
-    session.commit()
+    admin_module.fijar_id_admin_demo(42)
+    try:
+        assert admin_module.require_admin_demo() == 42
+    finally:
+        admin_module.fijar_id_admin_demo(None)
 
-    assert require_admin_demo(session) == admin1.id
+
+def test_require_admin_demo_sin_cache_lanza_503():
+    """Si el lifespan de arranque no ha corrido (o fallo antes de cachear),
+    `require_admin_demo` no debe autorizar a ciegas: 503 explicito en vez de
+    devolver un usuario_id inventado o `None`."""
+    from fastapi import HTTPException
+
+    from app.presentacion import admin as admin_module
+
+    admin_module.fijar_id_admin_demo(None)
+    with pytest.raises(HTTPException) as exc:
+        admin_module.require_admin_demo()
+    assert exc.value.status_code == 503
 
 
 def test_flujo_completo(cliente, admin):

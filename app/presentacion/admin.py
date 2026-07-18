@@ -226,21 +226,36 @@ def require_admin(request: Request) -> int:
     return usuario_id
 
 
-def require_admin_demo(s: Session = Depends(get_session)) -> int:
-    """Dependencia de acceso libre (SOLO perfil demo): sin sesion, autoriza
-    siempre como el primer `Usuario` `rol='administracion'` activo sembrado.
+_id_admin_demo: int | None = None
+
+
+def fijar_id_admin_demo(uid: int | None) -> None:
+    """Cachea (o limpia, con `None`) el id del administrador demo resuelto en
+    el arranque (lifespan de `crear_app`, ver `app/main.py`). `require_admin_demo`
+    NO debe abrir su propia conexion de BD por peticion: FastAPI no deduplica
+    `Depends(get_session)` con `Depends(get_uow)` (son callables DISTINTOS que
+    abren conexiones DISTINTAS), y ambas fuerzan `BEGIN IMMEDIATE`
+    (`app/infraestructura/db.py::_configurar_begin_immediate`) sobre el MISMO
+    fichero SQLite dentro de la MISMA peticion: cualquier endpoint admin que
+    dependiera de `get_uow` (fiscal, cierres Z, stock, maestros de
+    escritura...) se autobloqueaba -> `sqlite3.OperationalError: database is
+    locked` -> 500."""
+    global _id_admin_demo
+    _id_admin_demo = uid
+
+
+def require_admin_demo() -> int:
+    """Dependencia de acceso libre (SOLO perfil demo): sin sesion NI conexion de
+    BD propia, autoriza siempre como el administrador demo cacheado en el
+    arranque (`fijar_id_admin_demo`, invocado desde el lifespan de `crear_app`
+    en `app/main.py` tras `_resetear_demo`).
 
     `crear_app` la registra como `dependency_overrides[require_admin]`
     UNICAMENTE cuando `settings.perfil == 'demo'`; produccion nunca la carga y
     su login por sesion queda intacto (invariante 5: nada de "modo formacion")."""
-    usuario = s.execute(
-        select(Usuario)
-        .where(Usuario.rol == "administracion", Usuario.activo.is_(True))
-        .order_by(Usuario.id)
-    ).scalars().first()
-    if usuario is None:
-        raise HTTPException(500, "Modo demo sin administrador sembrado")
-    return usuario.id
+    if _id_admin_demo is None:
+        raise HTTPException(503, "Modo demo sin administrador cacheado (lifespan no ejecutado)")
+    return _id_admin_demo
 
 
 @router.get("/", include_in_schema=False)

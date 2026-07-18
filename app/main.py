@@ -1,16 +1,20 @@
 """Punto de entrada FastAPI. Los routers TPV/admin/fiscal se anaden en fases siguientes."""
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
+from app.presentacion import admin
 from app.presentacion.admin import require_admin, require_admin_demo
 from app.presentacion.admin import router as admin_router
 from app.presentacion.health import router as health_router
@@ -19,6 +23,7 @@ from app.presentacion.tpv import router as tpv_router
 from app.infraestructura import imagenes
 from app.infraestructura.config import DB_PATH_PRODUCCION, Settings, settings
 from app.infraestructura.db import crear_engine
+from app.infraestructura.persistencia.modelos import Usuario
 from app.seed import sembrar_demo
 
 # Raiz del proyecto (para localizar alembic.ini/migrations/ desde el reset de
@@ -77,11 +82,65 @@ def _resetear_demo(s: Settings) -> None:
         engine_demo.dispose()
 
 
-def crear_app() -> FastAPI:
-    _verificar_aislamiento_demo(settings)
+def _id_primer_admin_demo(s: Settings) -> int | None:
+    """Resuelve el id del primer `Usuario` `rol='administracion'` activo (menor
+    id) sembrado en la BD apuntada por `s.database_url`, con un engine LOCAL de
+    corta vida (mismo patron que `_resetear_demo`): la conexion se abre y se
+    cierra ANTES de que el lifespan termine de arrancar, para que
+    `require_admin_demo` (ver `app/presentacion/admin.py`) no necesite abrir su
+    propia conexion por peticion. Ese era exactamente el bug: `require_admin_demo`
+    dependia de `Depends(get_session)`, un callable DISTINTO de `Depends(get_uow)`
+    (que usan el panel fiscal, cierres Z, stock y maestros de escritura), asi
+    que FastAPI no deduplicaba las sesiones; ambas fuerzan `BEGIN IMMEDIATE`
+    (`app/infraestructura/db.py::_configurar_begin_immediate`) sobre el MISMO
+    fichero SQLite dentro de la MISMA peticion -> auto-bloqueo real
+    (`sqlite3.OperationalError: database is locked` -> 500)."""
+    engine_demo = crear_engine(s.database_url, poolclass=NullPool)
+    try:
+        Sesion = sessionmaker(bind=engine_demo, class_=Session, expire_on_commit=False)
+        with Sesion() as sesion:
+            usuario = sesion.execute(
+                select(Usuario)
+                .where(Usuario.rol == "administracion", Usuario.activo.is_(True))
+                .order_by(Usuario.id)
+            ).scalars().first()
+            return usuario.id if usuario is not None else None
+    finally:
+        engine_demo.dispose()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Arranque real del proceso que SIRVE la app (evento ASGI `lifespan`), no
+    tiempo de import.
+
+    El reset de demo vivia antes en el CUERPO de `crear_app()`, que se ejecuta
+    en tiempo de import (`app = crear_app()` a nivel de modulo, mas abajo).
+    Con `python -m uvicorn app.main:app` (y el arranque de Render) el modulo
+    se importa en el proceso lanzador Y en el proceso hijo que sirve, lo que
+    disparaba `_resetear_demo` DOS VECES en paralelo contra el mismo
+    `tpv_demo.db` -> `sqlite3.OperationalError: database is locked`, y el
+    panel fiscal (`GET /admin/api/fiscal/estado`, invoca `verify_chain`)
+    devolvia 500. El lifespan arranca UNA sola vez, en el proceso que
+    realmente atiende peticiones.
+
+    Tras `_resetear_demo`, cachea el id del administrador demo
+    (`admin.fijar_id_admin_demo`) para que `require_admin_demo` no abra su
+    propia conexion por peticion (ver `_id_primer_admin_demo`). Se limpia al
+    apagar para no dejar el global de modulo filtrado entre arranques/tests."""
     if settings.perfil == "demo":
         _resetear_demo(settings)
-    app = FastAPI(title=settings.nombre_sistema, version=settings.version_sistema)
+        admin.fijar_id_admin_demo(_id_primer_admin_demo(settings))
+    yield
+    if settings.perfil == "demo":
+        admin.fijar_id_admin_demo(None)
+
+
+def crear_app() -> FastAPI:
+    _verificar_aislamiento_demo(settings)
+    app = FastAPI(
+        title=settings.nombre_sistema, version=settings.version_sistema, lifespan=lifespan
+    )
     if settings.perfil == "demo":
         # Acceso libre SOLO en demo: voltea de una vez las ~40 rutas que declaran
         # Depends(require_admin). Produccion NUNCA registra este override y su
