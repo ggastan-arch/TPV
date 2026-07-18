@@ -113,14 +113,20 @@ async function dashboard() {
   $("#root").innerHTML = `
     <header><h1>TPV AcuaTPV · Administración</h1>
       <span>${me.nombre}</span>
-      <button class="accion" id="salir">Salir</button></header>
+      <a href="/tpv/" class="accion" id="irTpv" style="text-decoration:none;display:inline-block">Ir al TPV</a>
+      ${window.esDemo ? "" : '<button class="accion" id="salir">Salir</button>'}
+    </header>
     <div class="tabs">
       <button data-t="fiscal">Fiscal</button>
       <button data-t="dia">Día</button>
       <button data-t="maestros">Maestros</button>
       <button data-t="botoneras">Botoneras</button>
     </div><main id="main"></main>`;
-  $("#salir").onclick = async () => { await api("/admin/api/logout",{method:"POST"}); vistaLogin(); };
+  // En demo el acceso es libre (sin sesion que cerrar, ver require_admin_demo);
+  // el boton "Salir" ni se monta (null-check: el resto del codigo no asume su
+  // existencia).
+  const btnSalir = $("#salir");
+  if (btnSalir) btnSalir.onclick = async () => { await api("/admin/api/logout",{method:"POST"}); vistaLogin(); };
   document.querySelectorAll(".tabs button").forEach((b) =>
     b.onclick = () => { pestanaActual = b.dataset.t; pintarPestana(); });
   pintarPestana();
