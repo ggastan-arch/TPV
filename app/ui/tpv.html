@@ -4,94 +4,168 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>TPV AcuaTPV</title>
+<link rel="stylesheet" href="/static/nocturne.css">
+<script src="/static/nocturne-icons.js"></script>
 <style>
-  :root { --bg:#0f172a; --panel:#1e293b; --accent:#0ea5e9; --ok:#16a34a; --line:#334155; --txt:#e2e8f0; }
+  /* Hoja puente (page-scoped) de tpv.html: remapea sobre los tokens Nocturne los
+     nombres de clase que el <script> de esta pagina genera via innerHTML
+     (pintarBotonera/abrirFamilia/buscar/render/pantallaLogin/abrirCobro/cobrar),
+     SIN tocar ese <script> en el camino de cobro (ver design.md). */
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  html,body { margin:0; height:100%; font-family:system-ui,Segoe UI,sans-serif; background:var(--bg); color:var(--txt); overflow:hidden; }
-  #app { display:flex; height:100vh; }
-  .col-botonera { flex:1; display:flex; flex-direction:column; padding:10px; min-width:0; }
-  .col-carrito { width:34%; max-width:420px; background:var(--panel); display:flex; flex-direction:column; border-left:2px solid var(--line); }
-  header { display:flex; align-items:center; gap:10px; padding:6px 10px; }
-  header .breadcrumb { flex:1; font-size:18px; color:#94a3b8; }
-  header .usuario { font-size:14px; color:#94a3b8; }
-  .btn { position:relative; overflow:hidden; border:1px solid rgba(148,163,184,.28);
-         border-radius:14px; color:#fff; font-size:18px; font-weight:600; padding:12px;
-         cursor:pointer; min-height:110px; display:flex; flex-direction:column;
-         align-items:center; justify-content:center; gap:4px; text-align:center;
-         box-shadow:0 2px 6px rgba(0,0,0,.35); transition:transform .06s ease, filter .06s ease; }
-  .btn:active { transform:scale(.97); filter:brightness(1.15); }
-  /* Altura de tarjeta acotada: con pocos articulos los botones NO se estiran a
-     toda la columna. El inicio (botonera) fuerza filas 1fr aparte para llenar. */
-  .grid { flex:1; display:grid; gap:12px; grid-auto-rows:170px; align-content:start;
-          overflow-y:auto; padding:4px; }
-  .b-articulo { background:#0369a1; }
-  .b-familia { background:#7c3aed; }
-  .b-funcion { background:#475569; }
-  .b-inicio { background:#0891b2; }
-  /* Boton con foto: la imagen llena el boton y el texto va en una franja inferior
-     sobre un degradado para que sea legible sobre cualquier foto. */
+  html,body { margin:0; height:100%; overflow:hidden; }
+  body { font-family:var(--font-body); background:var(--color-bg); color:var(--color-text); }
+  #app { display:flex; flex-direction:column; height:100vh; }
+  .fila-principal { flex:1; display:flex; min-height:0; }
+  .col-botonera { flex:1; display:flex; flex-direction:column; padding:var(--space-3); min-width:0; gap:var(--space-2); }
+  .col-carrito { width:34%; max-width:420px; background:var(--color-surface); display:flex; flex-direction:column; border-left:1px solid var(--color-divider); }
+  header { display:flex; align-items:center; gap:var(--space-3); padding:var(--space-2) var(--space-3); }
+  /* Marca de AcuaTPV en la cabecera: el logo real trae fondo claro propio, asi
+     que se enmarca pequeno en una superficie clara (como el header del diseno
+     de referencia) en vez de mostrarse a tamano completo sobre el fondo oscuro. */
+  .brand-mark-sm { flex:none; width:38px; height:38px; border-radius:var(--radius-md); background:#f4fafe;
+                   box-shadow:var(--shadow-sm); display:flex; align-items:center; justify-content:center;
+                   padding:4px; overflow:hidden; }
+  .brand-mark-sm img { width:100%; height:100%; object-fit:contain; display:block; }
+  header .breadcrumb { flex:1; font-family:var(--font-heading); font-size:18px; color:color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .usuario-info { display:flex; align-items:center; gap:6px; color:color-mix(in srgb, var(--color-text) 60%, transparent); }
+  .usuario-info [data-icono] svg { width:18px; height:18px; display:block; }
+  header .usuario { font-size:14px; }
+  .enlace-admin { display:inline-flex; align-items:center; gap:6px; color:color-mix(in srgb, var(--color-text) 60%, transparent);
+                  font-size:14px; text-decoration:none; border:1px solid var(--color-divider);
+                  border-radius:var(--radius-md); padding:8px 14px; }
+  .enlace-admin:hover { border-color:var(--color-accent); color:var(--color-accent); }
+  .enlace-admin [data-icono] svg { width:16px; height:16px; display:block; }
+
+  /* Botones tactiles: el .btn compacto de Nocturne (pensado para formularios de
+     consola) no encaja como tarjeta grande de venta; #app lo reescala como
+     superficie Nocturne conservando SIEMPRE el objetivo tactil minimo. */
+  #app .btn {
+    position:relative; overflow:hidden; border:1px solid var(--color-divider);
+    border-radius:var(--radius-md); background:var(--color-surface); color:var(--color-text);
+    font-family:var(--font-heading); font-weight:var(--font-heading-weight); font-size:16px;
+    padding:12px; cursor:pointer; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:4px; text-align:center; box-shadow:var(--shadow-sm);
+    transition:transform .06s ease, filter .06s ease, border-color .12s ease;
+  }
+  #app .btn:active { transform:scale(.97); filter:brightness(1.15); }
+  /* Requisito de superficie tactil (áreas interactivas de venta, WCAG 2.5.5): */
+  #app .btn{min-height:48px}
+
+  .grid { flex:1; display:grid; gap:var(--space-3); grid-auto-rows:170px; align-content:start; overflow-y:auto; padding:4px; }
+  .grid .btn:hover { border-color:var(--color-accent); }
+  .b-articulo { background:var(--color-surface); }
+  .b-familia { background:var(--color-accent-800); border-color:var(--color-accent-700); color:var(--color-accent-100); }
+  .b-funcion { background:var(--color-neutral-800); }
+  .b-inicio { min-height:auto !important; padding:8px 16px; background:transparent; }
+  .b-inicio [data-icono] svg { width:16px; height:16px; display:block; }
+
   .btn.con-img { justify-content:flex-end; padding:0; }
   .b-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
-  .b-cap { position:relative; z-index:1; width:100%; display:flex; flex-direction:column;
-           align-items:center; gap:1px; }
-  .btn.con-img .b-cap { padding:8px 6px 7px;
-           background:linear-gradient(to top, rgba(2,6,23,.92) 25%, rgba(2,6,23,0)); }
+  .b-fallback { display:flex; align-items:center; justify-content:center; color:color-mix(in srgb, var(--color-text) 40%, transparent); }
+  .b-fallback svg { width:32px; height:32px; display:block; }
+  .b-cap { position:relative; z-index:1; width:100%; display:flex; flex-direction:column; align-items:center; gap:1px; }
+  .btn.con-img .b-cap { padding:8px 6px 7px; background:linear-gradient(to top, rgba(2,6,23,.92) 25%, rgba(2,6,23,0)); }
   .b-tit { line-height:1.15; text-shadow:0 1px 3px rgba(0,0,0,.75); }
-  .b-precio { font-size:15px; opacity:.95; font-weight:700; text-shadow:0 1px 3px rgba(0,0,0,.75); }
-  .cites { font-size:12px; background:#b45309; border-radius:6px; padding:1px 6px; }
-  /* carrito */
-  .carrito-lineas { flex:1; overflow-y:auto; padding:10px; }
-  .linea { display:flex; align-items:center; gap:8px; padding:10px 6px; border-bottom:1px solid var(--line); }
+  .b-precio { font-size:15px; opacity:.95; font-weight:600; color:var(--color-accent-300); text-shadow:0 1px 3px rgba(0,0,0,.75); }
+  .cites { font-size:12px; background:#b45309; border-radius:6px; padding:1px 6px; color:#fff; }
+
+  .buscador { display:flex; align-items:center; gap:8px; padding:0 4px var(--space-2); }
+  .buscador .lupa { display:flex; color:color-mix(in srgb, var(--color-text) 55%, transparent); }
+  .buscador .lupa svg { width:20px; height:20px; display:block; }
+  .campo-buscar { flex:1; min-height:48px; font-size:16px; padding:10px 12px; border-radius:var(--radius-md);
+                  border:1px solid var(--color-divider); background:var(--color-surface); color:var(--color-text); }
+  .campo-buscar:focus-visible { border-color:var(--color-accent); outline:none; }
+
+  .carrito-lineas { flex:1; overflow-y:auto; padding:var(--space-3); }
+  .linea { display:flex; align-items:center; gap:8px; padding:10px 6px; border-bottom:1px solid var(--color-divider); }
   .linea .desc { flex:1; }
-  .linea .cant { color:#94a3b8; font-size:14px; }
-  .linea .tot { font-variant-numeric:tabular-nums; font-weight:700; }
-  .linea .quita { background:#7f1d1d; border:none; color:#fff; border-radius:8px; width:38px; height:38px; font-size:20px; }
-  .linea .editable { border-bottom:1px dashed #64748b; cursor:pointer; padding:0 2px; }
-  .linea .editable:active { background:#334155; border-radius:4px; }
-  .total { padding:14px; font-size:30px; font-weight:800; display:flex; justify-content:space-between; border-top:2px solid var(--line); font-variant-numeric:tabular-nums; }
+  .linea .cant { color:color-mix(in srgb, var(--color-text) 55%, transparent); font-size:14px; }
+  .linea .tot { font-variant-numeric:tabular-nums; font-weight:600; }
+  .linea .quita { background:transparent; border:1px solid var(--color-divider); color:color-mix(in srgb, var(--color-text) 55%, transparent);
+                  border-radius:8px; width:38px; height:38px; min-height:38px; font-size:18px; cursor:pointer; }
+  .linea .quita:hover { border-color:var(--color-accent); color:var(--color-accent); }
+  .linea .editable { border-bottom:1px dashed var(--color-divider); cursor:pointer; padding:0 2px; }
+  .linea .editable:active { background:color-mix(in srgb, var(--color-text) 8%, transparent); border-radius:4px; }
+
+  .total { padding:14px; font-family:var(--font-heading); font-size:30px; font-weight:600; display:flex;
+           justify-content:space-between; border-top:1px solid var(--color-divider); font-variant-numeric:tabular-nums; }
   .acciones { display:flex; gap:10px; padding:10px; }
-  .acciones .btn { flex:1; min-height:70px; }
-  .b-cobrar { background:var(--ok); font-size:22px; }
-  .b-vaciar { background:#475569; flex:0 0 90px !important; }
-  /* overlay */
-  .overlay { position:fixed; inset:0; background:rgba(2,6,23,.85); display:flex; align-items:center; justify-content:center; z-index:10; }
-  .modal { background:var(--panel); border-radius:16px; padding:24px; width:min(92vw,440px); }
+  /* Prefijo #app: iguala la especificidad de `#app .btn{min-height:48px}`
+     (que incluye un ID) para que estos min-height mas altos SI ganen — de otro
+     modo un selector de solo clases nunca le gana a un selector con ID, sin
+     importar el orden en la hoja. */
+  #app .acciones .btn { flex:1; min-height:70px; }
+  .b-cobrar { border-color:var(--color-accent); background:color-mix(in srgb, var(--color-accent) 16%, transparent);
+              color:var(--color-accent-200); font-size:20px; }
+  .b-cobrar [data-icono] svg { width:18px; height:18px; display:block; }
+  .b-vaciar { background:transparent; flex:0 0 90px !important; }
+
+  .barra-funciones { flex:none; display:flex; gap:8px; padding:10px var(--space-4); border-top:1px solid var(--color-divider);
+                     background:color-mix(in srgb, var(--color-surface) 40%, var(--color-bg)); }
+  .fn-btn { flex:1; min-height:60px !important; padding:8px 4px; background:transparent; }
+  .fn-btn .fn-ico svg { width:20px; height:20px; display:block; }
+  .fn-btn .fn-txt { font-size:12px; }
+
+  .overlay { position:fixed; inset:0; background:color-mix(in srgb, var(--color-neutral-900) 65%, transparent);
+             display:flex; align-items:center; justify-content:center; z-index:10; }
+  .modal { background:var(--color-surface); border-radius:var(--radius-lg); padding:24px; width:min(92vw,440px); box-shadow:var(--shadow-lg); }
   .modal h2 { margin:0 0 14px; }
   .pinpad, .rapidos { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
-  .pinpad .btn, .rapidos .btn { min-height:66px; background:#334155; font-size:24px; }
+  /* Teclas tactiles reales (no texto plano): superficie con borde, realce en
+     hover/active desde la rampa del acento, y min-height/min-width >= 56px. */
+  .pinpad .btn, .rapidos .btn {
+    min-height:66px; min-width:56px; background:var(--color-neutral-800);
+    border:1px solid var(--color-divider); font-size:24px; font-weight:600; color:var(--color-text);
+  }
+  .pinpad .btn:hover, .rapidos .btn:hover {
+    border-color:var(--color-accent); background:color-mix(in srgb, var(--color-accent) 16%, var(--color-neutral-800));
+  }
+  /* OK: distinguida como accion principal (contorno de acento, como .btn-primary).
+     C: distinguida como accion secundaria (texto atenuado). */
+  .pinpad .pin-ok {
+    border-color:var(--color-accent); color:var(--color-accent-200);
+    background:color-mix(in srgb, var(--color-accent) 18%, transparent);
+  }
+  .pinpad .pin-ok:hover { background:color-mix(in srgb, var(--color-accent) 26%, transparent); }
+  .pinpad .pin-clear { color:color-mix(in srgb, var(--color-text) 65%, transparent); }
   .pin-display { text-align:center; font-size:34px; letter-spacing:10px; height:44px; margin:10px 0; }
-  .campo { width:100%; font-size:26px; padding:12px; border-radius:10px; border:1px solid var(--line); background:#0f172a; color:#fff; text-align:right; }
-  .msg-error { color:#fca5a5; text-align:center; min-height:22px; }
+  .campo { width:100%; font-size:26px; padding:12px; border-radius:var(--radius-md); border:1px solid var(--color-divider);
+           background:var(--color-bg); color:var(--color-text); text-align:right; }
+  .msg-error { color:#fca5a5; text-align:center; font-size:14px; font-weight:600; min-height:22px; margin:2px 0 4px; }
   .ticket-ok { text-align:center; }
   .ticket-ok img { background:#fff; padding:8px; border-radius:8px; margin:10px auto; display:block; }
   .fila-modal { display:flex; gap:10px; margin-top:12px; }
   .fila-modal .btn { flex:1; }
-  .buscador { display:flex; align-items:center; gap:8px; padding:0 4px 10px; }
-  .buscador .lupa { font-size:20px; }
-  .campo-buscar { flex:1; font-size:18px; padding:10px 12px; border-radius:10px;
-                  border:1px solid var(--line); background:#0f172a; color:#fff; }
-  /* banner de modo demo (documento de prueba, sin validez fiscal) */
-  #demoBanner { display:none; position:fixed; top:6px; left:50%; transform:translateX(-50%);
-                z-index:20; background:#b45309; color:#fff; padding:4px 16px; border-radius:999px;
-                font-size:13px; font-weight:700; letter-spacing:.3px; pointer-events:none;
-                box-shadow:0 2px 8px rgba(0,0,0,.4); }
-  .ticket-demo { margin:12px auto; padding:10px; border:2px dashed #f59e0b; border-radius:10px;
-                 color:#fbbf24; font-weight:700; line-height:1.4; }
+
+  /* Retonado a la paleta de acento de Nocturne (antes ambar #b45309, que
+     desentonaba con el resto del sistema de diseno). */
+  #demoBanner { display:none; position:fixed; top:6px; left:50%; transform:translateX(-50%); z-index:20;
+                background:color-mix(in srgb, var(--color-accent) 20%, var(--color-neutral-900));
+                border:1px solid var(--color-accent); color:var(--color-accent-100);
+                padding:4px 16px; border-radius:999px; font-size:13px; font-weight:600;
+                letter-spacing:.3px; pointer-events:none; box-shadow:var(--shadow-md); }
+  #demoBanner [data-icono] svg { width:14px; height:14px; display:inline-block; vertical-align:-2px; margin-right:4px; color:var(--color-accent-300); }
+  .ticket-demo { margin:12px auto; padding:10px; border:2px dashed #f59e0b; border-radius:10px; color:#fbbf24; font-weight:600; line-height:1.4; }
 </style>
 </head>
 <body>
-<div id="demoBanner">MODO DEMO &middot; datos de prueba &middot; SIN VALIDEZ FISCAL</div>
+<div id="demoBanner"><span data-icono="flask" aria-hidden="true"></span>MODO DEMO &middot; datos de prueba &middot; SIN VALIDEZ FISCAL</div>
 <div id="app">
+  <div class="fila-principal">
   <div class="col-botonera">
     <header>
-      <button class="btn b-inicio" style="min-height:auto;padding:8px 16px" onclick="irInicio()">Inicio</button>
+      <span class="brand-mark-sm"><img src="/static/img/logo-acuatpv.png" alt="AcuaTPV"></span>
+      <button class="btn b-inicio" style="min-height:auto;padding:8px 16px" onclick="irInicio()">
+        <span data-icono="house" aria-hidden="true"></span> Inicio</button>
       <div class="breadcrumb" id="breadcrumb">Venta</div>
-      <div class="usuario" id="usuario"></div>
-      <a href="/admin/" style="color:#94a3b8;font-size:14px;text-decoration:none;
-         border:1px solid var(--line);border-radius:8px;padding:8px 14px">Administración</a>
+      <div class="usuario-info">
+        <span data-icono="user-circle" aria-hidden="true"></span>
+        <span class="usuario" id="usuario"></span>
+      </div>
+      <a href="/admin/" class="enlace-admin"><span data-icono="gear" aria-hidden="true"></span> Administración</a>
     </header>
     <div class="buscador">
-      <span class="lupa">&#128269;</span>
+      <span class="lupa" data-icono="magnifying-glass" aria-hidden="true"></span>
       <input type="text" id="buscarInput" class="campo-buscar"
              placeholder="Buscar articulo por nombre..." oninput="onBuscarInput()">
     </div>
@@ -102,9 +176,28 @@
     <div class="total"><span>TOTAL</span><span id="total">0,00 &euro;</span></div>
     <div class="acciones">
       <button class="btn b-vaciar" onclick="vaciar()">&#128465;</button>
-      <button class="btn b-cobrar" onclick="abrirCobro()">COBRAR</button>
+      <button class="btn b-cobrar" onclick="abrirCobro()">COBRAR <span data-icono="arrow-right" aria-hidden="true"></span></button>
     </div>
   </div>
+  </div>
+  <footer class="barra-funciones">
+    <button class="btn fn-btn" disabled title="Próximamente">
+      <span class="fn-ico" data-icono="file-text" aria-hidden="true"></span>
+      <span class="fn-txt">Convertir en factura</span>
+    </button>
+    <button class="btn fn-btn" disabled title="Próximamente">
+      <span class="fn-ico" data-icono="pause-circle" aria-hidden="true"></span>
+      <span class="fn-txt">Aparcar ticket</span>
+    </button>
+    <button class="btn fn-btn" disabled title="Próximamente">
+      <span class="fn-ico" data-icono="play-circle" aria-hidden="true"></span>
+      <span class="fn-txt">Desaparcar</span>
+    </button>
+    <button class="btn fn-btn" disabled title="Próximamente">
+      <span class="fn-ico" data-icono="user-circle" aria-hidden="true"></span>
+      <span class="fn-txt">Cliente en venta</span>
+    </button>
+  </footer>
 </div>
 
 <script>
@@ -124,15 +217,19 @@ async function api(path, opts = {}) {
   return r.json();
 }
 const eur = (s) => (s ?? "0.00").toString().replace(".", ",") + " €";
-// Imagen del destino (articulo/familia); "" cuando no hay -> el boton conserva su aspecto actual.
+// Imagen del destino (articulo/familia); "" cuando no hay -> el boton muestra un
+// icono generico de relleno en vez del hueco vacio.
 // Pinta el contenido de un boton: si hay imagen, la imagen llena el boton (clase
-// con-img) y el titulo (+ precio opcional) va en una franja inferior; si no, solo
-// el titulo centrado. Un unico punto para todos los botones (botonera, familia, buscador).
+// con-img) y el titulo (+ precio opcional) va en una franja inferior; si no, un
+// icono generico (Nocturne, /static/nocturne-icons.js) ocupa el lugar de la foto
+// y el titulo va centrado debajo. Un unico punto para todos los botones
+// (botonera, familia, buscador).
 function pintarContenido(btn, imagen, titulo, precioHtml = "") {
   btn.classList.toggle("con-img", !!imagen);
   const img = imagen ? `<img class="b-img" src="${imagen}" alt="">` : "";
+  const relleno = imagen ? "" : `<span class="b-fallback" aria-hidden="true">${icono("basket")}</span>`;
   const precio = precioHtml ? `<span class="b-precio">${precioHtml}</span>` : "";
-  btn.innerHTML = `${img}<span class="b-cap"><span class="b-tit">${titulo}</span>${precio}</span>`;
+  btn.innerHTML = `${img}${relleno}<span class="b-cap"><span class="b-tit">${titulo}</span>${precio}</span>`;
 }
 // Precio a mostrar en el boton: "/kg" cuando el articulo se vende al peso.
 const precioBoton = (a) => eur(a.pvp) + (a.modo_precio === "al_peso" ? "/kg" : "");
@@ -150,7 +247,9 @@ function pantallaLogin() {
   const pp = ov.querySelector("#pp");
   ["1","2","3","4","5","6","7","8","9","C","0","OK"].forEach((t) => {
     const b = document.createElement("button");
-    b.className = "btn"; b.textContent = t;
+    // className extra solo a efectos visuales (distingue C/OK); onclick/flow intactos.
+    b.className = "btn" + (t === "OK" ? " pin-ok" : t === "C" ? " pin-clear" : "");
+    b.textContent = t;
     b.onclick = async () => {
       if (t === "C") { pin = ""; }
       else if (t === "OK") {
@@ -419,6 +518,15 @@ document.addEventListener("keydown", async (e) => {
     }
     bufEscaner = "";
   } else if (e.key.length === 1) { bufEscaner += e.key; }
+});
+
+/* ---------- ICONOS DECORATIVOS ---------- */
+// Los iconos Phosphor viven en /static/nocturne-icons.js (window.ICONOS/icono());
+// este bucle rellena los marcadores estaticos declarados en el HTML via
+// data-icono (cabecera, buscador, barra de funciones). No toca el resto del
+// cableado: grid/carrito/cobro siguen generando su propio markup como antes.
+document.querySelectorAll("[data-icono]").forEach((el) => {
+  el.innerHTML = icono(el.dataset.icono, 'aria-hidden="true"');
 });
 
 /* ---------- ARRANQUE ---------- */
