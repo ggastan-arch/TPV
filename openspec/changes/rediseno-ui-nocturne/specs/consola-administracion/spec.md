@@ -8,11 +8,12 @@ La consola MUST exponer un panel de Cierre Z cableado a los endpoints
 existentes (`POST`/`GET /admin/api/maestros/cierres-z`,
 `GET /admin/api/maestros/cierres-z/{numero}`) que permita generar un nuevo
 cierre con confirmación previa, listar el histórico (número, fecha, totales)
-y ver el detalle de un cierre. El sistema MUST impedir el disparo de una
-segunda generación cuando ya exista un Cierre Z cuya fecha
-(`fecha_hora_huso`) sea la del día en curso, deshabilitando la acción
-"Generar" y mostrando un aviso — guardarraíl de UI adicional al ya existente
-en el backend (numeración correlativa; el backend no impone "uno por día").
+y ver el detalle de un cierre. Cuando ya exista un Cierre Z cuya fecha
+(`fecha_hora_huso`) sea la del día en curso, el sistema MUST mostrar un aviso
+advisory junto a "Generar" y exigir una segunda confirmación explícita antes
+de invocar el `POST`, pero sin deshabilitar la acción — guardarraíl de UI
+NO bloqueante, coherente con el backend (`GenerarCierreZ` no impone "uno por
+día"; permite legalmente varios Z el mismo día).
 
 #### Scenario: Confirmación antes de generar
 - GIVEN el panel de Cierre Z abierto y sin cierre generado hoy
@@ -25,16 +26,18 @@ en el backend (numeración correlativa; el backend no impone "uno por día").
 - THEN el nuevo cierre aparece en el listado histórico y su detalle es
   consultable
 
-#### Scenario: Bloqueo de un segundo cierre el mismo día
+#### Scenario: Aviso advisory de un segundo cierre el mismo día
 - GIVEN que ya existe un Cierre Z con fecha de hoy en el listado
 - WHEN se abre o refresca el panel
-- THEN la acción "Generar" queda deshabilitada con un aviso explicando que
-  ya existe un cierre para el día en curso
+- THEN se muestra un aviso junto a "Generar" explicando que ya existe un
+  cierre para el día en curso, y pulsar "Generar" exige una segunda
+  confirmación además de la habitual, PERO la acción sigue habilitada
 
-#### Scenario: Generación habilitada si no hay cierre hoy
+#### Scenario: Sin aviso si no hay cierre hoy
 - GIVEN que el último Cierre Z (si existe) es de una fecha distinta a hoy
 - WHEN se abre el panel
-- THEN la acción "Generar" está habilitada
+- THEN la acción "Generar" está habilitada y no se muestra el aviso de
+  duplicado
 
 **Tests**: `tests/test_admin_ui.py` (o equivalente) — cubrir las cuatro
 escenas anteriores contra el HTML/JS servido.

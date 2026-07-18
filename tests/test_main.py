@@ -31,12 +31,14 @@ def test_crear_app_rechaza_demo_apuntando_a_produccion(monkeypatch):
 def test_crear_app_demo_con_tpv_demo_db_no_lanza(tmp_path, monkeypatch):
     s = Settings(_env_file=None, TPV_PROFILE="demo")
     assert s.db_path == DEMO_DB_PATH  # resolucion normal, sin forzar nada
-    # Aislar del repo: crear_app() ejecuta _resetear_demo (borra + migra + siembra),
-    # que sobre DEMO_DB_PATH tocaria el tpv_demo.db real de la raiz del repo.
+    # Aislar del repo: el lifespan de arranque ejecuta _resetear_demo (borra +
+    # migra + siembra) al entrar en el TestClient como gestor de contexto, que
+    # sobre DEMO_DB_PATH tocaria el tpv_demo.db real de la raiz del repo.
     s.db_path = str(tmp_path / "tpv_demo.db")
     monkeypatch.setattr(main_module, "settings", s)
 
-    main_module.crear_app()  # no debe lanzar
+    with TestClient(main_module.crear_app()):
+        pass  # el arranque del lifespan (reset de demo) no debe lanzar
 
 
 # --- pagina de inicio (portada del despliegue) ---------------------------------
@@ -162,14 +164,16 @@ def test_landing_usa_clases_nocturne():
     assert 'class="table' in html
 
 
-# --- pulido visual: logo real de marca (pequeno, enmarcado), no un placeholder --
+# --- pulido visual: marca compacta cuadrada (logo-mark.png), no el wordmark
+# ancho con espacio en blanco (logo-acuatpv.png), que se veia diminuto dentro
+# de la caja pequena con object-fit:contain --
 def test_landing_referencia_logo_real_de_marca():
     html = TestClient(main_module.crear_app()).get("/").text
 
-    assert '/static/img/logo-acuatpv.png' in html
+    assert '/static/img/logo-mark.png' in html
 
 
 def test_tpv_referencia_logo_real_de_marca():
     html = TestClient(main_module.crear_app()).get("/tpv/").text
 
-    assert '/static/img/logo-acuatpv.png' in html
+    assert '/static/img/logo-mark.png' in html

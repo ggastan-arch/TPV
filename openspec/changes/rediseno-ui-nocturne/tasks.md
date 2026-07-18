@@ -53,23 +53,23 @@ Chain strategy: stacked-to-main
 ## Corte 2 (PR#2, base `main` tras fusionar C1) — reskin admin + paneles
 
 ### Fase 2.1 — Reskin `admin.html`
-- [ ] 2.1.1 RED `tests/test_navegacion.py::test_salir_presente_en_produccion`: actualizar la aserción en lock-step con el nuevo markup de "Salir"
-- [ ] 2.1.2 RED `tests/test_admin_ui.py` (nuevo): `/admin/` enlaza `/static/nocturne.css`; conserva `window.esDemo ? "" :`,`if (btnSalir)`,"Ir al TPV"; sin CDN
-- [ ] 2.1.3 GREEN `app/ui/admin.html`: enlazar `nocturne.css`; `<style>` puente para clases JS-generadas (`.card/.tabs/table/button.accion/.modal/.overlay`); conservar verbatim el bloque de perfil/"Salir"
+- [x] 2.1.1 RED `tests/test_navegacion.py::test_salir_presente_en_produccion`: actualizar la aserción en lock-step con el nuevo markup de "Salir" — NO fue necesario: design.md exige conservar el bloque de "Salir" VERBATIM, y el reskin no toca ese markup (solo remapea clases via el `<style>` puente); el test existente ya pasaba antes y después del reskin, verificado como no-regresión (safety net)
+- [x] 2.1.2 RED `tests/test_admin_ui.py` (nuevo): `/admin/` enlaza `/static/nocturne.css`; conserva `window.esDemo ? "" :`,`if (btnSalir)`,"Ir al TPV"; sin CDN
+- [x] 2.1.3 GREEN `app/ui/admin.html`: enlazar `nocturne.css`; `<style>` puente para clases JS-generadas (`.card/.tabs/table/button.accion/.modal/.overlay`); conservar verbatim el bloque de perfil/"Salir"
 
 ### Fase 2.2 — Panel Cierre Z (guardarraíl advisory, NO bloqueo duro)
-- [ ] 2.2.1 RED `tests/test_admin_ui.py`: pestaña `data-t="cierres"` usa `pintarCierresZ` y `/admin/api/maestros/cierres-z`; "Generar" exige doble confirmación antes del `POST`
-- [ ] 2.2.2 RED mismo archivo: tras generar, el listado y `detalleCierreZ` (desglose IVA/pago) se actualizan
-- [ ] 2.2.3 RED mismo archivo: con un Z de hoy ya existente se muestra un aviso junto a "Generar"; el botón sigue habilitado (advisory, sin `disabled` — el backend permite varios Z/día)
-- [ ] 2.2.4 GREEN `app/ui/admin.html`: `pintarCierresZ`/`detalleCierreZ`; doble `confirm()` antes del `POST`; aviso no bloqueante si hay Z de hoy
-- [ ] 2.2.5 Alinear `specs/consola-administracion/spec.md`: corregir el escenario "Bloqueo de un segundo cierre" (dice "deshabilitando 'Generar'") a advisory, para no contradecir design.md — ver Risks del resumen
+- [x] 2.2.1 RED `tests/test_admin_ui.py`: pestaña `data-t="cierres"` usa `pintarCierresZ` y `/admin/api/maestros/cierres-z`; "Generar" exige doble confirmación antes del `POST`
+- [x] 2.2.2 RED mismo archivo: tras generar, el listado y `detalleCierreZ` (desglose IVA/pago) se actualizan
+- [x] 2.2.3 RED mismo archivo: con un Z de hoy ya existente se muestra un aviso junto a "Generar"; el botón sigue habilitado (advisory, sin `disabled` — el backend permite varios Z/día)
+- [x] 2.2.4 GREEN `app/ui/admin.html`: `pintarCierresZ`/`detalleCierreZ`; doble `confirm()` antes del `POST`; aviso no bloqueante si hay Z de hoy
+- [x] 2.2.5 Alinear `specs/consola-administracion/spec.md`: corregir el escenario "Bloqueo de un segundo cierre" (dice "deshabilitando 'Generar'") a advisory, para no contradecir design.md — ver Risks del resumen
 
 ### Fase 2.3 — Panel Clientes CRUD
-- [ ] 2.3.1 RED `tests/test_admin_ui.py`: pestaña `data-t="clientes"` usa `pintarClientes` y `/admin/api/maestros/clientes`
-- [ ] 2.3.2 RED mismo archivo: alta con NIF inválido muestra el 422 del backend sin crear el cliente
-- [ ] 2.3.3 RED mismo archivo: "Desactivar"/"Activar" alternan `activo` sin confirmación adicional
-- [ ] 2.3.4 GREEN `app/ui/admin.html`: `pintarClientes`/`modalCliente` (alta/edición); botones activar/desactivar
+- [x] 2.3.1 RED `tests/test_admin_ui.py`: pestaña `data-t="clientes"` usa `pintarClientes` y `/admin/api/maestros/clientes`
+- [x] 2.3.2 RED mismo archivo: alta con NIF inválido muestra el 422 del backend sin crear el cliente
+- [x] 2.3.3 RED mismo archivo: "Desactivar"/"Activar" alternan `activo` sin confirmación adicional
+- [x] 2.3.4 GREEN `app/ui/admin.html`: `pintarClientes`/`modalCliente` (alta/edición); botones activar/desactivar
 
 ### Fase 2.4 — Cierre C2
-- [ ] 2.4.1 RED `tests/test_admin_ui.py`: las entradas sin backend maquetadas en Corte 1 siguen `disabled` tras el reskin de admin
-- [ ] 2.4.2 `pytest` verde completo; confirmar 0 diffs en `dominio`/`aplicacion`/`fiscal`
+- [x] 2.4.1 RED `tests/test_admin_ui.py`: las entradas sin backend maquetadas en Corte 1 siguen `disabled` tras el reskin de admin
+- [x] 2.4.2 `pytest` verde completo; confirmar 0 diffs en `dominio`/`aplicacion`/`fiscal`
