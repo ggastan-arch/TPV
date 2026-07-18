@@ -94,6 +94,11 @@ def crear_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(tpv_router)
     app.include_router(admin_router)
+    # Sistema de diseno Nocturne (css/iconos/fuente) vendorizado y servido desde
+    # origen propio: el cobro no debe depender de ningun CDN (invariante
+    # offline-first). Mount incondicional: los assets van commiteados al repo.
+    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "ui" / "static")),
+              name="static")
     # Imagenes de catalogo: archivo en disco, ruta publica en BD (nunca binario
     # ni base64). `imagenes.MEDIA_DIR` se lee en tiempo de llamada (permite
     # monkeypatch a tmp_path en tests). Se crea si no existe para que el
