@@ -310,37 +310,58 @@ Chain strategy: pending
   mismo registro con `tiene_destinatario=False` → sí (ver Nota de alcance arriba;
   SIN cambio de código en `validaciones_negocio.py`)
 
-## Fase 5: Endpoints de administración (Requirement: Listado de simplificadas elegibles + Endpoint de conversión — consola-administracion spec — dep. Fase 2)
+## Fase 5: Endpoints de administración (Requirement: Listado de simplificadas elegibles + Endpoint de conversión — consola-administracion spec — dep. Fase 2) — [APLICADO, PR3]
 
-- [ ] 5.1 RED `tests/test_admin_api.py::test_listado_convertibles_exige_sesion` —
+- [x] 5.1 RED `tests/test_admin_api.py::test_listado_convertibles_exige_sesion` —
   sin sesión → 401
-- [ ] 5.2 RED `tests/test_admin_api.py::test_listado_convertibles_excluye_no_elegibles`
+- [x] 5.2 RED `tests/test_admin_api.py::test_listado_convertibles_excluye_no_elegibles`
   — con sesión → 200, solo T cobradas no sustituidas
-- [ ] 5.3 GREEN `app/presentacion/admin.py`: `GET /api/ventas/convertibles`
+- [x] 5.3 GREEN `app/presentacion/admin.py`: `GET /api/ventas/convertibles`
   (`Depends(require_admin)`) → `uow.ventas.convertibles()` serializado
   (`id`, `num_serie_factura`, `fecha_hora_huso`, `total_con_iva`)
-- [ ] 5.4 RED `tests/test_admin_api.py::test_convertir_endpoint_2_ventas_devuelve_f3`
+- [x] 5.4 RED `tests/test_admin_api.py::test_convertir_endpoint_2_ventas_devuelve_f3`
   — POST con 2 ids + destinatario válido → 200 + `num_serie` de la F3,
   `LogAuditoria(accion="conversion_f3")` persistida
-- [ ] 5.5 RED `tests/test_admin_api.py::test_convertir_endpoint_rechaza_venta_no_elegible`
+- [x] 5.5 RED `tests/test_admin_api.py::test_convertir_endpoint_rechaza_venta_no_elegible`
   — incluye una T ya `sustituida` → 409, nada persistido
-- [ ] 5.6 RED `tests/test_admin_api.py::test_convertir_endpoint_rechaza_nif_invalido`
+- [x] 5.6 RED `tests/test_admin_api.py::test_convertir_endpoint_rechaza_nif_invalido`
   — NIF inválido → 422, nada persistido
-- [ ] 5.7 GREEN `app/presentacion/admin.py`: `POST /api/ventas/convertir`
+- [x] 5.7 GREEN `app/presentacion/admin.py`: `POST /api/ventas/convertir`
   (`Depends(require_admin)`) — DTO `ConvertirReq(ids: list[int], nif: str, nombre:
   str, domicilio: str)`; invoca `ConvertirEnFacturaF3.ejecutar(usuario_id, origen=
   _origen(request), ...)`; mapea `SinSimplificadas`/`DestinatarioInvalido` → 422,
   `SimplificadaNoElegible`/`YaSustituida` → 409 (mensaje claro, no 500 crudo)
 
-## Fase 6: Panel "Convertir en factura" (Requirement: Panel Convertir en factura — consola-administracion spec — dep. Fase 5)
+### Fase 5 (bis): endurecimiento HTTP-boundary — destinatario nulo/ausente y mensaje
+sin NIF en bruto (follow-up de revisión PR1/PR2, resuelto al construir el DTO) — [APLICADO, PR3]
 
-- [ ] 6.1 `app/ui/admin.html`: panel Nocturne "Convertir en factura" — tabla de
+> Hallazgo: `ConvertirReq` tipado con campos `str` obligatorios delega el 422 de
+> `null`/campo ausente en Pydantic (safe por accidente, no por diseño); y
+> `DestinatarioInvalido(destinatario.nif)` (Fase 2) hace `str(exc) == nif`, filtrando
+> el NIF en bruto (potencialmente inválido) en cualquier mensaje HTTP/log futuro.
+
+- [x] 5.8 RED `tests/test_admin_api.py::test_convertir_endpoint_nombre_nulo_da_422_no_500`
+  + `::test_convertir_endpoint_domicilio_ausente_da_422_no_500` — `nombre`/`domicilio`
+  nulo u omitido en el JSON → 422 controlado, nada persistido (no `AttributeError`/500)
+- [x] 5.9 GREEN `app/presentacion/admin.py`: `ConvertirReq.nif/nombre/domicilio`
+  tipados `str | None = None`; el handler construye `DatosDestinatario` con
+  `(req.x or "").strip()` ANTES de invocar el caso de uso — la guarda real vive en
+  el propio caso de uso (`DestinatarioInvalido` con cadena vacía)
+- [x] 5.10 RED `tests/test_convertir_en_factura_f3.py::test_destinatario_invalido_no_expone_nif_en_bruto`
+  — NIF inválido → `str(exc)` NO contiene el NIF y no está vacío
+- [x] 5.11 GREEN `app/aplicacion/convertir_en_factura_f3.py`: `DestinatarioInvalido.__init__`
+  con mensaje por defecto/por campo (nunca el NIF); los dos puntos de rechazo
+  (`validar_documento`, nombre/domicilio vacíos) pasan un motivo textual explícito
+
+## Fase 6: Panel "Convertir en factura" (Requirement: Panel Convertir en factura — consola-administracion spec — dep. Fase 5) — [APLICADO, PR3]
+
+- [x] 6.1 `app/ui/admin.html`: panel Nocturne "Convertir en factura" — tabla de
   elegibles (`GET .../convertibles`) con checkboxes de selección múltiple 1..N,
   formulario inline NIF+nombre+domicilio, botón "Convertir"; al confirmar invoca
   `POST .../convertir`; tras éxito refresca el listado (las T convertidas
   desaparecen) y muestra el `num_serie` de la F3 (smoke manual, sin motor de
   plantillas — mismo patrón que 2.10 en `cliente-en-venta/tasks.md`)
-- [ ] 6.2 `tests/test_admin_ui.py` (convención de test estático existente): assert
+- [x] 6.2 `tests/test_admin_ui.py` (convención de test estático existente): assert
   el panel/botón "Convertir en factura" aparece en el HTML servido
 
 ## Fase 7: Verificación final (dep. Fases 1-6)
@@ -377,6 +398,20 @@ Chain strategy: pending
   `test_inmutabilidad.py`), 0 failed.
 - [x] 7.2 (para la corrección round 3) `.venv/Scripts/lint-imports`: 3/3
   contratos kept.
+
+**Fase 5-6 (PR3), rama `-c3` (tras Fase 3 bis round 4 mergeado en local)**:
+- [x] 7.1 (para PR3) `.venv/Scripts/python -m pytest`: 611 → 623 passed (12 tests
+  nuevos: 7 en `test_admin_api.py` — Fase 5, listado + conversión + rechazos + 2
+  hardening HTTP-boundary — + 1 en `test_convertir_en_factura_f3.py` — Fase 5 bis,
+  `DestinatarioInvalido` sin NIF en bruto — + 4 en `test_admin_ui.py` — Fase 6,
+  panel Nocturne), 0 failed.
+- [x] 7.2 (para PR3) `.venv/Scripts/lint-imports`: 3/3 contratos kept.
+- [ ] 7.3 Smoke manual/e2e — pendiente: cubierto parcialmente por
+  `test_convertir_endpoint_2_ventas_devuelve_f3` (2 T IVA mixto → F3 vía HTTP,
+  auditoría), pero sin aserción explícita de `Destinatarios` en el XML remitido ni
+  de `verify_chain().ok == True` tras el POST admin (esas dos aserciones ya están
+  cubiertas a nivel de caso de uso/XML en Fases 2-3; queda como smoke manual/e2e
+  real, no bloquea PR3).
 
 **Fase 3 (bis, round 4), judgment-day (rama `-c2`, tras el batch anterior)**:
 - [x] Footgun de fuente compartida en el guard de drift (round 3): `upgrade()` de
