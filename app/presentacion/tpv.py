@@ -23,7 +23,9 @@ from app.aplicacion.aparcar_venta import (
 )
 from app.aplicacion.aparcar_venta import TicketVacio as TicketVacioAparcar
 from app.aplicacion.aparcar_venta import UsuarioNoValido as UsuarioNoValidoAparcar
+from app.aplicacion.clientes import DatosCliente, NifInvalido, ServicioClientes
 from app.aplicacion.emitir_venta import (
+    CualificadaSinDatos,
     EmitirVenta,
     PagoVenta,
     TicketVacio,
@@ -86,6 +88,8 @@ class CobrarReq(BaseModel):
     usuario_id: int
     items: list[ItemVenta]
     pagos: list[PagoReq] = Field(default_factory=list)
+    cliente_id: int | None = None
+    cualificada: bool = False
 
 
 class AparcarReq(BaseModel):
@@ -100,6 +104,15 @@ class LoginReq(BaseModel):
 
 class CajonReq(BaseModel):
     usuario_id: int | None = None
+
+
+class ClienteReq(BaseModel):
+    nombre: str
+    nif: str | None = None
+    domicilio: str | None = None
+    email: str | None = None
+    telefono: str | None = None
+    rgpd_consentimiento: bool = False
 
 
 # --- serializacion -------------------------------------------------------------
@@ -239,6 +252,7 @@ def cobrar(
                                    pvp=i.pvp, descripcion=i.descripcion)
                    for i in req.items],
             pagos=[PagoVenta(medio=p.medio, importe=p.importe) for p in req.pagos],
+            cliente_id=req.cliente_id, cualificada=req.cualificada,
         )
     except TicketVacio as exc:
         raise HTTPException(400, "El ticket esta vacio") from exc
@@ -248,6 +262,10 @@ def cobrar(
         raise HTTPException(404, str(exc)) from exc
     except DescripcionRequerida as exc:
         raise HTTPException(422, str(exc)) from exc
+    except CualificadaSinDatos as exc:
+        raise HTTPException(
+            422, "Simplificada cualificada exige cliente con NIF y domicilio"
+        ) from exc
 
     _imprimir_ticket_seguro(resultado.venta_id)
     return {
@@ -257,6 +275,67 @@ def cobrar(
         "total": resultado.total,
         "cambio": resultado.cambio,
     }
+
+
+# --- Cliente en venta: busqueda (PIN-gated) y alta inline con RGPD ------------
+def _cliente_dto(c) -> dict:
+    return {
+        "id": c.id, "nombre": c.nombre, "nif": c.nif, "domicilio": c.domicilio,
+        "email": c.email, "telefono": c.telefono,
+        "rgpd_consentimiento": c.rgpd_consentimiento,
+    }
+
+
+def _cliente_resumen_dto(c) -> dict:
+    """DTO recortado para resultados de BUSQUEDA (picker del TPV): el panel
+    "Cliente en venta" solo necesita id/nombre/nif/domicilio para mostrar y
+    asignar; email/telefono son PII que la UI no consume aqui (Judgment Day
+    S-4). El alta inline (`crear_cliente_inline`) sigue devolviendo el DTO
+    completo porque nada exige recortarlo alli."""
+    return {"id": c.id, "nombre": c.nombre, "nif": c.nif, "domicilio": c.domicilio}
+
+
+@router.get("/api/clientes")
+def buscar_clientes(
+    q: str = "", _: int = Depends(require_pin), uow=Depends(get_uow),
+) -> list[dict]:
+    """Busqueda de cliente por nombre (subcadena) o NIF (exacto) desde el panel
+    "Cliente en venta" del TPV. PIN-gated (nunca bajo `require_admin`, ver spec)."""
+    por_nif = uow.clientes.buscar_por_nif(q) if q.strip() else None
+    if por_nif is not None:
+        return [_cliente_resumen_dto(por_nif)]
+    return [_cliente_resumen_dto(c) for c in uow.clientes.buscar_por_nombre(q)]
+
+
+@router.post("/api/clientes")
+def crear_cliente_inline(
+    req: ClienteReq, usuario_id: int = Depends(require_pin), uow=Depends(get_uow),
+) -> dict:
+    """Alta inline de cliente sin salir del TPV (reusa `ServicioClientes.crear`:
+    validacion de NIF + auditoria + consentimiento RGPD, ver spec).
+
+    Nota RGPD (Judgment Day S-3, documentado — NO se cambia el comportamiento):
+    para una simplificada cualificada (art. 7.2/7.3 ROF) el cliente aporta
+    NIF+domicilio por OBLIGACION FISCAL (el es quien pide la factura
+    cualificada), no por una relacion comercial que requiera base de consentimiento
+    del art. 6.1.a RGPD -- la base aqui es el cumplimiento de una obligacion legal
+    (art. 6.1.c). `rgpd_consentimiento` se sigue capturando y persistiendo por
+    trazabilidad/transparencia hacia el cliente, pero NO es (ni debe convertirse
+    en) una puerta de creacion: exigir `rgpd_consentimiento=true` para poder
+    dar de alta o asignar el cliente seria juridicamente incorrecto para esta
+    base de tratamiento (forzaria consentimiento donde la base real es
+    obligacion legal). No añadir esa validacion."""
+    try:
+        cliente_id = ServicioClientes(uow, usuario_id=usuario_id, origen="local").crear(
+            DatosCliente(
+                nombre=req.nombre, nif=req.nif, domicilio=req.domicilio,
+                email=req.email, telefono=req.telefono,
+                rgpd_consentimiento=req.rgpd_consentimiento,
+            )
+        )
+    except NifInvalido as exc:
+        raise HTTPException(422, "NIF no valido") from exc
+    return _cliente_dto(uow.clientes.buscar(cliente_id))
 
 
 # --- Aparcar / listar / desaparcar (borradores no fiscales, ver ADR-0004) ------
@@ -377,7 +456,7 @@ def _imprimir_ticket_seguro(venta_id: int) -> None:
             ).scalars().first()
             if venta is None or registro is None:
                 return
-            _ = venta.lineas, registro.desglose
-            imprimir_ticket(crear_impresora(), venta, registro)
+            _ = venta.lineas, registro.desglose, venta.cliente
+            imprimir_ticket(crear_impresora(), venta, registro, cliente=venta.cliente)
     except Exception as exc:  # noqa: BLE001 - local-first: no romper la venta
         _log.warning("No se pudo imprimir el ticket de la venta %s: %s", venta_id, exc)

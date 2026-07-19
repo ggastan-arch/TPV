@@ -40,13 +40,21 @@ class UsuarioNoValido(Exception):
     pass
 
 
+class CualificadaSinDatos(Exception):
+    """Se intento marcar la venta como simplificada cualificada (art. 7.2/7.3
+    ROF) sin un cliente asignado con NIF y domicilio no vacios (HTTP 422)."""
+
+    pass
+
+
 class EmitirVenta:
     def __init__(self, uow: UnidadDeTrabajo, motor: MotorFiscal):
         self.uow = uow
         self.motor = motor
 
     def ejecutar(
-        self, *, usuario_id: int, items: list[ItemVenta], pagos: list[PagoVenta]
+        self, *, usuario_id: int, items: list[ItemVenta], pagos: list[PagoVenta],
+        cliente_id: int | None = None, cualificada: bool = False,
     ) -> ResultadoVenta:
         if not items:
             raise TicketVacio()
@@ -54,10 +62,14 @@ class EmitirVenta:
         if usuario is None:
             raise UsuarioNoValido()
 
+        if cualificada:
+            self._exigir_datos_cualificada(cliente_id)
+
         lineas, totales = resolver_items(
             self.uow.articulos, items, exigir_descripcion_libre=True
         )
-        venta = Venta(estado="aparcada", usuario_id=usuario.id,
+        venta = Venta(estado="aparcada", usuario_id=usuario.id, cliente_id=cliente_id,
+                      cualificada=cualificada,
                       base_total=totales.base_total, cuota_total=totales.cuota_total,
                       total_con_iva=totales.total_con_iva)
         venta.lineas.extend(construir_lineas(lineas))
@@ -80,6 +92,29 @@ class EmitirVenta:
             fecha=registro.fecha_expedicion, total=str(total), cambio=str(cambio))
         self.uow.commit()
         return resultado
+
+    def _exigir_datos_cualificada(self, cliente_id: int | None) -> None:
+        """Precondicion (D5, design.md): marcar la venta como simplificada
+        cualificada (art. 7.2/7.3 ROF) exige un cliente ACTIVO asignado con NIF
+        y domicilio no vacios. Vive aqui (no en validaciones_negocio) porque
+        necesita la entidad `Cliente`, que ese modulo de dominio no ve. Un
+        cliente dado de baja logica (`activo=False`, ver
+        ServicioClientes.desactivar) no puede sostener la cualificada aunque
+        conserve NIF/domicilio: la baja logica invalida el dato para este uso.
+
+        Este metodo es, HOY, el UNICO guardarraiz de esta regla en tiempo de
+        ejecucion: `validaciones_negocio.validar_alta`/`validar_registro`
+        tienen un kwarg homologo (`cualificada_incompleta`) pero ese modulo NO
+        se invoca desde `NullEngine.emit` ni desde `RemitirLote` — solo desde
+        sus propios tests (`tests/test_validaciones_negocio.py`). Es una regla
+        a nivel de test / pensada para un futuro `VerifactuEngine` que valide
+        antes de remitir, NO una defensa en profundidad activa hoy (corregido
+        en revision Judgment Day W-1; no wirear `validar_alta` al flujo de
+        emision desde aqui sin evaluar el riesgo fiscal de tocar ese camino)."""
+        cliente = self.uow.clientes.buscar(cliente_id) if cliente_id is not None else None
+        if (cliente is None or not cliente.activo
+                or not (cliente.nif or "").strip() or not (cliente.domicilio or "").strip()):
+            raise CualificadaSinDatos()
 
     def _auditar_precios_manuales(self, venta: Venta, lineas, usuario_id: int) -> None:
         """Invariante 4: por cada linea de un articulo con `modo_precio` en

@@ -39,6 +39,14 @@ class ServicioClientes:
         self.origen = origen
 
     def crear(self, datos: DatosCliente) -> int:
+        # Nota RGPD (Judgment Day S-3, documentado — sin cambio de comportamiento):
+        # `rgpd_consentimiento` se persiste tal cual lo declara el llamante, sin
+        # exigirlo como condicion para crear. Para el caso de uso "cualificada"
+        # (ver presentacion/tpv.py::crear_cliente_inline), NIF+domicilio se piden
+        # por obligacion fiscal (art. 7.2/7.3 ROF), no por consentimiento
+        # comercial; forzar `rgpd_consentimiento=True` aqui seria incorrecto
+        # (la base legal de ese tratamiento es la obligacion legal, art. 6.1.c
+        # RGPD, no el consentimiento del art. 6.1.a). No añadir esa validacion.
         nif = self._validar_nif(datos.nif)
         cliente = Cliente(
             nombre=datos.nombre, nif=nif, domicilio=datos.domicilio,

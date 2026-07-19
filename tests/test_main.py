@@ -128,19 +128,19 @@ def test_tpv_boton_convertir_en_factura_deshabilitado_sin_comportamiento_simulad
 
 
 def test_tpv_barra_funciones_futuras_presentes_deshabilitadas():
-    """'Convertir en factura' y 'Cliente en venta' siguen sin backend
-    (`disabled`, sin handler). 'Aparcar ticket'/'Desaparcar' SI tienen backend
-    desde este cambio: se verifican habilitados en
-    `test_tpv_api.test_tpv_aparcar_y_desaparcar_habilitados_y_referencian_su_api`."""
+    """'Convertir en factura' sigue sin backend (`disabled`, sin handler).
+    'Aparcar ticket'/'Desaparcar' tienen backend desde aparcar-desaparcar; se
+    verifican habilitados en
+    `test_tpv_api.test_tpv_aparcar_y_desaparcar_habilitados_y_referencian_su_api`.
+    'Cliente en venta' tiene backend desde este cambio (cliente-en-venta)."""
     html = TestClient(main_module.crear_app()).get("/tpv/").text
 
-    for etiqueta in ("Convertir en factura", "Cliente en venta"):
-        bloque = _bloque_boton_que_contiene(html, etiqueta)
-        assert "disabled" in bloque, f"boton '{etiqueta}' no esta deshabilitado"
-        assert "fetch" not in bloque, f"boton '{etiqueta}' no debe llamar a fetch"
-        assert "onclick" not in bloque, f"boton '{etiqueta}' no debe tener handler"
+    bloque = _bloque_boton_que_contiene(html, "Convertir en factura")
+    assert "disabled" in bloque, "boton 'Convertir en factura' no esta deshabilitado"
+    assert "fetch" not in bloque, "boton 'Convertir en factura' no debe llamar a fetch"
+    assert "onclick" not in bloque, "boton 'Convertir en factura' no debe tener handler"
 
-    for etiqueta in ("Aparcar ticket", "Desaparcar"):
+    for etiqueta in ("Aparcar ticket", "Desaparcar", "Cliente en venta"):
         bloque = _bloque_boton_que_contiene(html, etiqueta)
         assert "disabled" not in bloque, f"boton '{etiqueta}' deberia estar habilitado"
         assert "onclick" in bloque, f"boton '{etiqueta}' deberia tener handler"

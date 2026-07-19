@@ -5,7 +5,9 @@ from decimal import Decimal
 
 import pytest
 
+from app.aplicacion.clientes import DatosCliente, ServicioClientes
 from app.aplicacion.emitir_venta import (
+    CualificadaSinDatos,
     EmitirVenta,
     PagoVenta,
     TicketVacio,
@@ -372,3 +374,130 @@ def test_emitir_venta_articulo_migrado_modo_libre_no_regresion(crear_sesion, mot
         assert venta.lineas[0].pvp_unitario == Decimal("50.00")
 
     assert _auditorias(crear_sesion, "precio_manual_venta") == []
+
+
+# --- cliente-en-venta (Fase 2/A): cliente_id opcional en EmitirVenta.ejecutar --------
+
+
+def test_emitir_venta_persiste_cliente_id_opcional(crear_sesion, motor, datos_base, articulo_neon):
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(DatosCliente(nombre="Juan Perez"))
+
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("2.50"))],
+            cliente_id=cliente_id,
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.cliente_id == cliente_id
+
+
+def test_emitir_venta_sin_cliente_id_no_regresion(crear_sesion, motor, datos_base, articulo_neon):
+    """Llamada existente sin `cliente_id`: se comporta exactamente igual que antes
+    de este cambio (no-regresion, ver specs/tpv-venta)."""
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("2.50"))],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.cliente_id is None
+
+
+# --- cliente-en-venta (Fase 3/B): simplificada cualificada (art. 7.2/7.3 ROF) --------
+
+
+def test_cualificada_sin_nif_o_domicilio_rechaza(crear_sesion, motor, datos_base, articulo_neon):
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Sin datos"))  # sin nif ni domicilio
+
+    with crear_sesion() as s, pytest.raises(CualificadaSinDatos):
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("2.50"))],
+            cliente_id=cliente_id, cualificada=True,
+        )
+
+    with crear_sesion() as s:
+        assert s.query(Venta).count() == 0
+
+
+def test_cualificada_con_cliente_inactivo_rechaza(crear_sesion, motor, datos_base, articulo_neon):
+    """Judgment Day W-2: un cliente `activo=False` (baja logica RGPD, ver
+    ServicioClientes.desactivar) con NIF+domicilio completos NO debe poder
+    sostener una simplificada cualificada -- la baja logica debe pesar tanto
+    como la falta de NIF/domicilio."""
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Acuario S.L.", nif="A58818501", domicilio="Calle Mayor 1"))
+        ServicioClientes(UnidadDeTrabajoSQL(s)).desactivar(cliente_id)
+
+    with crear_sesion() as s, pytest.raises(CualificadaSinDatos):
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("2.50"))],
+            cliente_id=cliente_id, cualificada=True,
+        )
+
+    with crear_sesion() as s:
+        assert s.query(Venta).count() == 0
+
+
+def test_cualificada_sin_cliente_asignado_rechaza(crear_sesion, motor, datos_base, articulo_neon):
+    with crear_sesion() as s, pytest.raises(CualificadaSinDatos):
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("2.50"))],
+            cualificada=True,
+        )
+
+
+def test_cualificada_con_datos_completos_marca_venta(crear_sesion, motor, datos_base, articulo_neon):
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Acuario S.L.", nif="A58818501", domicilio="Calle Mayor 1"))
+
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("2.50"))],
+            cliente_id=cliente_id, cualificada=True,
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.cualificada is True
+
+
+def test_sin_cualificada_no_marca_venta_aunque_cliente_este_completo(
+    crear_sesion, motor, datos_base, articulo_neon
+):
+    """Asignar un cliente con NIF+domicilio completos NO auto-marca la venta como
+    cualificada (spec: 'Asignar cliente no auto-marca cualificada')."""
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Acuario S.L.", nif="A58818501", domicilio="Calle Mayor 1"))
+
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_neon, cantidad=Decimal("1"))],
+            pagos=[PagoVenta("efectivo", Decimal("2.50"))],
+            cliente_id=cliente_id,
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert not venta.cualificada

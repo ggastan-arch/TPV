@@ -102,6 +102,7 @@ def registro_alta_xml(
     nombre_emisor: str,
     sistema: SistemaInformatico,
     anterior: RegistroFiscal | None = None,
+    cualificada: bool = False,
 ) -> etree._Element:
     root = etree.Element(_q("RegistroAlta"), nsmap=_NSMAP)
     _sub(root, "IDVersion", "1.0")
@@ -124,6 +125,13 @@ def registro_alta_xml(
             _sub(idfs, "FechaExpedicionFactura", f.fecha_expedicion)
 
     _sub(root, "DescripcionOperacion", reg.descripcion_operacion or "")
+
+    # Simplificada cualificada (art. 7.2/7.3 ROF): minOccurs=0, se OMITE cuando
+    # False (la simplificada normal queda byte-idéntica). Posicion XSD exacta
+    # (SuministroInformacion.xsd.xml:144): entre DescripcionOperacion y Desglose
+    # (los elementos opcionales intermedios del XSD no se emiten en este SIF).
+    if cualificada:
+        _sub(root, "FacturaSimplificadaArt7273", "S")
 
     desglose = _sub(root, "Desglose")
     for d in reg.desglose:

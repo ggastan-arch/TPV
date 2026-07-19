@@ -117,6 +117,7 @@ def validar_alta(
     sistema: _Sistema,
     ahora: datetime | None = None,
     tiene_destinatario: bool = False,
+    cualificada_incompleta: bool = False,
 ) -> list[Incidencia]:
     ahora = ahora or datetime.now().astimezone()
     inc = _validar_comunes(reg, nif_obligado=nif_obligado, ahora=ahora)
@@ -130,6 +131,20 @@ def validar_alta(
     if reg.tipo_factura in _CON_DESTINATARIO and not tiene_destinatario:
         inc.append(Incidencia("FALTA_DESTINATARIO",
                               "F1/F3/R1-R4 requieren destinatario (3.1.3.13)", "rechazo"))
+    # Simplificada cualificada (art. 7.2/7.3 ROF): el cliente asignado debe tener
+    # NIF y domicilio. La precondicion que SI se ejecuta en tiempo real vive en
+    # EmitirVenta._exigir_datos_cualificada (unico sitio con acceso a la entidad
+    # Cliente — ver design.md D5). Este kwarg (`cualificada_incompleta`) NO esta
+    # wireado desde NullEngine.emit ni desde RemitirLote hoy: solo lo ejercen
+    # tests/test_validaciones_negocio.py. Es una regla a nivel de test / pensada
+    # para un futuro VerifactuEngine que valide antes de remitir; corregido en
+    # revision Judgment Day W-1 (el comentario anterior sobreestimaba esto como
+    # "defensa en profundidad" activa). NO wirear validar_alta al camino de
+    # emision/remision desde aqui sin evaluar el riesgo fiscal.
+    if cualificada_incompleta:
+        inc.append(Incidencia("CUALIFICADA_SIN_NIF_DOMICILIO",
+                              "Simplificada cualificada sin NIF/domicilio del cliente (art. 7.2/7.3 ROF)",
+                              "rechazo"))
 
     suma_cuota = Decimal("0.00")
     suma_base_cuota = Decimal("0.00")
@@ -170,8 +185,12 @@ def validar_anulacion(
     return inc
 
 
+_KWARGS_SOLO_ALTA = {"tiene_destinatario", "cualificada_incompleta"}
+
+
 def validar_registro(reg, **kwargs) -> list[Incidencia]:
     """Despacha segun el tipo de registro."""
     if reg.tipo_registro == "anulacion":
-        return validar_anulacion(reg, **{k: v for k, v in kwargs.items() if k != "tiene_destinatario"})
+        return validar_anulacion(
+            reg, **{k: v for k, v in kwargs.items() if k not in _KWARGS_SOLO_ALTA})
     return validar_alta(reg, **kwargs)

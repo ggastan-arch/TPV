@@ -73,6 +73,65 @@ def test_ticket_demo_marca_documento_de_prueba_sin_qr_real(crear_sesion, motor, 
         assert qr_mod.LEYENDA_CORTA.encode() not in salida
 
 
+# --- Fase 3 (B): ticket cualificado (destinatario NIF+domicilio+cuota separada) --
+def test_ticket_cualificada_incluye_nif_domicilio_cuota_separada(crear_sesion, motor, datos_base):
+    from app.aplicacion.clientes import DatosCliente, ServicioClientes
+    from app.infraestructura.persistencia.modelos import Cliente
+    from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
+
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Acuario S.L.", nif="A58818501", domicilio="Calle Mayor 1"))
+
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(
+            datos_base["usuario_id"],
+            [("Neon cardenal", "2.50", "2", "21"), ("Anubias", "6.90", "1", "10")],
+        )
+        venta.cliente_id = cliente_id
+        venta.cualificada = True
+        s.add(venta)
+        reg = motor.emit(s, venta)
+        venta_id, reg_id = venta.id, reg.id
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, venta_id)
+        registro = s.get(RegistroFiscal, reg_id)
+        cliente = s.get(Cliente, cliente_id)
+        _ = venta.lineas
+        _ = registro.desglose
+
+        dummy = Dummy()
+        imprimir_ticket(dummy, venta, registro, cliente=cliente)
+        salida = dummy.output
+
+        assert "Acuario S.L.".encode() in salida
+        assert b"A58818501" in salida
+        assert "Calle Mayor 1".encode() in salida
+        # Cuota separada por tipo (el desglose ya la imprime, sin cambios, D6).
+        assert b"IVA 21%" in salida
+        assert b"IVA 10%" in salida
+
+
+def test_ticket_no_cualificado_sin_cambios(crear_sesion, motor, datos_base):
+    """Golden: una venta NO cualificada se imprime EXACTAMENTE igual que antes de
+    este cambio, con o sin el kwarg `cliente` (ausente/None -> sin destinatario)."""
+    venta_id, reg_id = _emitir_con_lineas(crear_sesion, motor, datos_base["usuario_id"])
+    with crear_sesion() as s:
+        venta = s.get(Venta, venta_id)
+        registro = s.get(RegistroFiscal, reg_id)
+        _ = venta.lineas
+        _ = registro.desglose
+
+        dummy_llamada_previa = Dummy()
+        imprimir_ticket(dummy_llamada_previa, venta, registro)
+
+        dummy_cliente_explicito_none = Dummy()
+        imprimir_ticket(dummy_cliente_explicito_none, venta, registro, cliente=None)
+
+        assert dummy_llamada_previa.output == dummy_cliente_explicito_none.output
+
+
 def test_ticket_produccion_explicito_mantiene_qr_y_leyenda(crear_sesion, motor, datos_base):
     venta_id, reg_id = _emitir_con_lineas(crear_sesion, motor, datos_base["usuario_id"])
     with crear_sesion() as s:
