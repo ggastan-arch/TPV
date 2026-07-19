@@ -197,6 +197,73 @@ Chain strategy: pending
   — nombre de destinatario con `&`/`<`/`>`/`"` escapa correctamente y el XML
   sigue siendo válido contra el XSD.
 
+### Fase 3 (bis, round 2): el snapshot congelado NO era inmutable a nivel de BD — [APLICADO, review-driven (judgment-day), rama `-c2`]
+
+> Hallazgo CRÍTICO (ambos jueces, empíricamente probado): `trg_venta_no_update`
+> exime la transición de estado permitida (`cobrada -> {anulada_con_rastro,
+> sustituida}`) y SOLO re-verifica los campos listados en
+> `_VENTA_CAMPOS_CONGELADOS` durante esa transición. `destinatario_nombre`/
+> `destinatario_nif` (migración 0010) y `cualificada` (migración 0009) NO
+> estaban en esa lista: un UPDATE que combinara la transición PERMITIDA con un
+> cambio de esos campos, en la MISMA sentencia, se colaba SIN ser rechazado —
+> violando el invariante 1 de CLAUDE.md (ninguna venta emitida se edita, ni a
+> nivel de BD) para el snapshot congelado de una F1/F3 ya expedida. El D2
+> override de las migraciones 0009/0010 (documentado en `ddl.py`) partía de un
+> análisis incompleto: "una venta `cobrada` ya está totalmente bloqueada salvo
+> `estado`" era falso para el UPDATE combinado.
+
+- [x] 3.16 (CRÍTICO) RED `tests/test_inmutabilidad.py::test_no_se_puede_colar_destinatario_ni_cualificada_en_transicion_permitida`
+  (vector combinado: `venta.estado = 'anulada_con_rastro'` +
+  `destinatario_nombre`/`destinatario_nif`/`cualificada` en el MISMO flush →
+  hoy NO lanza excepción, RED confirmado) + `tests/test_migracion_destinatario_f3.py`
+  bloque 3c) (mismo vector vía SQL crudo) → GREEN:
+  - `app/infraestructura/persistencia/ddl.py`: `cualificada`,
+    `destinatario_nombre`, `destinatario_nif` añadidas a
+    `_VENTA_CAMPOS_CONGELADOS_V2` (lista SEPARADA de la histórica
+    `_VENTA_CAMPOS_CONGELADOS`, que alimenta la migración 0001 y NO se toca —
+    ver nota inline: tocarla in-place rompe cualquier migración desde cero,
+    porque 0001 crearía un trigger referenciando columnas que no existen hasta
+    0009/0010, y SQLite revalida triggers existentes en cuanto CUALQUIER otra
+    migración usa `batch_alter_table` sobre cualquier tabla — probado
+    empíricamente, documentado en el propio `ddl.py`).
+  - `migrations/versions/0011_venta_trigger_campos_congelados.py` (nueva):
+    `DROP TRIGGER` + `CREATE TRIGGER` de ÚNICAMENTE `trg_venta_no_update`
+    (nunca `batch_alter_table`, nunca recreación de tabla — preserva los otros
+    15 triggers), cuerpo nuevo importado de `ddl.TRIGGER_VENTA_NO_UPDATE_V2`
+    (fuente única de verdad); `downgrade()` restaura el cuerpo ANTERIOR
+    (literal histórico fijo en la propia migración). Test adicional
+    `test_migracion_0011_downgrade_restaura_trigger_anterior`: confirma que el
+    downgrade REALMENTE reactiva el vector combinado bajo el trigger de 0010
+    (prueba que el downgrade hace lo que dice).
+  - Confirmado (y cubierto por el mismo test) que los DOS caminos legítimos que
+    SÍ hacen la transición permitida siguen funcionando: (a) T origen
+    `cobrada -> sustituida` sin destinatario (permanece `NULL`); (b)
+    `motor.cancel()` `cobrada -> anulada_con_rastro` sin tocar destinatario.
+- [x] 3.17 (hardening) RED `tests/test_remision.py::test_remitir_lote_f1_f3_con_nif_pero_sin_nombre_marca_requiere_intervencion`
+  (NIF presente, `destinatario_nombre` ausente → hoy se remitiría igual, RED) →
+  GREEN `app/aplicacion/remitir_lote.py`: la guarda de snapshot ausente ahora
+  exige AMBOS `destinatario_nif` Y `destinatario_nombre` (antes solo NIF) —
+  `NombreRazon` es obligatorio en el XSD igual que NIF.
+- [x] 3.18 (hardening) RED `tests/test_xml_validacion.py::test_registro_alta_xml_omite_destinatario_con_nombre_vacio`
+  (nombre vacío/None con NIF presente → hoy emite `<NombreRazon/>` vacío, RED)
+  → GREEN `app/infraestructura/fiscal/xml.py`: `Destinatario.nombre` tipado
+  `str | None` (honesto); `registro_alta_xml` omite el bloque `Destinatarios`
+  ENTERO si `destinatario.nombre` es falsy (simétrico con la guarda de NIF ya
+  existente, 3.13).
+- [x] 3.19 (hardening, preserva FIFO/cadena) RED `tests/test_remision.py::test_remitir_lote_registro_invalido_no_es_el_ultimo_detiene_el_lote_ahi`
+  (registro inválido NO es el último del lote → hoy los posteriores igual se
+  remiten, RED) → GREEN `app/aplicacion/remitir_lote.py`: ante CUALQUIER
+  exclusión por guarda (`requiere_intervencion`), el bucle se DETIENE en ese
+  `orden` (`break` en vez de `continue`) — se remite el PREFIJO válido
+  contiguo anterior, pero los registros POSTERIORES (aunque serían válidos por
+  sí solos) quedan DIFERIDOS, intactos, para un intento futuro. Evita que un
+  sucesor referencie, en su propio `Encadenamiento`, un `huella_anterior` que
+  la AEAT nunca recibió (hueco de cadena en la remisión), preservando la regla
+  FIFO de orden de generación (CLAUDE.md). El test previo
+  `test_remitir_lote_excluye_solo_el_registro_invalido_resto_del_lote_sigue`
+  (registro inválido SÍ es el último) sigue verde sin cambios: coincide con el
+  nuevo comportamiento cuando no hay nada posterior que diferir.
+
 ## Fase 4: Confirmación de reglas ya existentes (Requirement: soporte estructural F1/F3 en validaciones — motor-fiscal-verifactu spec — dep. ninguna) — [APLICADO, PR2]
 
 - [x] 4.1 `tests/test_validaciones_negocio.py::test_f3_con_destinatario_no_rechaza_falta_destinatario`
@@ -254,6 +321,14 @@ Chain strategy: pending
   congelado, guarda `requiere_intervencion`, exclusión parcial del lote,
   alineación de tipos) − 1 test reemplazado en `test_remision.py`), 0 failed.
 - [x] 7.2 (para la corrección review-driven) `.venv/Scripts/lint-imports`: 3/3
+  contratos kept.
+
+**Fase 3 (bis, round 2), judgment-day (rama `-c2`, tras el batch anterior)**:
+- [x] 7.1 (para la corrección round 2) `.venv/Scripts/python -m pytest`:
+  599 → 604 passed (5 tests nuevos: vector combinado en `test_inmutabilidad.py`
+  + downgrade de la migración 0011 + guarda NIF-sin-nombre + XML NombreRazon
+  vacío + lote detenido en registro no-último), 0 failed.
+- [x] 7.2 (para la corrección round 2) `.venv/Scripts/lint-imports`: 3/3
   contratos kept.
 
 Nota: cada Work Unit (PR 1/2/3) debe correr 7.1-7.2 de forma independiente antes de
