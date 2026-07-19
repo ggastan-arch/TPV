@@ -614,6 +614,38 @@ def test_desaparcar_id_ya_consumido_devuelve_404(cliente, datos_tpv):
     assert cliente.delete(f"/tpv/api/aparcadas/{aparcada['venta_id']}").status_code == 404
 
 
+def test_aparcar_usuario_id_invalido_devuelve_401(cliente, datos_tpv):
+    """Hardening: un `usuario_id` inexistente en `/api/aparcar` debe mapear al
+    mismo 401 que `/api/cobrar` usa para `UsuarioNoValido`, no un 500 por
+    `IntegrityError` de la FK."""
+    r = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": 999999,
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}],
+    })
+    assert r.status_code == 401
+
+
+def test_aparcar_libre_sin_descripcion_devuelve_422(cliente, datos_tpv):
+    """Hardening: cierra el bypass de `DescripcionRequerida` al aparcar (antes
+    solo se exigia al cobrar, permitiendo aparcar un libre sin descripcion)."""
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1", "pvp": "50.00"}],
+    })
+    assert r.status_code == 422
+
+
+def test_aparcar_libre_con_descripcion_devuelve_200(cliente, datos_tpv):
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1",
+                   "pvp": "50.00", "descripcion": "Promo verano"}],
+    })
+    assert r.status_code == 200
+
+
 def test_cobrar_un_carrito_recuperado_emite_venta_nueva(cliente, crear_sesion, datos_tpv):
     """No regresion (spec 'Cobrar un carrito recuperado'): un borrador
     desaparcado se cobra por el camino INTACTO `EmitirVenta`/`/tpv/api/cobrar`,

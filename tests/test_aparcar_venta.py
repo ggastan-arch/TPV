@@ -19,8 +19,9 @@ from app.aplicacion.aparcar_venta import (
     ListarAparcadas,
     RecuperarAparcada,
     TicketVacio,
+    UsuarioNoValido,
 )
-from app.aplicacion.lineas import ItemVenta
+from app.aplicacion.lineas import DescripcionRequerida, ItemVenta
 from app.infraestructura.persistencia.modelos import (
     Articulo,
     ContadorSerie,
@@ -94,6 +95,66 @@ def test_aparcar_carrito_vacio_rechaza_sin_persistir(crear_sesion, datos_base):
     with crear_sesion() as s:
         assert s.query(Venta).count() == 0
         assert s.query(VentaLinea).count() == 0
+
+
+# --- Hardening: usuario_id invalido / descripcion libre exigida al aparcar ----
+
+
+@pytest.fixture
+def articulo_libre(session, datos_base):
+    art = Articulo(nombre="Tridacna maxima", nombre_corto="Tridacna",
+                   tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("45.00"),
+                   modo_precio="libre")
+    session.add(art)
+    session.commit()
+    return art.id
+
+
+def test_aparcar_usuario_id_invalido_rechaza_sin_persistir(
+    crear_sesion, datos_base, tres_articulos
+):
+    """Antes: un `usuario_id` inexistente llegaba sin validar a `Venta(...)` y
+    solo fallaba al hacer commit como `IntegrityError` de la FK (500 en el
+    endpoint). Ahora se valida igual que `EmitirVenta` (`uow.usuarios.buscar`)."""
+    with crear_sesion() as s, pytest.raises(UsuarioNoValido):
+        _uc_aparcar(s).ejecutar(
+            usuario_id=999999, items=[ItemVenta(articulo_id=tres_articulos[0])],
+        )
+
+    with crear_sesion() as s:
+        assert s.query(Venta).count() == 0
+        assert s.query(VentaLinea).count() == 0
+
+
+def test_aparcar_libre_sin_descripcion_rechaza_con_descripcion_requerida(
+    crear_sesion, datos_base, articulo_libre
+):
+    """Cierra el bypass: un articulo `modo_precio == "libre"` sin descripcion
+    aparcado hoy congela `descripcion = articulo.nombre` y pasa silenciosamente
+    la validacion de `EmitirVenta` al cobrar. Se exige aqui, al aparcar."""
+    with crear_sesion() as s, pytest.raises(DescripcionRequerida):
+        _uc_aparcar(s).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_libre, pvp=Decimal("50.00"))],
+        )
+
+    with crear_sesion() as s:
+        assert s.query(Venta).count() == 0
+        assert s.query(VentaLinea).count() == 0
+
+
+def test_aparcar_libre_con_descripcion_persiste_ok(crear_sesion, datos_base, articulo_libre):
+    with crear_sesion() as s:
+        venta_id = _uc_aparcar(s).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_libre, pvp=Decimal("50.00"),
+                              descripcion="Promo verano")],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, venta_id)
+        assert venta.estado == "aparcada"
+        assert venta.lineas[0].descripcion == "Promo verano"
 
 
 # --- 2.3: frontera fiscal -- aparcar NUNCA asigna identidad fiscal ------------
