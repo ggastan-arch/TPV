@@ -2,15 +2,19 @@
 NATIVAS (`op.add_column`).
 
 Guarda de regresion (mismo patron que test_migracion_cualificada.py / migracion
-0009): NO se toca `trg_venta_no_update` ni `_VENTA_CAMPOS_CONGELADOS` (ver ADR en
-`app/infraestructura/persistencia/ddl.py` y el comentario de la propia migracion).
-Una venta `cobrada` ya esta totalmente congelada por el trigger vigente (ningun
-UPDATE plano pasa); el UNICO codigo que escribe estas columnas
-(`ConvertirEnFacturaF3`) lo hace ANTES del `emit` (mientras la F3 aun esta
-`aparcada`), fuera del alcance del trigger. `ADD COLUMN` nativo (no
-`batch_alter_table`) nunca recrea la tabla: triggers e invariantes quedan
-intactos, y la huella de una venta YA EMITIDA bajo el esquema anterior (revision
-0009) no cambia (las columnas nuevas son ajenas a la huella).
+0009): la migracion 0010 en si NO toca `trg_venta_no_update` ni
+`_VENTA_CAMPOS_CONGELADOS` (ver ADR en `app/infraestructura/persistencia/ddl.py` y el
+comentario de la propia migracion). `ADD COLUMN` nativo (no `batch_alter_table`)
+nunca recrea la tabla: triggers e invariantes quedan intactos, y la huella de una
+venta YA EMITIDA bajo el esquema anterior (revision 0009) no cambia (las columnas
+nuevas son ajenas a la huella).
+
+ACTUALIZACION (Judgment Day, round 2): el analisis original de "una venta `cobrada`
+ya esta totalmente congelada" resulto INCOMPLETO -- el trigger solo revisaba
+`_VENTA_CAMPOS_CONGELADOS` durante la transicion de estado PERMITIDA, y estas dos
+columnas no estaban en esa lista (hueco cerrado en la migracion 0011, ver 3c) mas
+abajo). `head` en este fichero ya incluye 0011: este test verifica el estado FINAL
+(con el hueco cerrado), no solo el efecto aislado de 0010.
 
 Sin ORM: la fila "ya emitida" se inserta con SQL crudo (mismo patron que
 test_migracion_cualificada.py) para no depender de que los modelos Python (que YA
@@ -135,7 +139,11 @@ def test_migracion_0010_no_rompe_triggers_ni_huella(tmp_path, aplicar_migracione
 
     # 3b) tambien se rechaza un intento de "colar" un destinatario en un UPDATE
     #    directo de una venta ya emitida (el trigger bloquea CUALQUIER UPDATE
-    #    plano sobre una fila `cobrada`, no solo los campos historicos).
+    #    plano sobre una fila `cobrada`, no solo los campos historicos). OJO: esto
+    #    NO cambia estado, asi que ya rechazaba ANTES de la migracion 0011 (el
+    #    trigger bloquea CUALQUIER UPDATE fuera de la transicion permitida,
+    #    independientemente de que columnas toque) -- da falsa confianza sobre el
+    #    vector realmente peligroso, ver 3c).
     with engine.connect() as conn:
         try:
             with conn.begin():
@@ -144,6 +152,27 @@ def test_migracion_0010_no_rompe_triggers_ni_huella(tmp_path, aplicar_migracione
                     "destinatario_nif = 'B00000000' WHERE id = 1"
                 ))
             raise AssertionError("el UPDATE ilegal debio ser rechazado por el trigger")
+        except Exception as exc:  # noqa: BLE001
+            assert "inmutable" in str(exc).lower()
+
+    # 3c) el vector COMBINADO (Judgment Day, round 2, empiricamente probado): un
+    #    UPDATE que hace la transicion de estado PERMITIDA (cobrada ->
+    #    anulada_con_rastro) Y, en la MISMA sentencia, cambia
+    #    destinatario_nombre/destinatario_nif, tambien se rechaza -- ANTES de la
+    #    migracion 0011 este UPDATE SUCEDIA sin ser detectado (el trigger solo
+    #    revisaba `_VENTA_CAMPOS_CONGELADOS` durante la transicion permitida, y esas
+    #    dos columnas no estaban en la lista). "head" en este test ya incluye la
+    #    migracion 0011 (endurece `trg_venta_no_update`), asi que este bloque
+    #    prueba el hueco CERRADO.
+    with engine.connect() as conn:
+        try:
+            with conn.begin():
+                conn.execute(text(
+                    "UPDATE venta SET estado = 'anulada_con_rastro', "
+                    "destinatario_nombre = 'HACK', destinatario_nif = 'B00000000' "
+                    "WHERE id = 1"
+                ))
+            raise AssertionError("el UPDATE combinado debio ser rechazado por el trigger")
         except Exception as exc:  # noqa: BLE001
             assert "inmutable" in str(exc).lower()
 
@@ -163,4 +192,42 @@ def test_migracion_0010_no_rompe_triggers_ni_huella(tmp_path, aplicar_migracione
             text("SELECT huella FROM registro_fiscal WHERE id = 1")
         ).scalar_one()
     assert huella_en_bd == campos["huella_original"]
+    engine.dispose()
+
+
+def test_migracion_0011_downgrade_restaura_trigger_anterior(
+    tmp_path, aplicar_migraciones, bajar_migraciones
+):
+    """`downgrade()` de la migracion 0011 restaura EXACTAMENTE el trigger anterior
+    (lista SIN `cualificada`/`destinatario_nombre`/`destinatario_nif`): el vector
+    combinado, rechazado en `head`, vuelve a "colarse" bajo el trigger de la
+    revision 0010 -- prueba que el downgrade hace lo que dice (no solo que no
+    rompe nada al bajar)."""
+    db = tmp_path / "migracion_0011_downgrade.db"
+    url = f"sqlite:///{db}"
+
+    aplicar_migraciones(url, "head")
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        _emitir_venta_pre_0010(conn)  # F3 "emitida" (columnas ya existen en head)
+    engine.dispose()
+
+    bajar_migraciones(url, "0010_venta_destinatario_f3")
+
+    engine = create_engine(url)
+    with engine.connect() as conn:
+        with conn.begin():
+            # Bajo el trigger de la revision 0010 (SIN el endurecimiento de 0011)
+            # este UPDATE combinado NO debe ser rechazado.
+            conn.execute(text(
+                "UPDATE venta SET estado = 'anulada_con_rastro', "
+                "destinatario_nombre = 'HACK', destinatario_nif = 'B00000000' "
+                "WHERE id = 1"
+            ))
+        fila = conn.execute(
+            text("SELECT estado, destinatario_nombre, destinatario_nif FROM venta WHERE id = 1")
+        ).one()
+    assert fila.estado == "anulada_con_rastro"
+    assert fila.destinatario_nombre == "HACK"
+    assert fila.destinatario_nif == "B00000000"
     engine.dispose()

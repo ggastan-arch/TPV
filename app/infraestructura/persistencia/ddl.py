@@ -16,13 +16,19 @@ Politica:
 from __future__ import annotations
 
 # Igualdad null-safe de los campos que NO pueden cambiar en una venta emitida.
-# NOTA (D2 override, migraciones 0009/0010): `cualificada` y
-# `destinatario_nombre`/`destinatario_nif` se anadieron DESPUES via `op.add_column`
-# y deliberadamente NO estan en esta lista -- una venta `cobrada` ya esta
-# bloqueada para CUALQUIER UPDATE que no sea la transicion de estado controlada
-# (ver `trg_venta_no_update` mas abajo), y ningun codigo actual escribe esas
-# columnas durante esa transicion. Ver el docstring de cada migracion para el
-# analisis completo antes de asumir que serian seguras de anadir sin mas.
+#
+# NOTA: esta lista alimenta `TRIGGERS` (mas abajo), que la migracion 0001 ejecuta
+# TAL CUAL para CREAR el trigger por primera vez en una BD desde cero. Por eso esta
+# lista NUNCA debe incluir una columna que no exista todavia en el esquema de la
+# migracion 0001 (p. ej. `cualificada`/`destinatario_nombre`/`destinatario_nif`,
+# anadidas 8-9 migraciones despues, en 0009/0010): si lo hiciera, migrar una BD desde
+# cero fallaria en cuanto CUALQUIER migracion posterior tocara CUALQUIER tabla con
+# `batch_alter_table` (SQLite revalida los triggers existentes contra el esquema
+# ACTUAL al reescribir una tabla, y `NEW.cualificada` no existiria aun) -- probado
+# empiricamente al intentar este mismo cambio (ver git history / apply-progress).
+# El endurecimiento POSTERIOR de esta lista (D2 override cerrado, migracion 0011)
+# vive en `_VENTA_CAMPOS_CONGELADOS_V2` / `TRIGGER_VENTA_NO_UPDATE_V2`, aplicado por
+# esa migracion via DROP+CREATE DESPUES de que esas columnas ya existan.
 _VENTA_CAMPOS_CONGELADOS = " AND ".join(
     f"NEW.{c} IS OLD.{c}"
     for c in (
@@ -65,6 +71,9 @@ _REGISTRO_CAMPOS_CONGELADOS = " AND ".join(
 
 TRIGGERS: list[str] = [
     # --- venta: inmutable tras emitir, salvo transicion de estado controlada ---
+    # (creacion HISTORICA, migracion 0001 -- ver nota sobre `_VENTA_CAMPOS_CONGELADOS`
+    # arriba: NO tocar este cuerpo para endurecer campos; usar
+    # `TRIGGER_VENTA_NO_UPDATE_V2` + una migracion DROP+CREATE nueva, como 0011).
     f"""
     CREATE TRIGGER trg_venta_no_update
     BEFORE UPDATE ON venta
@@ -204,6 +213,59 @@ TRIGGERS: list[str] = [
     END;
     """,
 ]
+
+# --- Endurecimiento de `trg_venta_no_update` (migracion 0011) ---------------------
+# Revision Judgment Day, round 2 (hueco empiricamente probado): el override D2 de
+# las migraciones 0009/0010 asumia que una venta `cobrada` ya estaba "totalmente"
+# bloqueada salvo el campo `estado` durante la transicion permitida
+# `cobrada -> {anulada_con_rastro, sustituida}`. ESO ERA FALSO: el trigger de arriba
+# SOLO re-verifica `_VENTA_CAMPOS_CONGELADOS` durante esa transicion -- un UPDATE que
+# combinara la transicion PERMITIDA con un cambio de `cualificada`/
+# `destinatario_nombre`/`destinatario_nif` en la MISMA sentencia se colaba sin ser
+# detectado (violando el invariante 1 de CLAUDE.md). Se confirmo que ningun camino de
+# codigo legitimo escribe estas columnas durante esa transicion
+# (`ConvertirEnFacturaF3.ejecutar()` las fija UNA SOLA VEZ mientras la F3 aun esta
+# `aparcada`, ANTES de `motor.emit`; `NullEngine.cancel` solo escribe `estado`), asi
+# que anadirlas aqui no rompe ningun flujo real.
+#
+# `_VENTA_CAMPOS_CONGELADOS_V2`/`TRIGGER_VENTA_NO_UPDATE_V2` (separados de la version
+# HISTORICA de arriba, ver la nota junto a `_VENTA_CAMPOS_CONGELADOS`) son la fuente
+# unica de verdad que importa la migracion 0011 para el DROP+CREATE dirigido de
+# `trg_venta_no_update` -- se aplican DESPUES de que las migraciones 0009/0010 ya
+# hayan anadido esas columnas, por eso es seguro referenciarlas aqui.
+_VENTA_CAMPOS_CONGELADOS_V2 = " AND ".join(
+    f"NEW.{c} IS OLD.{c}"
+    for c in (
+        "serie",
+        "ejercicio",
+        "numero",
+        "num_serie_factura",
+        "fecha_hora_huso",
+        "usuario_id",
+        "cliente_id",
+        "base_total",
+        "cuota_total",
+        "total_con_iva",
+        "cualificada",
+        "destinatario_nombre",
+        "destinatario_nif",
+    )
+)
+
+TRIGGER_VENTA_NO_UPDATE_V2 = f"""
+CREATE TRIGGER trg_venta_no_update
+BEFORE UPDATE ON venta
+FOR EACH ROW
+WHEN OLD.estado <> 'aparcada'
+ AND NOT (
+    OLD.estado = 'cobrada'
+    AND NEW.estado IN ('anulada_con_rastro', 'sustituida')
+    AND {_VENTA_CAMPOS_CONGELADOS_V2}
+ )
+BEGIN
+    SELECT RAISE(ABORT, 'Venta emitida inmutable (RRSIF art. 8): solo transicion de estado permitida');
+END;
+"""
 
 _NOMBRES_TRIGGERS = [
     "trg_venta_no_update",
