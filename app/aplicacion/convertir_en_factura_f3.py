@@ -71,7 +71,14 @@ class YaSustituida(Exception):
 
 class DestinatarioInvalido(Exception):
     """El NIF del destinatario no supera el digito de control, o su nombre/domicilio
-    vienen vacios (art. 6 ROF: contenido minimo de una factura completa) (HTTP 422)."""
+    vienen vacios (art. 6 ROF: contenido minimo de una factura completa) (HTTP 422).
+
+    El mensaje NUNCA incluye el NIF en bruto (podria acabar en un HTTPException/log;
+    ver `admin.py::convertir_en_factura`): cada punto de rechazo pasa un motivo
+    generico especifico del campo (endurecimiento HTTP-boundary, PR3)."""
+
+    def __init__(self, motivo: str = "El NIF, nombre o domicilio del destinatario no son validos"):
+        super().__init__(motivo)
 
 
 class RegistroOrigenNoEncontrado(Exception):
@@ -109,11 +116,11 @@ class ConvertirEnFacturaF3:
         origenes = [self._validar_elegible(vid) for vid in simplificada_ids]
 
         if not validar_documento(destinatario.nif):
-            raise DestinatarioInvalido(destinatario.nif)
+            raise DestinatarioInvalido("El NIF/NIE/CIF del destinatario no es valido")
         # Art. 6 ROF: la factura completa exige nombre y domicilio del destinatario
         # (mismo guardarraiz que `EmitirVenta._exigir_datos_cualificada` para domicilio).
         if not destinatario.nombre.strip() or not destinatario.domicilio.strip():
-            raise DestinatarioInvalido(destinatario.nif)
+            raise DestinatarioInvalido("El nombre y el domicilio del destinatario son obligatorios")
 
         # A partir de aqui TODAS las validaciones pasaron: recien ahora se toca
         # la sesion (2.6, atomicidad por construccion: nada se persiste antes).
