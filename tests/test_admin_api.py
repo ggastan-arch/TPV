@@ -738,6 +738,14 @@ def test_listado_convertibles_exige_sesion(cliente, datos_base):
     assert cliente.get("/admin/api/ventas/convertibles").status_code == 401
 
 
+def test_convertir_exige_sesion(cliente, datos_base):
+    # Regresion: bloquea un futuro refactor que retire `Depends(require_admin)`
+    # del endpoint de escritura (mismo patron que test_crear_cliente_exige_sesion
+    # y el resto de tests `_exige_sesion` de escritura en este fichero).
+    assert cliente.post("/admin/api/ventas/convertir",
+                        json={"ids": [1], **_DESTINATARIO_OK}).status_code == 401
+
+
 def test_listado_convertibles_excluye_no_elegibles(cliente, admin, crear_sesion, motor, datos_base):
     usuario_id = datos_base["usuario_id"]
     ejercicio = datos_base["ejercicio"]
@@ -842,3 +850,12 @@ def test_convertir_endpoint_domicilio_ausente_da_422_no_500(cliente, admin, crea
 
     with crear_sesion() as s:
         assert s.get(Venta, elegible_id).estado == "cobrada"
+
+
+def test_convertir_endpoint_ids_vacio_da_422(cliente, admin, datos_base):
+    # `ConvertirReq.ids` exige `min_length=1` (Pydantic): "ids": [] se rechaza en la
+    # capa Pydantic ANTES de llegar al caso de uso, en vez de colar por `SinSimplificadas`
+    # y caer en el mensaje generico "Destinatario invalido" (misleading, Judge A/B WARNING).
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/ventas/convertir", json={"ids": [], **_DESTINATARIO_OK})
+    assert r.status_code == 422

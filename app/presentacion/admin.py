@@ -13,7 +13,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -35,6 +35,7 @@ from app.aplicacion.convertir_en_factura_f3 import (
     ConvertirEnFacturaF3,
     DatosDestinatario,
     DestinatarioInvalido,
+    RegistroOrigenNoEncontrado,
     SimplificadaNoElegible,
     SinSimplificadas,
     YaSustituida,
@@ -82,7 +83,7 @@ from app.aplicacion.tipos_iva import (
     ServicioTiposIva,
     TipoIvaNoEncontrado,
 )
-from app.presentacion.deps import get_session, get_uow
+from app.presentacion.deps import get_motor, get_session, get_uow
 from app.infraestructura.config import settings
 from app.infraestructura.imagenes import (
     ImagenInvalida,
@@ -93,7 +94,7 @@ from app.infraestructura.imagenes import (
 )
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.seguridad import verificar_pin
-from app.infraestructura.fiscal.engine import NullEngine
+from app.infraestructura.fiscal.engine import FiscalEngine, NullEngine
 from app.infraestructura.persistencia.modelos import (
     Articulo,
     Cliente,
@@ -230,7 +231,7 @@ class ConvertirReq(BaseModel):
     el DTO en Python (sin pasar por HTTP) podria seguir colando `None` hasta el caso
     de uso. La guarda real vive en `convertir_en_factura`, no aqui."""
 
-    ids: list[int]
+    ids: list[int] = Field(min_length=1, max_length=100)
     nif: str | None = None
     nombre: str | None = None
     domicilio: str | None = None
@@ -423,8 +424,8 @@ def listar_convertibles(_: int = Depends(require_admin), uow=Depends(get_uow)) -
 
 @router.post("/api/ventas/convertir")
 def convertir_en_factura(req: ConvertirReq, request: Request,
-                         usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
-    motor = NullEngine(settings.nif_emisor, settings.nombre_emisor)
+                         usuario_id: int = Depends(require_admin), uow=Depends(get_uow),
+                         motor: FiscalEngine = Depends(get_motor)) -> dict:
     # Boundary guard (`(x or "").strip()`): un NIF/nombre/domicilio `null` u omitido
     # en el JSON llega aqui como `None` (ver docstring de `ConvertirReq`); se coacciona
     # a cadena vacia ANTES de construir `DatosDestinatario`, para que el rechazo salga
@@ -444,6 +445,12 @@ def convertir_en_factura(req: ConvertirReq, request: Request,
         raise HTTPException(422, str(exc) or "Destinatario invalido (NIF/nombre/domicilio)") from exc
     except (SimplificadaNoElegible, YaSustituida) as exc:
         raise HTTPException(409, str(exc)) from exc
+    except RegistroOrigenNoEncontrado as exc:
+        # Invariante roto (defensa en profundidad, ver docstring de la excepcion en
+        # convertir_en_factura_f3.py): nunca deberia ocurrir con datos consistentes.
+        # 500 controlado -- sin traza, sin PII (el mensaje solo referencia el id
+        # interno de la venta) -- en vez de dejar subir un 500 crudo con traceback.
+        raise HTTPException(500, str(exc)) from exc
     return {
         "venta_id": resultado.venta_id, "num_serie": resultado.num_serie,
         "fecha": resultado.fecha, "total": resultado.total,
