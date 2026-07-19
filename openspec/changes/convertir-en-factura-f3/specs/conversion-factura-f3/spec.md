@@ -107,3 +107,8 @@ Disparo desde el TPV (botón footer sigue deshabilitado). Límite de 3.000 €
 entre Cierres Z de distintos periodos cuando la T convertida ya estaba en
 un Z pasado inmutable: se ACEPTA y se documenta como limitación conocida,
 sin bloqueo ni mecanismo compensatorio en esta capacidad.
+
+**Superseded por `cierre-z-f3-sustitucion`**: el cambio en
+`cobradas_por_rango_orden` (incluir `sustituida` + excluir la F3 sustituta)
+elimina el doble conteo descrito arriba, tanto en conversiones del mismo
+periodo como cross-period. Ver `openspec/specs/cierre-z/spec.md`.

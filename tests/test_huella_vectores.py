@@ -8,7 +8,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from _helpers import construir_venta
 from app.dominio.servicios.huella import huella_alta, huella_anulacion
+from app.infraestructura.fiscal.xml import (
+    NS,
+    Destinatario,
+    registro_alta_xml,
+    sistema_desde_settings,
+)
+from app.infraestructura.persistencia.modelos import RegistroFiscal
 
 # Huellas encadenadas de los ejemplos: caso 2 usa la del caso 1; caso 3 la del caso 2.
 HUELLA_CASO_1 = "3C464DAF61ACB827C65FDA19F352A4E3BDC2C640E9E9FC4CC058073F38F12F60"
@@ -69,3 +77,36 @@ def test_flag_cualificada_no_altera_huella():
     import inspect
 
     assert "cualificada" not in inspect.signature(huella_alta).parameters
+
+
+def test_huella_f3_independiente_del_destinatario(crear_sesion, motor, datos_base):
+    """Frontera fiscal (design D2, tasks.md 3.4): el bloque XML
+    Destinatarios/IDDestinatario NUNCA participa en el computo de la huella. La
+    huella ya queda fijada por `motor.emit` (`huella_alta`, ver arriba) en el
+    momento de la EMISION -- ANTES de que exista ningun destinatario resuelto
+    (eso solo ocurre en `registro_alta_xml`, en la SERIALIZACION, ver
+    app.aplicacion.remitir_lote). Serializar el MISMO `RegistroFiscal` F3 con
+    destinatarios distintos (o sin destinatario) debe producir siempre el mismo
+    elemento <Huella>, igual que `huella_alta` ni siquiera declara el parametro
+    (test anterior)."""
+    ejercicio = datos_base["ejercicio"]
+    with crear_sesion() as s, s.begin():
+        f3 = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "2", "21")])
+        s.add(f3)
+        registro = motor.emit(s, f3, serie="F", ejercicio=ejercicio, tipo_factura="F3")
+        reg_id = registro.id
+
+    with crear_sesion() as s:
+        reg = s.get(RegistroFiscal, reg_id)
+        sistema = sistema_desde_settings()
+        xml_sin = registro_alta_xml(reg, nombre_emisor="AcuaTPV", sistema=sistema, anterior=None)
+        xml_con_a = registro_alta_xml(
+            reg, nombre_emisor="AcuaTPV", sistema=sistema, anterior=None,
+            destinatario=Destinatario(nombre="Acuario S.L.", nif="A58818501"))
+        xml_con_b = registro_alta_xml(
+            reg, nombre_emisor="AcuaTPV", sistema=sistema, anterior=None,
+            destinatario=Destinatario(nombre="Otro Cliente Distinto", nif="B98765432"))
+
+        huella_tag = f"{{{NS}}}Huella"
+        huellas = {xml.find(huella_tag).text for xml in (xml_sin, xml_con_a, xml_con_b)}
+        assert huellas == {reg.huella}

@@ -73,6 +73,14 @@ F3 genera `orden` nuevo en un Z futuro, el mismo hecho económico se cuenta dos 
 **Rationale**: decisión de negocio cerrada en la propuesta; Z es inmutable (ddl.py). Se añade
 nota de conciliación en el informe de módulos. Sin mecanismo compensatorio en v1.
 
+**Superseded por `cierre-z-f3-sustitucion`**: `cobradas_por_rango_orden` pasa a incluir
+`Venta.estado IN ('cobrada', 'sustituida')` y excluye la F3 sustituta
+(`venta_sustituta_id`). El origen T se cuenta exactamente una vez, en la ventana de
+`orden` propia, sea la conversión del mismo periodo o cross-period; la F3 nunca aporta
+un total fantasma. El "doble conteo ACEPTADO" descrito arriba ya NO aplica desde ese
+cambio. Ver `openspec/specs/cierre-z/spec.md`, requirement "Cuadre de totales y
+desgloses".
+
 ## Data Flow
 
     Admin UI ──POST /api/ventas/convertir {ids[], nif, nombre, domicilio}
