@@ -264,6 +264,45 @@ Chain strategy: pending
   (registro inválido SÍ es el último) sigue verde sin cambios: coincide con el
   nuevo comportamiento cuando no hay nada posterior que diferir.
 
+### Fase 3 (bis, round 3): barrera FIFO persistente entre ciclos + footgun de las dos constantes congeladas — [APLICADO, review-driven (judgment-day round 3), rama `-c2`]
+
+> Hallazgo CRÍTICO (ambos jueces, empíricamente probado): `requiere_intervencion`
+> es un estado TERMINAL (`ESTADOS_TERMINALES`, `repositorios.py`) que
+> `pendientes()` EXCLUYE. El `break` de 3.19 (commit `37843bb`) solo difiere los
+> registros posteriores DENTRO del mismo ciclo de `remitir_lote` — en el ciclo
+> SIGUIENTE, `pendientes()` ya no ve el registro held (por ser terminal) y sus
+> sucesores de `orden` mayor SÍ se remiten, referenciando en su
+> `Encadenamiento`/`RegistroAnterior`/`Huella` una huella que la AEAT NUNCA
+> recibió — rotura PERMANENTE de la cadena, no solo dentro de una llamada.
+
+- [x] 3.20 (CRÍTICO) RED de dos ciclos `tests/test_remision.py::test_remitir_lote_barrera_persiste_entre_ciclos_orden_posterior_nunca_se_remite`
+  (orden 1 F3 válida, orden 2 F3 sin destinatario congelado, orden 3 F3 válida
+  → CICLO 1 remite orden 1 y marca orden 2 `requiere_intervencion`; CICLO 2
+  remitía orden 3 sin la barrera persistente, RED confirmado empíricamente) →
+  GREEN:
+  - `app/infraestructura/persistencia/repositorios.py`:
+    `RepositorioRegistrosSQL.orden_minimo_requiere_intervencion()` — menor
+    `orden` entre los registros en `requiere_intervencion`, o `None`.
+  - `app/dominio/puertos.py`: método añadido al protocolo `RepositorioRegistros`.
+  - `app/aplicacion/remitir_lote.py`: `RemitirLote.ejecutar()` filtra el lote a
+    `orden < barrera` en CADA ciclo (no solo dentro del ciclo que generó el
+    held), hasta que el registro held se resuelva vía `reencolar`. El test de
+    un solo ciclo (3.19) sigue verde sin cambios.
+- [x] 3.21 (footgun de nombres) `app/infraestructura/persistencia/ddl.py`:
+  renombrado de símbolo puro `_VENTA_CAMPOS_CONGELADOS` →
+  `_VENTA_CAMPOS_CONGELADOS_0001` (histórica, MUERTA a HEAD — solo alimenta la
+  migración 0001; `_VENTA_CAMPOS_CONGELADOS_V2` sigue siendo la autoritativa
+  desde la migración 0011). Cuerpo del trigger byte-idéntico, sin migración
+  nueva. Referencias en comentarios de `migrations/versions/0008-0011` y
+  `tests/test_migracion_cualificada.py`/`test_migracion_destinatario_f3.py`/
+  `test_inmutabilidad.py`/`modelos/venta.py` actualizadas a `_0001` o `_V2`
+  según a qué lista se referían realmente (0011 mezclaba menciones a ambas).
+  Nuevo test de drift `tests/test_inmutabilidad.py::test_trigger_venta_no_update_no_diverge_de_ddl_v2`:
+  construye una BD desde cero hasta `head` y compara el cuerpo VIVO de
+  `trg_venta_no_update` en `sqlite_master` contra `ddl.TRIGGER_VENTA_NO_UPDATE_V2`
+  byte a byte — detecta una futura columna congelada añadida sin el
+  DROP+CREATE correspondiente.
+
 ## Fase 4: Confirmación de reglas ya existentes (Requirement: soporte estructural F1/F3 en validaciones — motor-fiscal-verifactu spec — dep. ninguna) — [APLICADO, PR2]
 
 - [x] 4.1 `tests/test_validaciones_negocio.py::test_f3_con_destinatario_no_rechaza_falta_destinatario`
@@ -329,6 +368,14 @@ Chain strategy: pending
   + downgrade de la migración 0011 + guarda NIF-sin-nombre + XML NombreRazon
   vacío + lote detenido en registro no-último), 0 failed.
 - [x] 7.2 (para la corrección round 2) `.venv/Scripts/lint-imports`: 3/3
+  contratos kept.
+
+**Fase 3 (bis, round 3), judgment-day (rama `-c2`, tras el batch anterior)**:
+- [x] 7.1 (para la corrección round 3) `.venv/Scripts/python -m pytest`:
+  604 → 606 passed (2 tests nuevos: barrera FIFO persistente de dos ciclos en
+  `test_remision.py` + guarda de drift del trigger `trg_venta_no_update` en
+  `test_inmutabilidad.py`), 0 failed.
+- [x] 7.2 (para la corrección round 3) `.venv/Scripts/lint-imports`: 3/3
   contratos kept.
 
 Nota: cada Work Unit (PR 1/2/3) debe correr 7.1-7.2 de forma independiente antes de
