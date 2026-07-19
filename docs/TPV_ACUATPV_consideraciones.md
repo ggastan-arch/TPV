@@ -2,6 +2,19 @@
 
 Documento de análisis previo, actualizado: la persona titular tiene su domicilio fiscal en **Cantabria (territorio común, AEAT)**. No aplica TicketBAI/Batuz; el sistema de referencia es **VeriFactu (RRSIF)**. Pensado para servir de contexto/requisitos a Claude Code.
 
+Perfil de usuario y reto de diseño: simplicidad aparente sobre complejidad real
+
+Dolor a cubrir. La persona usuaria necesita un programa que se sienta simple, intuitivo y muy visual en el mostrador, pero completo y potente en el backoffice (maestros, fiscalidad VERI*FACTU, importación, informes). El reto central del producto es que parezca fácil lo que en realidad es complejo: toda la carga normativa (RRSIF, Orden HAC/1177, encadenamiento de huellas, series correlativas, remisión a la AEAT) debe quedar invisible para quien vende, sin renunciar a nada de ella por debajo.
+
+Implicación de diseño. La complejidad no se elimina, se oculta y automatiza: el flujo de cobro debe cerrarse en pocos toques y offline; los aspectos fiscales (numeración, registro, huella, QR, cola de remisión) se resuelven solos y solo se muestran como alarma cuando requieren atención (p. ej. nº de registros pendientes). El backoffice concentra la potencia; el TPV concentra la inmediatez.
+
+Doble modelo de entrada de artículos (imprescindible para acuariofilia). El catálogo mezcla dos naturalezas que exigen dos formas de selección conviviendo:
+
+- Táctil, imprescindible para artículos sin código de barras práctico y de altísimo volumen de referencias: peces y plantas vivas. Son muchísimos SKUs, cambian con frecuencia y se venden a granel/por unidad sin etiqueta física. Requieren botonera táctil organizada (perfiles → páginas → rejilla), familias en árbol navegables con el dedo y búsqueda rápida para no depender de memorizar posiciones.
+- Código de barras para artículos etiquetados (complementos, alimentación, acuarios, accesorios): lectura por escáner, N códigos de barras por artículo, EAN tratado siempre como texto con validación de dígito de control.
+
+Consecuencia. La interfaz del TPV debe soportar con la misma fluidez el gesto táctil (para el grueso de peces/plantas) y el escaneo (para el resto), sin que la persona usuaria perciba dos sistemas distintos. La botonera editable desde consola y el árbol de familias ilimitado son la respuesta a la escala del catálogo vivo; el alta de múltiples EAN por artículo, la respuesta al catálogo etiquetado.
+
 ---
 
 ## 1. Marco normativo (territorio común)
@@ -146,6 +159,7 @@ Aislar el cumplimiento tras una interfaz **`FiscalEngine`** con tres implementac
 ---
 
 ## 8. Particularidades del negocio (acuariofilia)
+
 
 - **Vivos sin código de barras** → familias/subfamilias y botonera. Variantes por talla como sub-artículos para no multiplicar botones.
 - **Garantías de vivos** (pez muerto en 24-48 h): flujo propio de devolución = rectificativa/devolución con rastro + merma.
