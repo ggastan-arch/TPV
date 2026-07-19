@@ -387,7 +387,7 @@ function ejecutarFuncion(f) {
   // no tiene deep-link (pestanaActual es una variable JS en memoria, sin hash
   // ni query param que la fije al cargar), asi que se enlaza a la raiz de la
   // consola en vez de a la pestana "Cierres Z" directamente.
-  else if (f === "cierre_z") window.location.href = "/admin/";
+  else if (f === "cierre_z") window.location.href = "/admin/#cierres";
   else alert("Funcion '" + f + "': disponible en una fase siguiente.");
 }
 
