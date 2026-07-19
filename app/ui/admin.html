@@ -644,8 +644,12 @@ async function pintarConvertir() {
       const r = await api("/admin/api/ventas/convertir", { method: "POST", body: JSON.stringify({
         ids, nif: $("#cvNif").value, nombre: $("#cvNombre").value, domicilio: $("#cvDomicilio").value,
       }) });
-      $("#cvMsg").textContent = `Convertido en factura ${r.num_serie}`;
+      // El refresco reconstruye #main (y por tanto #cvMsg): la confirmacion se
+      // asigna DESPUES de "await pintarConvertir()", sobre el nodo recien creado,
+      // para que el operador SI vea el numero de serie de la F3 (antes se
+      // asignaba sobre el nodo viejo, que el refresco destruia acto seguido).
       await pintarConvertir();
+      $("#cvMsg").textContent = `Convertido en factura ${r.num_serie}`;
     } catch (e) { $("#cvMsg").textContent = e.message; }
   };
 }

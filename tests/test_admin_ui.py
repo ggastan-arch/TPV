@@ -180,3 +180,19 @@ def test_admin_convertir_refresca_listado_tras_exito():
     assert "await pintarConvertir()" in bloque
     # Muestra la referencia (num_serie) de la F3 resultante tras convertir.
     assert "r.num_serie" in bloque
+
+
+def test_admin_convertir_confirmacion_sobrevive_al_refresco():
+    """Regresion: el refresco (`await pintarConvertir()`) reescribe
+    `#main.innerHTML` completo, lo que DESTRUYE cualquier nodo `#cvMsg` fijado
+    ANTES del refresco -- el operador nunca llegaba a ver el `num_serie` de la
+    F3 en el camino feliz (objetivo declarado de la tarea 6.1). No hay capa de
+    test de navegador/motor de plantillas en este repo (mismo patron estatico
+    que el resto de `test_admin_ui.py`): esta prueba asegura, a nivel de
+    ORDEN EN EL FUENTE, que la asignacion de `#cvMsg` con el mensaje de exito
+    ocurre DESPUES de `await pintarConvertir()` (sobre el nodo recien
+    reconstruido), nunca antes."""
+    bloque = _bloque_pintar_convertir(_html())
+    pos_refresco = bloque.index("await pintarConvertir()")
+    pos_confirmacion = bloque.index('$("#cvMsg").textContent = `Convertido en factura')
+    assert pos_confirmacion > pos_refresco
