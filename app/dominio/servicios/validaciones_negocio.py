@@ -39,6 +39,11 @@ _RE_HUELLA = re.compile(r"^[0-9A-F]{64}$")
 _RE_ID_SISTEMA = re.compile(r"^[A-Z0-9]{2}$")  # 2 posiciones, mayus (sin Ñ) o digito
 _CON_DESTINATARIO = {"F1", "F3", "R1", "R2", "R3", "R4"}
 _SIN_DESTINATARIO = {"F2", "R5"}
+# Alias PUBLICO (sin guion bajo) para reutilizacion desde otras capas -- fuente
+# unica de verdad de "que tipos de factura llevan destinatario" (revision Judgment
+# Day, item 7): `app.aplicacion.remitir_lote` deriva su propio conjunto de este
+# mismo objeto para no divergir silenciosamente si este conjunto cambia aqui.
+TIPOS_CON_DESTINATARIO = _CON_DESTINATARIO
 
 
 @dataclass(frozen=True)

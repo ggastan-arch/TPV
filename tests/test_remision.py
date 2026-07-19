@@ -322,6 +322,12 @@ def test_remitir_lote_no_cualificada_no_incluye_flag_no_regresion(crear_sesion, 
 
 
 # --- Fase 3: bloque Destinatarios resuelto al remitir (F1/F3) -------------------
+# NOTA (fix Judgment Day, riesgo fiscal real -- ver PRIMARY CHANGE): la resolucion
+# ya NO lee `venta.cliente` EN VIVO -- lee el SNAPSHOT congelado en
+# `venta.destinatario_nombre`/`venta.destinatario_nif`, escrito UNA SOLA VEZ por
+# `ConvertirEnFacturaF3` al emitir (migracion 0010). Los tests de abajo simulan
+# ese snapshot con asignacion directa (sin pasar por el caso de uso real, igual
+# que el resto de este fichero construye ventas "a mano" con `construir_venta`).
 def test_remitir_lote_resuelve_destinatario_para_f1_f3(crear_sesion, motor, datos_base):
     with crear_sesion() as s, s.begin():
         cliente = Cliente(nif="A58818501", nombre="Acuario S.L.")
@@ -329,6 +335,8 @@ def test_remitir_lote_resuelve_destinatario_para_f1_f3(crear_sesion, motor, dato
         s.flush()
         venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
         venta.cliente_id = cliente.id
+        venta.destinatario_nombre = cliente.nombre
+        venta.destinatario_nif = cliente.nif
         s.add(venta)
         motor.emit(s, venta, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
 
@@ -347,13 +355,31 @@ def test_remitir_lote_resuelve_destinatario_para_f1_f3(crear_sesion, motor, dato
     assert b"<sum1:NIF>A58818501</sum1:NIF>" in body
 
 
-def test_remitir_lote_no_resuelve_destinatario_sin_cliente(crear_sesion, motor, datos_base):
-    """F1/F3 sin cliente asignado (venta.cliente_id es None) -> destinatario=None,
-    igual que antes de este cambio (no regresion)."""
+def test_remitir_lote_usa_snapshot_congelado_no_cliente_editado_despues(
+    crear_sesion, motor, datos_base
+):
+    """FIX Judgment Day (riesgo fiscal real): el destinatario remitido es el
+    SNAPSHOT congelado en la venta al emitir, NUNCA una relectura en vivo de
+    `venta.cliente` -- si el cliente se edita DESPUES de emitir (p.ej. antes de
+    que la remision FIFO asincrona procese el registro), la AEAT debe recibir el
+    MISMO destinatario que se emitio/imprimio en la factura, no el editado."""
     with crear_sesion() as s, s.begin():
+        cliente = Cliente(nif="A58818501", nombre="Acuario S.L.")
+        s.add(cliente)
+        s.flush()
         venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        venta.cliente_id = cliente.id
+        venta.destinatario_nombre = cliente.nombre
+        venta.destinatario_nif = cliente.nif
         s.add(venta)
         motor.emit(s, venta, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+
+    # El cliente se edita DESPUES de la emision, ANTES de que RemitirLote actue
+    # (cola FIFO asincrona -- exactamente el escenario del hallazgo fiscal).
+    with crear_sesion() as s, s.begin():
+        cliente_editado = s.query(Cliente).filter_by(nif="A58818501").one()
+        cliente_editado.nombre = "Otro Nombre Editado S.L."
+        cliente_editado.nif = "B12345674"
 
     capturado: dict = {}
 
@@ -364,7 +390,96 @@ def test_remitir_lote_no_resuelve_destinatario_sin_cliente(crear_sesion, motor, 
         return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
 
     _remitir(crear_sesion, poster)
-    assert b"Destinatarios" not in capturado["body"]
+    body = capturado["body"]
+    assert b"<sum1:NombreRazon>Acuario S.L.</sum1:NombreRazon>" in body
+    assert b"<sum1:NIF>A58818501</sum1:NIF>" in body
+    assert b"Otro Nombre Editado" not in body
+    assert b"B12345674" not in body
+
+
+def test_remitir_lote_f1_f3_sin_destinatario_congelado_marca_requiere_intervencion(
+    crear_sesion, motor, datos_base
+):
+    """Guarda fiscal (fix Judgment Day): un F1/F3 SIN `destinatario_nif` congelado
+    (dato inconsistente -- NO deberia ocurrir con el camino real de
+    `ConvertirEnFacturaF3`, que siempre lo fija antes de emitir) ya NO se remite
+    silenciosamente sin destinatario (comportamiento PREVIO, bug): un `<NIF/>`
+    vacio o el bloque `Destinatarios` ausente en un F1/F3 es fiscalmente invalido
+    (FALTA_DESTINATARIO, doc Validaciones_Errores_Veri-Factu.pdf 3.1.3.13) y
+    bloquearia TODA la cola FIFO si la AEAT lo rechaza. Se marca
+    'requiere_intervencion' y se EXCLUYE del sobre enviado."""
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        s.add(venta)
+        motor.emit(s, venta, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+
+    def poster(url, headers, body):
+        pytest.fail("no debe remitirse un F1/F3 sin destinatario congelado (dato invalido)")
+
+    respuesta = _remitir(crear_sesion, poster)
+    assert respuesta is None  # nada que enviar: unico registro del lote, invalido
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).registros
+        reg = repo.ultimos(1)[0]
+        assert reg.estado_remision == "requiere_intervencion"
+        assert repo.contar_pendientes() == 0
+
+
+def test_remitir_lote_excluye_solo_el_registro_invalido_resto_del_lote_sigue(
+    crear_sesion, motor, datos_base
+):
+    """La guarda de destinatario faltante NO bloquea el resto del lote: un F3
+    valido junto a un F3 sin destinatario congelado -- solo el invalido queda
+    `requiere_intervencion`, el valido se remite con normalidad."""
+    with crear_sesion() as s, s.begin():
+        cliente = Cliente(nif="A58818501", nombre="Acuario S.L.")
+        s.add(cliente)
+        s.flush()
+        f3_valida = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        f3_valida.cliente_id = cliente.id
+        f3_valida.destinatario_nombre = cliente.nombre
+        f3_valida.destinatario_nif = cliente.nif
+        s.add(f3_valida)
+        motor.emit(s, f3_valida, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+        f3_valida_num = f3_valida.num_serie_factura
+
+        f3_invalida = construir_venta(datos_base["usuario_id"], [("Guppy", "3.00", "1", "21")])
+        s.add(f3_invalida)
+        motor.emit(s, f3_invalida, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+        f3_invalida_num = f3_invalida.num_serie_factura
+
+    capturado: dict = {}
+
+    def poster(url, headers, body):
+        capturado["body"] = body
+        root = etree.fromstring(body)
+        nums = [e.text for e in root.findall(f".//{_E_SF}IDFactura/{_E_SF}NumSerieFactura")]
+        return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
+
+    respuesta = _remitir(crear_sesion, poster)
+    assert respuesta is not None
+    assert f3_invalida_num.encode() not in capturado["body"]
+    assert f3_valida_num.encode() in capturado["body"]
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).registros
+        regs = {r.num_serie_factura: r for r in repo.ultimos(2)}
+        assert regs[f3_valida_num].estado_remision == "aceptado"
+        assert regs[f3_invalida_num].estado_remision == "requiere_intervencion"
+
+
+# --- Item 7: `_TIPOS_CON_DESTINATARIO` alineado con validaciones_negocio -------
+def test_tipos_con_destinatario_alineado_con_validaciones_negocio():
+    """`remitir_lote._TIPOS_CON_DESTINATARIO` NUNCA debe divergir silenciosamente
+    de `validaciones_negocio.TIPOS_CON_DESTINATARIO` (fuente unica de verdad de
+    "que tipos de factura llevan destinatario") -- si R1-R4 (rectificativas) se
+    implementan sin tocar `remitir_lote.py`, la resolucion debe aplicarles
+    exactamente la misma logica que F1/F3 (incluida la guarda de NIF faltante)."""
+    from app.aplicacion import remitir_lote
+    from app.dominio.servicios import validaciones_negocio
+
+    assert remitir_lote._TIPOS_CON_DESTINATARIO == validaciones_negocio.TIPOS_CON_DESTINATARIO
 
 
 # --- Fase 3 (3.7): no regresion -- F2 nunca recibe destinatario -----------------
