@@ -19,7 +19,9 @@ from app.aplicacion.convertir_en_factura_f3 import (
     YaSustituida,
 )
 from app.infraestructura.persistencia.modelos import (
+    Cliente,
     LogAuditoria,
+    RegistroFacturaSustituida,
     RegistroFiscal,
     Venta,
     VentaSustitucion,
@@ -106,6 +108,74 @@ def test_convertir_dos_veces_una_t_falla(crear_sesion, motor, datos_base):
         )
 
 
+# --- ids duplicados en una misma llamada se deduplican (no IntegrityError cruda) ----
+
+
+def test_ids_duplicados_se_deduplican(crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+
+    with crear_sesion() as s, s.begin():
+        t_id = _emitir_t(s, motor, usuario_id, ejercicio, [("Neon", "2.50", "2", "21")])
+
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=usuario_id, origen="local",
+            simplificada_ids=[t_id, t_id], destinatario=_DESTINATARIO_OK,
+        )
+
+    assert resultado.num_origenes == 1  # el id repetido cuenta una sola vez
+
+    with crear_sesion() as s:
+        t = s.get(Venta, t_id)
+        assert t.estado == "sustituida"
+        f3 = s.get(Venta, resultado.venta_id)
+        assert len(f3.lineas) == 1  # las lineas NO se duplican
+        assert f3.total_con_iva == t.total_con_iva  # los totales NO se doblan
+        assert s.query(VentaSustitucion).filter_by(venta_sustituida_id=t_id).count() == 1
+
+
+# --- elegibilidad se fia de VentaSustitucion, no solo del campo estado --------------
+
+
+def _crear_t_con_sustitucion_pero_estado_inconsistente(session, motor, usuario_id, ejercicio) -> int:
+    """T cobrada con un `VentaSustitucion` ya registrado pero SIN actualizar su
+    estado a 'sustituida' (simula la inconsistencia "dos fuentes de verdad" que
+    `_validar_elegible` debe cubrir fiandose de `VentaSustitucion`, no solo del
+    campo `estado`)."""
+    t = construir_venta(usuario_id, [("Neon", "2.50", "1", "21")])
+    session.add(t)
+    motor.emit(session, t, serie="T", ejercicio=ejercicio, tipo_factura="F2")
+    t_id = t.id
+
+    f3 = construir_venta(usuario_id, [("Neon", "2.50", "1", "21")])
+    session.add(f3)
+    motor.emit(session, f3, serie="F", ejercicio=ejercicio, tipo_factura="F3")
+    session.add(VentaSustitucion(venta_sustituta_id=f3.id, venta_sustituida_id=t_id))
+    # A proposito NO se marca t.estado = "sustituida": el UNIQUE de BD ya
+    # impediria una segunda sustitucion, pero la elegibilidad NO debe depender
+    # solo de ese campo.
+    return t_id
+
+
+def test_elegibilidad_rechaza_id_en_venta_sustitucion_aunque_estado_no_lo_diga(
+    crear_sesion, motor, datos_base
+):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+
+    with crear_sesion() as s, s.begin():
+        t_id = _crear_t_con_sustitucion_pero_estado_inconsistente(
+            s, motor, usuario_id, ejercicio
+        )
+
+    with crear_sesion() as s, pytest.raises(YaSustituida):
+        _uc(s, motor).ejecutar(
+            usuario_id=usuario_id, origen="local",
+            simplificada_ids=[t_id], destinatario=_DESTINATARIO_OK,
+        )
+
+
 # --- 2.5: NIF de destinatario invalido rechaza sin persistir nada -------------------
 
 
@@ -126,6 +196,35 @@ def test_nif_destinatario_invalido(crear_sesion, motor, datos_base):
             usuario_id=usuario_id, origen="local",
             simplificada_ids=[t_id], destinatario=destinatario_invalido,
         )
+
+    with crear_sesion() as s:
+        t = s.get(Venta, t_id)
+        assert t.estado == "cobrada"  # nada cambio: rechazo antes de tocar la sesion
+
+
+# --- art. 6 ROF: nombre/domicilio del destinatario vacios rechaza sin persistir -----
+
+
+def test_destinatario_con_nombre_o_domicilio_vacio_rechaza(crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+
+    with crear_sesion() as s, s.begin():
+        t_id = _emitir_t(s, motor, usuario_id, ejercicio, [("Neon", "2.50", "1", "21")])
+
+    destinatarios_invalidos = [
+        DatosDestinatario(nif="A58818501", nombre="", domicilio="Calle Mayor 1"),
+        DatosDestinatario(nif="A58818501", nombre="   ", domicilio="Calle Mayor 1"),
+        DatosDestinatario(nif="A58818501", nombre="Acuario S.L.", domicilio=""),
+        DatosDestinatario(nif="A58818501", nombre="Acuario S.L.", domicilio="   "),
+    ]
+
+    for destinatario in destinatarios_invalidos:
+        with crear_sesion() as s, pytest.raises(DestinatarioInvalido):
+            _uc(s, motor).ejecutar(
+                usuario_id=usuario_id, origen="local",
+                simplificada_ids=[t_id], destinatario=destinatario,
+            )
 
     with crear_sesion() as s:
         t = s.get(Venta, t_id)
@@ -237,6 +336,9 @@ def test_rechazo_atomico_si_una_t_no_es_elegible(crear_sesion, motor, datos_base
     with crear_sesion() as s:
         ventas_antes = s.query(Venta).count()
         registros_antes = s.query(RegistroFiscal).count()
+        clientes_antes = s.query(Cliente).count()
+        facturas_sustituidas_antes = s.query(RegistroFacturaSustituida).count()
+        sustituciones_antes = s.query(VentaSustitucion).count()
 
     with crear_sesion() as s, pytest.raises(YaSustituida):
         _uc(s, motor).ejecutar(
@@ -247,6 +349,9 @@ def test_rechazo_atomico_si_una_t_no_es_elegible(crear_sesion, motor, datos_base
     with crear_sesion() as s:
         assert s.query(Venta).count() == ventas_antes
         assert s.query(RegistroFiscal).count() == registros_antes
+        assert s.query(Cliente).count() == clientes_antes  # no partial persist (2.11)
+        assert s.query(RegistroFacturaSustituida).count() == facturas_sustituidas_antes
+        assert s.query(VentaSustitucion).count() == sustituciones_antes
         assert s.get(Venta, t_elegible_id).estado == "cobrada"
 
 

@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from sqlalchemy import select
+
 from app.dominio.puertos import MotorFiscal, UnidadDeTrabajo
 from app.dominio.servicios.validadores import normalizar_documento, validar_documento
 from app.infraestructura.persistencia.modelos import (
@@ -68,7 +70,19 @@ class YaSustituida(Exception):
 
 
 class DestinatarioInvalido(Exception):
-    """El NIF del destinatario no supera el digito de control (HTTP 422)."""
+    """El NIF del destinatario no supera el digito de control, o su nombre/domicilio
+    vienen vacios (art. 6 ROF: contenido minimo de una factura completa) (HTTP 422)."""
+
+
+class RegistroOrigenNoEncontrado(Exception):
+    """Invariante roto: una simplificada ya validada como elegible no tiene un
+    registro de ALTA fiscal propio (nunca deberia ocurrir con datos consistentes,
+    toda venta serie T 'cobrada'/'sustituida' fue emitida por el motor fiscal).
+    Defensa en profundidad, no un camino de negocio esperado."""
+
+    def __init__(self, venta_id: int):
+        super().__init__(f"Venta {venta_id} no tiene registro de alta fiscal")
+        self.venta_id = venta_id
 
 
 class ConvertirEnFacturaF3:
@@ -83,12 +97,22 @@ class ConvertirEnFacturaF3:
         if not simplificada_ids:
             raise SinSimplificadas()
 
+        # De-duplicar preservando orden ANTES de cualquier validacion/escritura: una
+        # seleccion repetida convierte esa factura una sola vez (sin esto, [5, 5]
+        # duplica lineas/totales y solo el UNIQUE de venta_sustitucion lo aborta con
+        # un IntegrityError crudo).
+        simplificada_ids = list(dict.fromkeys(simplificada_ids))
+
         # Revalidar CADA id (pre-check de negocio, no confiar solo en el UNIQUE de
         # BD: decision.md "elegibilidad en el caso de uso, no en la BD"). Ninguna
         # de estas lecturas muta la sesion.
         origenes = [self._validar_elegible(vid) for vid in simplificada_ids]
 
         if not validar_documento(destinatario.nif):
+            raise DestinatarioInvalido(destinatario.nif)
+        # Art. 6 ROF: la factura completa exige nombre y domicilio del destinatario
+        # (mismo guardarraiz que `EmitirVenta._exigir_datos_cualificada` para domicilio).
+        if not destinatario.nombre.strip() or not destinatario.domicilio.strip():
             raise DestinatarioInvalido(destinatario.nif)
 
         # A partir de aqui TODAS las validaciones pasaron: recien ahora se toca
@@ -108,6 +132,8 @@ class ConvertirEnFacturaF3:
         num_series_origen = []
         for origen_venta in origenes:
             registro_origen = self.uow.registros.buscar_alta_por_venta(origen_venta.id)
+            if registro_origen is None:
+                raise RegistroOrigenNoEncontrado(origen_venta.id)
             self.uow.session.add(RegistroFacturaSustituida(
                 registro_fiscal_id=registro.id,
                 id_emisor=registro_origen.id_emisor,
@@ -140,7 +166,14 @@ class ConvertirEnFacturaF3:
         venta = self.uow.ventas.buscar(venta_id)
         if venta is None or venta.serie != "T" or venta.estado not in _ESTADOS_T_RECONOCIDOS:
             raise SimplificadaNoElegible(venta_id)
-        if venta.estado == "sustituida":
+        # No fiarse solo de `estado`: un `VentaSustitucion` ya registrado para este
+        # id es la MISMA fuente de verdad que usa `RepositorioVentasSQL.convertibles()`
+        # (hardening: mata la teoria de "dos fuentes de verdad" -- una `cobrada` ya
+        # sustituida por una inconsistencia previa no debe llegar al UNIQUE de BD).
+        ya_referenciada = self.uow.session.execute(
+            select(VentaSustitucion.id).where(VentaSustitucion.venta_sustituida_id == venta_id)
+        ).first()
+        if venta.estado == "sustituida" or ya_referenciada is not None:
             raise YaSustituida(venta_id)
         return venta
 
