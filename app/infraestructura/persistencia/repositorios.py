@@ -436,9 +436,17 @@ class RepositorioCierresZSQL:
         return list(self._s.execute(stmt).scalars())
 
     def cobradas_por_rango_orden(self, desde_orden: int, hasta_orden: int) -> TotalesRangoZ:
-        """Agrega totales y desgloses de las ventas `cobrada` cuyo registro de ALTA
-        tiene `orden` en [desde_orden, hasta_orden]. Rango vacio -> totales en cero
-        (Z a cero permitido, ver design.md)."""
+        """Agrega totales y desgloses de las ventas `cobrada` o `sustituida` cuyo
+        registro de ALTA tiene `orden` en [desde_orden, hasta_orden], excluyendo la
+        factura F3 sustituta de una conversion. Rango vacio -> totales en cero
+        (Z a cero permitido, ver design.md).
+
+        `sustituida` se incluye porque la simplificada origen conserva `base_total`,
+        `cuota_total`, `total_con_iva` y sus filas `Pago` reales congeladas
+        (`trg_venta_no_update` solo permite ese transito sin tocar esos campos); la
+        F3 se excluye porque es un total en papel sin filas `Pago` propias -- sin
+        esto, `convertir_en_factura_f3` deja el `desglose_pago` corto o duplica el
+        efectivo cross-period (change `cierre-z-f3-sustitucion`)."""
         if hasta_orden < desde_orden:
             return TotalesRangoZ(
                 num_tickets=0, base_total=Decimal("0.00"), cuota_total=Decimal("0.00"),
@@ -452,7 +460,11 @@ class RepositorioCierresZSQL:
                 RegistroFiscal.tipo_registro == "alta",
                 RegistroFiscal.orden >= desde_orden,
                 RegistroFiscal.orden <= hasta_orden,
-                Venta.estado == "cobrada",
+                Venta.estado.in_(("cobrada", "sustituida")),
+                # Excluye el LADO SUSTITUTO (la F3); NO invertir con
+                # `venta_sustituida_id` (ese es el origen, usado por `convertibles()`
+                # en este mismo fichero) o el cuadre queda al reves.
+                Venta.id.notin_(select(VentaSustitucion.venta_sustituta_id)),
             )
         )
         ventas = list(self._s.execute(stmt).scalars())
