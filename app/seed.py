@@ -215,64 +215,51 @@ def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
             s.add(CodigoBarras(articulo_id=articulo.id, codigo=ean, principal=True))
         articulos[datos["corto"]] = articulo
 
-    _sembrar_botonera_demo(s, familias, articulos)
+    _sembrar_botonera_demo(s, familias)
 
 
 def _sembrar_botonera_demo(
     s: Session,
     familias: dict[str, Familia],
-    articulos: dict[str, Articulo],
 ) -> None:
-    """Botonera demo: pagina con articulos frecuentes, navegacion por familias
-    y funciones. Tolera que falte algun articulo del catalogo."""
+    """Botonera demo: la pagina de Inicio muestra SOLO familias de nivel raiz
+    (una por familia, `tipo="familia"` en la API/tpv.html), no una mezcla de
+    articulos sueltos: la persona operadora entra a cada familia por boton y
+    llega a sus articulos por drill-down (`abrirFamilia` en tpv.html).
+
+    Solo se siembra boton para las familias raiz VISIBLES en tactil (peces,
+    plantas, agua fria); el material con codigo de barras (alimento,
+    filtracion, iluminacion, decoracion...) queda fuera del inicio a
+    proposito: esas familias estan ocultas (`FAMILIAS_OCULTAS_TACTIL`) y se
+    venden por escaner/buscador, no tocando botones (ver
+    `test_sembrar_demo_oculta_familias_de_material`).
+
+    La rejilla se ajusta al numero de botones (3 familias + 1 funcion de
+    apoyo) en vez de dejar sin usar la mayor parte de una rejilla 5x4."""
     perfil = PerfilBotonera(nombre="Principal")
     s.add(perfil)
     s.flush()
     pagina = PaginaBotonera(
-        perfil_id=perfil.id, nombre="Inicio", orden=0, columnas=5, filas=4
+        perfil_id=perfil.id, nombre="Inicio", orden=0, columnas=2, filas=2
     )
     s.add(pagina)
     s.flush()
 
-    # Filas 0-1: articulos con foto real (lucen el catalogo demo en los botones).
-    directos_fila0 = ["Neón cardenal", "Guppy macho", "Disco turquesa", "Betta macho", "Anubias"]
-    directos_fila1 = ["Ancistrus", "Apisto. borellii", "Yellow", "Cometa", "Guppy delta"]
-    for fila, cortos in ((0, directos_fila0), (1, directos_fila1)):
-        for col, corto in enumerate(cortos):
-            art = articulos.get(corto)
-            if art is not None:
-                s.add(Boton(pagina_id=pagina.id, fila=fila, columna=col,
-                            texto=art.nombre_corto, articulo_id=art.id))
-
-    # Fila 2: navegacion por las familias VISIBLES en tactil (peces, plantas,
-    # agua fria) mas dos peces con foto. El material (alimento, filtracion,
-    # iluminacion, decoracion...) NO tiene boton: esas familias estan ocultas y
-    # se venden por escaner/buscador, no tocando la pantalla.
-    fams_visibles = [
+    fams_raiz_visibles = [
         ("Peces", "Peces por familias"),
         ("Plantas", "Plantas"),
         ("Agua fría", "Agua fría"),
     ]
-    for col, (texto, ruta) in enumerate(fams_visibles):
+    for i, (texto, ruta) in enumerate(fams_raiz_visibles):
         fam = familias.get(ruta)
         if fam is not None:
-            s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
-                        texto=texto, familia_id=fam.id))
-    for col, corto in ((3, "Aphyosemion"), (4, "Tiburón bala")):
-        art = articulos.get(corto)
-        if art is not None:
-            s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
-                        texto=art.nombre_corto, articulo_id=art.id))
+            s.add(Boton(pagina_id=pagina.id, fila=i // pagina.columnas,
+                        columna=i % pagina.columnas, texto=texto, familia_id=fam.id))
 
-    # Fila 3: boton fijo de cobro rapido de "Bolsa" (art. 0,10 EUR) + funciones.
-    # Solo funciones ya implementadas en la botonera (ejecutarFuncion en tpv.html):
-    # "abrir_cajon". No se siembra "convertir_factura" mientras la funcion no exista
-    # (evita un boton que no hace nada en el demo).
-    bolsa = articulos.get("Bolsa")
-    if bolsa is not None:
-        s.add(Boton(pagina_id=pagina.id, fila=3, columna=0,
-                    texto=bolsa.nombre_corto, articulo_id=bolsa.id))
-    s.add(Boton(pagina_id=pagina.id, fila=3, columna=4, texto="Abrir cajón",
+    # Unica funcion (no articulo, no familia) que ya tenia hueco en el inicio
+    # demo: abrir el cajon sin venta. No se siembra "convertir_factura"
+    # mientras la funcion no exista (evita un boton que no hace nada).
+    s.add(Boton(pagina_id=pagina.id, fila=1, columna=1, texto="Abrir cajón",
                 funcion="abrir_cajon"))
 
 
