@@ -170,6 +170,14 @@ class RepositorioVentasSQL:
     def buscar(self, venta_id: int) -> Venta | None:
         return self._s.get(Venta, venta_id)
 
+    def listar_por_estado(self, estado: str) -> list[Venta]:
+        stmt = select(Venta).where(Venta.estado == estado).order_by(Venta.id.desc())
+        return list(self._s.execute(stmt).scalars())
+
+    def eliminar(self, venta: Venta) -> None:
+        # Solo aparcada: los triggers de inmutabilidad eximen ese estado (ADR-0003).
+        self._s.delete(venta)
+
 
 class RepositorioUsuariosSQL:
     def __init__(self, session: Session):

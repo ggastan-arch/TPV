@@ -1,7 +1,7 @@
 """Botonera configurable: perfil -> pagina -> boton.
 
 Un boton apunta EXACTAMENTE a uno de: articulo, familia (navega a hijos) o funcion
-(cobrar, convertir en factura, devolucion, aparcar/recuperar, abrir cajon,
+(cobrar, convertir en factura, devolucion, aparcar/desaparcar, abrir cajon,
 descuento, cierre de caja). Un CHECK garantiza que el destino sea unico.
 
 `FUNCIONES` es un concepto de DOMINIO (el conjunto de acciones rapidas soportadas

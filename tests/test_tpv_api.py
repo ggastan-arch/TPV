@@ -82,6 +82,26 @@ def test_pagina_tpv_sirve_html(cliente):
     assert "TPV AcuaTPV" in r.text
 
 
+def _bloque_boton_que_contiene(html: str, etiqueta: str) -> str:
+    idx = html.index(etiqueta)
+    inicio = html.rindex("<button", 0, idx)
+    fin = html.index("</button>", idx) + len("</button>")
+    return html[inicio:fin]
+
+
+def test_tpv_aparcar_y_desaparcar_habilitados_y_referencian_su_api(cliente):
+    """Fase 4 (contenido estatico): 'Aparcar ticket'/'Desaparcar' dejan de estar
+    `disabled` y su wiring referencia los endpoints nuevos."""
+    html = cliente.get("/tpv/").text
+
+    for etiqueta in ("Aparcar ticket", "Desaparcar"):
+        bloque = _bloque_boton_que_contiene(html, etiqueta)
+        assert "disabled" not in bloque, f"boton '{etiqueta}' sigue disabled"
+
+    assert "/tpv/api/aparcar" in html
+    assert "/tpv/api/aparcadas" in html
+
+
 def test_login_ok_y_ko(cliente, datos_tpv):
     r = cliente.post("/tpv/api/login", json={"pin": "0000"})
     assert r.status_code == 200
@@ -515,6 +535,114 @@ def test_buscar_limita_a_top_20(cliente, crear_sesion, datos_base):
     r = cliente.get("/tpv/api/buscar", params={"q": "pez"})
     assert r.status_code == 200
     assert len(r.json()) == 20
+
+
+# --- Aparcar / listar / desaparcar (borradores no fiscales) -------------------
+
+
+def test_aparcar_ticket_devuelve_venta_id_etiqueta_total_n_lineas(cliente, datos_tpv):
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "2"}],
+        "etiqueta": "Mostrador 2",
+    })
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert set(cuerpo.keys()) == {"venta_id", "etiqueta", "total", "n_lineas"}
+    assert cuerpo["etiqueta"] == "Mostrador 2"
+    assert cuerpo["total"] == "5.00"
+    assert cuerpo["n_lineas"] == 1
+
+
+def test_aparcar_ticket_vacio_rechaza(cliente, datos_tpv):
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/aparcar",
+                     json={"usuario_id": login["usuario_id"], "items": []})
+    assert r.status_code == 400
+
+
+def test_listar_aparcadas_orden_id_desc(cliente, datos_tpv):
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    primero = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}],
+    }).json()
+    segundo = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "3"}],
+        "etiqueta": "Barra",
+    }).json()
+
+    r = cliente.get("/tpv/api/aparcadas")
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert [item["venta_id"] for item in cuerpo] == [segundo["venta_id"], primero["venta_id"]]
+    assert set(cuerpo[0].keys()) == {"venta_id", "etiqueta", "total", "n_lineas"}
+
+
+def test_desaparcar_devuelve_lineas_enriquecidas_y_borra(cliente, datos_tpv):
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    aparcada = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "2"}],
+    }).json()
+
+    r = cliente.delete(f"/tpv/api/aparcadas/{aparcada['venta_id']}")
+    assert r.status_code == 200
+    lineas = r.json()["lineas"]
+    assert len(lineas) == 1
+    linea = lineas[0]
+    assert linea["articulo_id"] == datos_tpv["neon_id"]
+    assert linea["cantidad"] == "2.000"
+    assert linea["pvp"] == "2.50"
+    assert linea["modo_precio"] == "fijo"
+    assert linea["nombre_corto"] == "Neon"
+
+    # Consumido: ya no aparece en el listado.
+    assert cliente.get("/tpv/api/aparcadas").json() == []
+
+
+def test_desaparcar_id_ya_consumido_devuelve_404(cliente, datos_tpv):
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    aparcada = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}],
+    }).json()
+
+    assert cliente.delete(f"/tpv/api/aparcadas/{aparcada['venta_id']}").status_code == 200
+    assert cliente.delete(f"/tpv/api/aparcadas/{aparcada['venta_id']}").status_code == 404
+
+
+def test_cobrar_un_carrito_recuperado_emite_venta_nueva(cliente, crear_sesion, datos_tpv):
+    """No regresion (spec 'Cobrar un carrito recuperado'): un borrador
+    desaparcado se cobra por el camino INTACTO `EmitirVenta`/`/tpv/api/cobrar`,
+    igual que cualquier venta emitida desde cero (serie + numero + registro +
+    huella)."""
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    aparcada = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "2"}],
+    }).json()
+
+    recuperada = cliente.delete(f"/tpv/api/aparcadas/{aparcada['venta_id']}").json()
+
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": l["articulo_id"], "cantidad": l["cantidad"],
+                   "pvp": l["pvp"], "descripcion": l["descripcion"]}
+                  for l in recuperada["lineas"]],
+        "pagos": [{"medio": "efectivo", "importe": "5.00"}],
+    })
+    assert r.status_code == 200
+    datos = r.json()
+    assert datos["num_serie"].startswith("T")
+    assert datos["total"] == "5.00"
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, datos["venta_id"])
+        assert venta.estado == "cobrada"
+        assert s.query(RegistroFiscal).filter_by(venta_id=venta.id).count() == 1
 
 
 def test_stock_alarma_refleja_sobreventa(cliente, crear_sesion, datos_tpv):

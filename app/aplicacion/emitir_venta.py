@@ -9,9 +9,9 @@ import logging
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.aplicacion.lineas import ItemVenta, resolver_items
+from app.aplicacion.lineas import ItemVenta, construir_lineas, resolver_items
 from app.dominio.puertos import MotorFiscal, UnidadDeTrabajo
-from app.infraestructura.persistencia.modelos import MovimientoStock, Pago, Venta, VentaLinea
+from app.infraestructura.persistencia.modelos import MovimientoStock, Pago, Venta
 from app.infraestructura.reloj import ahora_huso
 
 _log = logging.getLogger(__name__)
@@ -60,12 +60,7 @@ class EmitirVenta:
         venta = Venta(estado="aparcada", usuario_id=usuario.id,
                       base_total=totales.base_total, cuota_total=totales.cuota_total,
                       total_con_iva=totales.total_con_iva)
-        for lr in lineas:
-            venta.lineas.append(VentaLinea(
-                articulo_id=lr.articulo.id, descripcion=lr.descripcion,
-                cantidad=lr.cantidad, pvp_unitario=lr.pvp,
-                tipo_iva_porcentaje=lr.calculo.porcentaje, base_linea=lr.calculo.base,
-                cuota_linea=lr.calculo.cuota, total_linea=lr.calculo.total))
+        venta.lineas.extend(construir_lineas(lineas))
         for p in pagos:
             venta.pagos.append(Pago(medio=p.medio, importe=Decimal(p.importe)))
         self.uow.ventas.agregar(venta)
