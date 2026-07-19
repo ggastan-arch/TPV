@@ -136,6 +136,7 @@ async function dashboard() {
       <button data-t="cierres">Cierres Z</button>
       <button data-t="maestros">Maestros</button>
       <button data-t="clientes">Clientes</button>
+      <button data-t="convertir">Convertir en factura</button>
       <button data-t="botoneras">Botoneras</button>
     </div><main id="main"></main>`;
   // En demo el acceso es libre (sin sesion que cerrar, ver require_admin_demo);
@@ -159,6 +160,7 @@ async function pintarPestana() {
   if (pestanaActual === "dia") return pintarDia();
   if (pestanaActual === "cierres") return pintarCierresZ();
   if (pestanaActual === "clientes") return pintarClientes();
+  if (pestanaActual === "convertir") return pintarConvertir();
   if (pestanaActual === "botoneras") return pintarBotoneras();
   return pintarMaestros();
 }
@@ -610,6 +612,41 @@ function modalCliente(cliente) {
       ov.remove();
       await pintarClientes();
     } catch (e) { $("#clError", ov).textContent = e.message; }
+  };
+}
+
+/* ---- CONVERTIR EN FACTURA (F3): sustituye 1..N simplificadas por una completa ---- */
+// Multiseleccion 1..N (checkboxes) + form inline de destinatario (NIF/nombre/domicilio,
+// obligatorios, art. 6/7 ROF). El backend valida elegibilidad y NIF (422/409 controlados);
+// aqui solo se exige la seleccion no vacia antes de confirmar (evita un POST vacio).
+async function pintarConvertir() {
+  const elegibles = await api("/admin/api/ventas/convertibles");
+  const filas = elegibles.map((v) => `<tr>
+      <td><input type="checkbox" class="cvSel" value="${v.id}"></td>
+      <td>${v.num_serie_factura}</td><td>${v.fecha_hora_huso}</td><td>${eur(v.total_con_iva)}</td>
+    </tr>`).join("");
+  $("#main").innerHTML = `
+    <div class="card"><h2>Simplificadas convertibles</h2>
+      <table><thead><tr><th></th><th>Nº serie</th><th>Fecha</th><th>Total</th></tr></thead>
+      <tbody>${filas || '<tr><td colspan="4">Sin simplificadas convertibles.</td></tr>'}</tbody></table>
+    </div>
+    <div class="card"><h2>Destinatario de la factura completa</h2>
+      <div class="field"><label>NIF/NIE/CIF</label><input id="cvNif" class="input"></div>
+      <div class="field"><label>Nombre / Razón social</label><input id="cvNombre" class="input"></div>
+      <div class="field"><label>Domicilio</label><input id="cvDomicilio" class="input"></div>
+      <p><button class="accion" id="cvConvertir">Convertir en factura</button> <span id="cvMsg"></span></p>
+    </div>`;
+  $("#cvConvertir").onclick = async () => {
+    const ids = Array.from(document.querySelectorAll(".cvSel:checked")).map((c) => Number(c.value));
+    if (!ids.length) { $("#cvMsg").textContent = "Selecciona al menos una simplificada."; return; }
+    if (!confirm(`¿Convertir ${ids.length} factura(s) simplificada(s) en una única factura completa? Esta acción no se puede deshacer.`)) return;
+    try {
+      const r = await api("/admin/api/ventas/convertir", { method: "POST", body: JSON.stringify({
+        ids, nif: $("#cvNif").value, nombre: $("#cvNombre").value, domicilio: $("#cvDomicilio").value,
+      }) });
+      $("#cvMsg").textContent = `Convertido en factura ${r.num_serie}`;
+      await pintarConvertir();
+    } catch (e) { $("#cvMsg").textContent = e.message; }
   };
 }
 

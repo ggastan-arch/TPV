@@ -136,3 +136,47 @@ def test_tpv_funciones_sin_backend_siguen_deshabilitadas_tras_reskin_admin():
     for texto in ("Convertir en factura", "Aparcar ticket", "Desaparcar", "Cliente en venta"):
         assert texto in html
     assert html.count('<button class="btn fn-btn" disabled') == 1
+
+
+# --- Fase 6: panel "Convertir en factura" (Requirement: Panel Convertir en factura --
+# consola-administracion spec). Smoke estatico, mismo patron que 2.10 en
+# cliente-en-venta/tasks.md (sin motor de plantillas, sin navegador). --------------
+
+
+def test_admin_tab_convertir_presente():
+    html = _html()
+    assert 'data-t="convertir"' in html
+    assert "pintarConvertir" in html
+    assert "/admin/api/ventas/convertibles" in html
+
+
+def _bloque_pintar_convertir(html: str) -> str:
+    inicio = html.index("async function pintarConvertir")
+    fin = html.index("/* ---- BOTONERAS", inicio)
+    return html[inicio:fin]
+
+
+def test_admin_convertir_multiseleccion_y_form_destinatario():
+    bloque = _bloque_pintar_convertir(_html())
+    # Multiseleccion 1..N: checkboxes con el id de cada convertible.
+    assert 'class="cvSel"' in bloque
+    assert "value=\"${v.id}\"" in bloque
+    # Form inline NIF + nombre + domicilio.
+    assert 'id="cvNif"' in bloque
+    assert 'id="cvNombre"' in bloque
+    assert 'id="cvDomicilio"' in bloque
+
+
+def test_admin_convertir_boton_confirma_y_llama_endpoint():
+    bloque = _bloque_pintar_convertir(_html())
+    assert "Convertir en factura" in bloque
+    assert "confirm(" in bloque
+    assert "/admin/api/ventas/convertir" in bloque
+    assert 'method: "POST"' in bloque
+
+
+def test_admin_convertir_refresca_listado_tras_exito():
+    bloque = _bloque_pintar_convertir(_html())
+    assert "await pintarConvertir()" in bloque
+    # Muestra la referencia (num_serie) de la F3 resultante tras convertir.
+    assert "r.num_serie" in bloque
