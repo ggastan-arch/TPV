@@ -254,6 +254,30 @@ def test_registro_alta_xml_omite_destinatario_con_nif_vacio(crear_sesion, motor,
             assert validacion.errores(xml) == []
 
 
+def test_registro_alta_xml_omite_destinatario_con_nombre_vacio(crear_sesion, motor, datos_base):
+    """Guarda simetrica (item 5, revision Judgment Day round 2): un `Destinatario`
+    con `nombre` vacio/None (NIF presente) TAMPOCO produce un `<NombreRazon/>` vacio
+    (invalido contra el XSD, `NombreRazon` es obligatorio dentro de IDDestinatario
+    igual que `NIF`) -- se omite el bloque ENTERO, igual que con NIF vacio."""
+    ejercicio = datos_base["ejercicio"]
+    reg_id = _emitir(
+        crear_sesion, motor, datos_base["usuario_id"], [("Neon cardenal", "2.50", "2", "21")],
+        serie="F", ejercicio=ejercicio, tipo_factura="F3",
+    )
+    with crear_sesion() as s:
+        reg = s.get(RegistroFiscal, reg_id)
+        for nombre_vacio in (None, ""):
+            destinatario = Destinatario(nombre=nombre_vacio, nif="A58818501")
+            xml = registro_alta_xml(
+                reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None,
+                destinatario=destinatario)
+            cuerpo = a_bytes(xml)
+            assert b"Destinatarios" not in cuerpo
+            assert b"<sum1:NombreRazon/>" not in cuerpo
+            assert b"<sum1:NombreRazon></sum1:NombreRazon>" not in cuerpo
+            assert validacion.errores(xml) == []
+
+
 def test_xml_destinatario_con_caracteres_especiales_escapa_correctamente(
     crear_sesion, motor, datos_base
 ):

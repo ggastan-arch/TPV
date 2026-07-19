@@ -24,10 +24,10 @@ if TYPE_CHECKING:
 # DERIVADO de `validaciones_negocio.TIPOS_CON_DESTINATARIO` (item 7, revision
 # Judgment Day): fuente unica de verdad, para que este modulo NUNCA diverja
 # silenciosamente de esa regla de negocio si R1-R4 (rectificativas) se
-# implementan sin tocar este fichero -- la guarda de destinatario_nif faltante
-# (mas abajo) hace que expandir este conjunto sea SEGURO incluso hoy: cualquier
-# R1-R4 sin snapshot simplemente queda `requiere_intervencion`, nunca se remite
-# con un destinatario ausente o invalido.
+# implementan sin tocar este fichero -- la guarda de destinatario_nif/nombre
+# faltante (mas abajo) hace que expandir este conjunto sea SEGURO incluso hoy:
+# cualquier R1-R4 sin snapshot simplemente queda `requiere_intervencion`, nunca
+# se remite con un destinatario ausente o invalido.
 
 
 class RemitirLote:
@@ -84,21 +84,30 @@ class RemitirLote:
                 # por `motor.emit` (huella.py).
                 destinatario = None
                 if reg.tipo_factura in _TIPOS_CON_DESTINATARIO:
-                    if venta is None or not venta.destinatario_nif:
+                    if venta is None or not venta.destinatario_nif or not venta.destinatario_nombre:
                         # Guarda fiscal: nunca remitir un F1/F3/R1-R4 sin
-                        # destinatario congelado -- un <NIF/> vacio (o el bloque
-                        # ausente) es invalido/incompleto para la AEAT y
-                        # bloquearia TODA la cola FIFO si se remitiera. Se marca
-                        # 'requiere_intervencion' (invariante "nunca se descarta
-                        # un registro en silencio") y se EXCLUYE del sobre; el
-                        # resto del lote sigue su curso normal.
+                        # destinatario congelado COMPLETO -- un <NIF/> vacio o un
+                        # <NombreRazon/> vacio (ambos obligatorios en
+                        # Destinatarios/IDDestinatario) son invalidos/incompletos
+                        # para la AEAT y bloquearian TODA la cola FIFO si se
+                        # remitiera. Se marca 'requiere_intervencion' (invariante
+                        # "nunca se descarta un registro en silencio").
+                        #
+                        # STOP del lote (item 6, Judgment Day round 2): a partir de
+                        # aqui NO se procesa ningun registro POSTERIOR de este
+                        # lote (aunque fuera valido por si solo) -- se difieren
+                        # intactos para un intento futuro. Enviarlos ahora
+                        # referenciaria, en su propio Encadenamiento, un
+                        # `huella_anterior` que la AEAT nunca recibio (si este
+                        # registro nunca llega a remitirse), rompiendo el orden
+                        # FIFO de generacion exigido (CLAUDE.md).
                         registros.registrar_resultado(
                             reg, "rechazado",
                             descripcion=(
                                 "F1/F3/R1-R4 sin destinatario congelado "
-                                "(destinatario_nif ausente en la venta)"),
+                                "(destinatario_nif/destinatario_nombre ausente en la venta)"),
                             estado_remision_final="requiere_intervencion")
-                        continue
+                        break
                     destinatario = Destinatario(
                         nombre=venta.destinatario_nombre, nif=venta.destinatario_nif)
                 elementos.append(
@@ -111,9 +120,10 @@ class RemitirLote:
                 lote_valido.append(reg)
 
         if not elementos:
-            # Todo el lote quedo excluido por la guarda de destinatario: nada que
-            # remitir, pero las marcas 'requiere_intervencion' ya asentadas arriba
-            # deben persistir (envelope_remision rechaza una lista vacia).
+            # El registro invalido era el PRIMERO del lote (nada de prefijo valido
+            # antes de el) y el bucle se detuvo ahi: nada que remitir, pero la
+            # marca 'requiere_intervencion' ya asentada arriba debe persistir
+            # (envelope_remision rechaza una lista vacia).
             self.uow.commit()
             return None
 

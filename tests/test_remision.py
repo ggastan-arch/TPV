@@ -426,12 +426,44 @@ def test_remitir_lote_f1_f3_sin_destinatario_congelado_marca_requiere_intervenci
         assert repo.contar_pendientes() == 0
 
 
+def test_remitir_lote_f1_f3_con_nif_pero_sin_nombre_marca_requiere_intervencion(
+    crear_sesion, motor, datos_base
+):
+    """Guarda fiscal simetrica (item 4, Judgment Day round 2): un F1/F3 con
+    `destinatario_nif` presente pero `destinatario_nombre` vacio/None (dato
+    inconsistente -- no deberia ocurrir con el camino real de
+    `ConvertirEnFacturaF3`) TAMPOCO se remite -- `NombreRazon` es obligatorio en el
+    XSD (Destinatarios/IDDestinatario) igual que NIF; un `<NombreRazon/>` vacio
+    bloquearia la cola FIFO igual que un NIF vacio."""
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        venta.destinatario_nif = "A58818501"  # NIF presente...
+        venta.destinatario_nombre = None  # ...pero SIN nombre.
+        s.add(venta)
+        motor.emit(s, venta, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+
+    def poster(url, headers, body):
+        pytest.fail("no debe remitirse un F1/F3 con NIF pero sin NombreRazon (dato invalido)")
+
+    respuesta = _remitir(crear_sesion, poster)
+    assert respuesta is None
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).registros
+        reg = repo.ultimos(1)[0]
+        assert reg.estado_remision == "requiere_intervencion"
+        assert repo.contar_pendientes() == 0
+
+
 def test_remitir_lote_excluye_solo_el_registro_invalido_resto_del_lote_sigue(
     crear_sesion, motor, datos_base
 ):
-    """La guarda de destinatario faltante NO bloquea el resto del lote: un F3
-    valido junto a un F3 sin destinatario congelado -- solo el invalido queda
-    `requiere_intervencion`, el valido se remite con normalidad."""
+    """La guarda de destinatario faltante NO bloquea el PREFIJO valido del lote: un
+    F3 valido junto a un F3 sin destinatario congelado -- solo el invalido queda
+    `requiere_intervencion`, el valido (que va ANTES en orden FIFO) se remite con
+    normalidad. El invalido es aqui el ULTIMO del lote: no hay nada posterior que
+    diferir (ver `test_remitir_lote_registro_invalido_no_es_el_ultimo...` para el
+    caso en que SI hay registros posteriores, item 6 Judgment Day round 2)."""
     with crear_sesion() as s, s.begin():
         cliente = Cliente(nif="A58818501", nombre="Acuario S.L.")
         s.add(cliente)
@@ -467,6 +499,72 @@ def test_remitir_lote_excluye_solo_el_registro_invalido_resto_del_lote_sigue(
         regs = {r.num_serie_factura: r for r in repo.ultimos(2)}
         assert regs[f3_valida_num].estado_remision == "aceptado"
         assert regs[f3_invalida_num].estado_remision == "requiere_intervencion"
+
+
+def test_remitir_lote_registro_invalido_no_es_el_ultimo_detiene_el_lote_ahi(
+    crear_sesion, motor, datos_base
+):
+    """Item 6 (Judgment Day, round 2): si el registro EXCLUIDO por la guarda de
+    destinatario NO es el ultimo del lote, el lote se DETIENE en ese orden -- el
+    PREFIJO valido anterior SI se remite, pero los registros POSTERIORES (aunque
+    serian validos por si solos) NO se remiten en este intento: enviarlos
+    referenciaria, en su propio Encadenamiento, un `huella_anterior` que la AEAT
+    nunca recibio (si el registro excluido nunca llega a remitirse), rompiendo el
+    orden FIFO de generacion exigido (CLAUDE.md). Quedan DIFERIDOS (intactos) para
+    un intento posterior."""
+    with crear_sesion() as s, s.begin():
+        cliente = Cliente(nif="A58818501", nombre="Acuario S.L.")
+        s.add(cliente)
+        s.flush()
+
+        # orden 1: F3 valida (con destinatario congelado) -- PREFIJO, debe remitirse.
+        f3_prefijo = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        f3_prefijo.cliente_id = cliente.id
+        f3_prefijo.destinatario_nombre = cliente.nombre
+        f3_prefijo.destinatario_nif = cliente.nif
+        s.add(f3_prefijo)
+        motor.emit(s, f3_prefijo, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+        f3_prefijo_num = f3_prefijo.num_serie_factura
+
+        # orden 2: F3 SIN destinatario congelado -- guarda de exclusion (held).
+        f3_invalida = construir_venta(datos_base["usuario_id"], [("Guppy", "3.00", "1", "21")])
+        s.add(f3_invalida)
+        motor.emit(s, f3_invalida, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+        f3_invalida_num = f3_invalida.num_serie_factura
+
+        # orden 3: F3 valida POSTERIOR al held -- NO debe enviarse en este intento.
+        f3_posterior = construir_venta(datos_base["usuario_id"], [("Guppy", "3.00", "1", "21")])
+        f3_posterior.cliente_id = cliente.id
+        f3_posterior.destinatario_nombre = cliente.nombre
+        f3_posterior.destinatario_nif = cliente.nif
+        s.add(f3_posterior)
+        motor.emit(s, f3_posterior, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+        f3_posterior_num = f3_posterior.num_serie_factura
+
+    capturado: dict = {}
+
+    def poster(url, headers, body):
+        capturado["body"] = body
+        root = etree.fromstring(body)
+        nums = [e.text for e in root.findall(f".//{_E_SF}IDFactura/{_E_SF}NumSerieFactura")]
+        return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
+
+    respuesta = _remitir(crear_sesion, poster)
+    assert respuesta is not None
+    body = capturado["body"]
+    assert f3_prefijo_num.encode() in body        # prefijo valido: SI se remite
+    assert f3_invalida_num.encode() not in body   # held: excluido (como antes)
+    assert f3_posterior_num.encode() not in body  # posterior: DIFERIDO, no enviado
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).registros
+        regs = {r.num_serie_factura: r for r in repo.ultimos(3)}
+        assert regs[f3_prefijo_num].estado_remision == "aceptado"
+        assert regs[f3_invalida_num].estado_remision == "requiere_intervencion"
+        # El posterior NO se toca: sigue pendiente para un intento futuro (FIFO
+        # preservado, sin hueco de encadenamiento en la remision a la AEAT).
+        assert regs[f3_posterior_num].estado_remision not in ("aceptado", "requiere_intervencion")
+        assert regs[f3_posterior_num].id in [r.id for r in repo.pendientes()]
 
 
 # --- Item 7: `_TIPOS_CON_DESTINATARIO` alineado con validaciones_negocio -------

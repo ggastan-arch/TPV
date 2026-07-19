@@ -104,15 +104,17 @@ class Destinatario:
     fijada por `motor.emit` ANTES de que exista ningun destinatario resuelto
     (eso solo ocurre aqui, en la SERIALIZACION, ver app.aplicacion.remitir_lote).
 
-    `nif: str | None` (honesto, revision Judgment Day): un NIF vacio/None NUNCA
-    produce un `<NIF/>` vacio en el XML (invalido contra el XSD, bloquearia la
-    cola FIFO de remision si la AEAT lo rechaza) -- `registro_alta_xml` omite el
-    bloque ENTERO si `nif` es falsy, igual que si `destinatario` fuera `None`.
-    La defensa PRIMARIA es la guarda de `remitir_lote.py` (nunca construye un
-    `Destinatario` con NIF vacio en el camino real); esto es defensa en
-    profundidad en el propio serializador."""
+    `nif: str | None` / `nombre: str | None` (honesto, revision Judgment Day): un
+    NIF o un NombreRazon vacio/None NUNCA producen un `<NIF/>`/`<NombreRazon/>`
+    vacio en el XML (ambos obligatorios en Destinatarios/IDDestinatario, invalido
+    contra el XSD, bloquearia la cola FIFO de remision si la AEAT lo rechaza) --
+    `registro_alta_xml` omite el bloque ENTERO si `nif` o `nombre` son falsy,
+    igual que si `destinatario` fuera `None`. La defensa PRIMARIA es la guarda de
+    `remitir_lote.py` (nunca construye un `Destinatario` con NIF o nombre vacio
+    en el camino real); esto es defensa en profundidad en el propio
+    serializador."""
 
-    nombre: str
+    nombre: str | None
     nif: str | None
 
 
@@ -160,12 +162,12 @@ def registro_alta_xml(
     # del XSD -- FacturaSinIdentifDestinatarioArt61d, Macrodato,
     # EmitidaPorTerceroODestinatario, Tercero -- no se emiten en este SIF).
     #
-    # Guarda (defensa en profundidad, revision Judgment Day): un NIF falsy
-    # (None/"") NUNCA emite un `<NIF/>` vacio (invalido contra el XSD) -- se
-    # omite el bloque ENTERO, igual que `destinatario=None`. La defensa PRIMARIA
-    # vive en `remitir_lote.py` (nunca construye un `Destinatario` sin NIF en el
-    # camino real).
-    if destinatario is not None and destinatario.nif:
+    # Guarda (defensa en profundidad, revision Judgment Day): un NIF o un nombre
+    # falsy (None/"") NUNCA emiten un `<NIF/>`/`<NombreRazon/>` vacio (invalido
+    # contra el XSD, ambos obligatorios) -- se omite el bloque ENTERO, igual que
+    # `destinatario=None`. La defensa PRIMARIA vive en `remitir_lote.py` (nunca
+    # construye un `Destinatario` sin NIF o sin nombre en el camino real).
+    if destinatario is not None and destinatario.nif and destinatario.nombre:
         destinatarios = _sub(root, "Destinatarios")
         idd = _sub(destinatarios, "IDDestinatario")
         _sub(idd, "NombreRazon", destinatario.nombre)
