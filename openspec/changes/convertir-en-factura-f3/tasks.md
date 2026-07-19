@@ -310,37 +310,58 @@ Chain strategy: pending
   mismo registro con `tiene_destinatario=False` → sí (ver Nota de alcance arriba;
   SIN cambio de código en `validaciones_negocio.py`)
 
-## Fase 5: Endpoints de administración (Requirement: Listado de simplificadas elegibles + Endpoint de conversión — consola-administracion spec — dep. Fase 2)
+## Fase 5: Endpoints de administración (Requirement: Listado de simplificadas elegibles + Endpoint de conversión — consola-administracion spec — dep. Fase 2) — [APLICADO, PR3]
 
-- [ ] 5.1 RED `tests/test_admin_api.py::test_listado_convertibles_exige_sesion` —
+- [x] 5.1 RED `tests/test_admin_api.py::test_listado_convertibles_exige_sesion` —
   sin sesión → 401
-- [ ] 5.2 RED `tests/test_admin_api.py::test_listado_convertibles_excluye_no_elegibles`
+- [x] 5.2 RED `tests/test_admin_api.py::test_listado_convertibles_excluye_no_elegibles`
   — con sesión → 200, solo T cobradas no sustituidas
-- [ ] 5.3 GREEN `app/presentacion/admin.py`: `GET /api/ventas/convertibles`
+- [x] 5.3 GREEN `app/presentacion/admin.py`: `GET /api/ventas/convertibles`
   (`Depends(require_admin)`) → `uow.ventas.convertibles()` serializado
   (`id`, `num_serie_factura`, `fecha_hora_huso`, `total_con_iva`)
-- [ ] 5.4 RED `tests/test_admin_api.py::test_convertir_endpoint_2_ventas_devuelve_f3`
+- [x] 5.4 RED `tests/test_admin_api.py::test_convertir_endpoint_2_ventas_devuelve_f3`
   — POST con 2 ids + destinatario válido → 200 + `num_serie` de la F3,
   `LogAuditoria(accion="conversion_f3")` persistida
-- [ ] 5.5 RED `tests/test_admin_api.py::test_convertir_endpoint_rechaza_venta_no_elegible`
+- [x] 5.5 RED `tests/test_admin_api.py::test_convertir_endpoint_rechaza_venta_no_elegible`
   — incluye una T ya `sustituida` → 409, nada persistido
-- [ ] 5.6 RED `tests/test_admin_api.py::test_convertir_endpoint_rechaza_nif_invalido`
+- [x] 5.6 RED `tests/test_admin_api.py::test_convertir_endpoint_rechaza_nif_invalido`
   — NIF inválido → 422, nada persistido
-- [ ] 5.7 GREEN `app/presentacion/admin.py`: `POST /api/ventas/convertir`
+- [x] 5.7 GREEN `app/presentacion/admin.py`: `POST /api/ventas/convertir`
   (`Depends(require_admin)`) — DTO `ConvertirReq(ids: list[int], nif: str, nombre:
   str, domicilio: str)`; invoca `ConvertirEnFacturaF3.ejecutar(usuario_id, origen=
   _origen(request), ...)`; mapea `SinSimplificadas`/`DestinatarioInvalido` → 422,
   `SimplificadaNoElegible`/`YaSustituida` → 409 (mensaje claro, no 500 crudo)
 
-## Fase 6: Panel "Convertir en factura" (Requirement: Panel Convertir en factura — consola-administracion spec — dep. Fase 5)
+### Fase 5 (bis): endurecimiento HTTP-boundary — destinatario nulo/ausente y mensaje
+sin NIF en bruto (follow-up de revisión PR1/PR2, resuelto al construir el DTO) — [APLICADO, PR3]
 
-- [ ] 6.1 `app/ui/admin.html`: panel Nocturne "Convertir en factura" — tabla de
+> Hallazgo: `ConvertirReq` tipado con campos `str` obligatorios delega el 422 de
+> `null`/campo ausente en Pydantic (safe por accidente, no por diseño); y
+> `DestinatarioInvalido(destinatario.nif)` (Fase 2) hace `str(exc) == nif`, filtrando
+> el NIF en bruto (potencialmente inválido) en cualquier mensaje HTTP/log futuro.
+
+- [x] 5.8 RED `tests/test_admin_api.py::test_convertir_endpoint_nombre_nulo_da_422_no_500`
+  + `::test_convertir_endpoint_domicilio_ausente_da_422_no_500` — `nombre`/`domicilio`
+  nulo u omitido en el JSON → 422 controlado, nada persistido (no `AttributeError`/500)
+- [x] 5.9 GREEN `app/presentacion/admin.py`: `ConvertirReq.nif/nombre/domicilio`
+  tipados `str | None = None`; el handler construye `DatosDestinatario` con
+  `(req.x or "").strip()` ANTES de invocar el caso de uso — la guarda real vive en
+  el propio caso de uso (`DestinatarioInvalido` con cadena vacía)
+- [x] 5.10 RED `tests/test_convertir_en_factura_f3.py::test_destinatario_invalido_no_expone_nif_en_bruto`
+  — NIF inválido → `str(exc)` NO contiene el NIF y no está vacío
+- [x] 5.11 GREEN `app/aplicacion/convertir_en_factura_f3.py`: `DestinatarioInvalido.__init__`
+  con mensaje por defecto/por campo (nunca el NIF); los dos puntos de rechazo
+  (`validar_documento`, nombre/domicilio vacíos) pasan un motivo textual explícito
+
+## Fase 6: Panel "Convertir en factura" (Requirement: Panel Convertir en factura — consola-administracion spec — dep. Fase 5) — [APLICADO, PR3]
+
+- [x] 6.1 `app/ui/admin.html`: panel Nocturne "Convertir en factura" — tabla de
   elegibles (`GET .../convertibles`) con checkboxes de selección múltiple 1..N,
   formulario inline NIF+nombre+domicilio, botón "Convertir"; al confirmar invoca
   `POST .../convertir`; tras éxito refresca el listado (las T convertidas
   desaparecen) y muestra el `num_serie` de la F3 (smoke manual, sin motor de
   plantillas — mismo patrón que 2.10 en `cliente-en-venta/tasks.md`)
-- [ ] 6.2 `tests/test_admin_ui.py` (convención de test estático existente): assert
+- [x] 6.2 `tests/test_admin_ui.py` (convención de test estático existente): assert
   el panel/botón "Convertir en factura" aparece en el HTML servido
 
 ## Fase 7: Verificación final (dep. Fases 1-6)
@@ -378,6 +399,20 @@ Chain strategy: pending
 - [x] 7.2 (para la corrección round 3) `.venv/Scripts/lint-imports`: 3/3
   contratos kept.
 
+**Fase 5-6 (PR3), rama `-c3` (tras Fase 3 bis round 4 mergeado en local)**:
+- [x] 7.1 (para PR3) `.venv/Scripts/python -m pytest`: 611 → 623 passed (12 tests
+  nuevos: 7 en `test_admin_api.py` — Fase 5, listado + conversión + rechazos + 2
+  hardening HTTP-boundary — + 1 en `test_convertir_en_factura_f3.py` — Fase 5 bis,
+  `DestinatarioInvalido` sin NIF en bruto — + 4 en `test_admin_ui.py` — Fase 6,
+  panel Nocturne), 0 failed.
+- [x] 7.2 (para PR3) `.venv/Scripts/lint-imports`: 3/3 contratos kept.
+- [ ] 7.3 Smoke manual/e2e — pendiente: cubierto parcialmente por
+  `test_convertir_endpoint_2_ventas_devuelve_f3` (2 T IVA mixto → F3 vía HTTP,
+  auditoría), pero sin aserción explícita de `Destinatarios` en el XML remitido ni
+  de `verify_chain().ok == True` tras el POST admin (esas dos aserciones ya están
+  cubiertas a nivel de caso de uso/XML en Fases 2-3; queda como smoke manual/e2e
+  real, no bloquea PR3).
+
 **Fase 3 (bis, round 4), judgment-day (rama `-c2`, tras el batch anterior)**:
 - [x] Footgun de fuente compartida en el guard de drift (round 3): `upgrade()` de
   la migración `0011_venta_trigger_campos_congelados.py` importaba
@@ -394,6 +429,66 @@ Chain strategy: pending
   606 → 606 passed (mismo recuento: fix sin tests nuevos, solo re-acopla el
   guard de drift existente a una fuente independiente), 0 failed.
 - [x] 7.2 (para la corrección round 4) `.venv/Scripts/lint-imports`: 3/3
+  contratos kept.
+
+### Fase 5/6 (bis): judgment-day sobre PR3 — confirmación de éxito destruida por el
+refresco + endurecimientos de la consola de administración — [APLICADO, rama `-c3`]
+
+> Hallazgo (ambos jueces): en `pintarConvertir` (Fase 6), el éxito fijaba
+> `#cvMsg` con el `num_serie` de la F3 y ACTO SEGUIDO llamaba
+> `await pintarConvertir()`, que reescribe `#main.innerHTML` completo —
+> destruyendo el nodo `#cvMsg` recién escrito. El operador nunca llegaba a ver
+> la confirmación en el camino feliz (objetivo declarado de 6.1). Además,
+> ambos jueces señalaron: el motor fiscal se instanciaba inline
+> (`NullEngine(...)`) en vez de inyectarse como en el resto de endpoints de
+> emisión (`Depends(get_motor)`, ver `tpv.py`); `RegistroOrigenNoEncontrado`
+> quedaba sin mapear (500 crudo con traza); y `ConvertirReq.ids` sin
+> restricción de longitud dejaba colar `"ids": []` hasta `SinSimplificadas`,
+> cuyo mensaje genérico ("Destinatario invalido...") es engañoso para ese caso.
+
+- [x] FIX 1 `app/ui/admin.html::pintarConvertir` — la asignación de `#cvMsg`
+  con el mensaje de éxito se mueve a DESPUÉS de `await pintarConvertir()`,
+  sobre el nodo recién reconstruido (mismo principio que `detalleCierreZ`
+  pintando en `#czDetalle` tras `await pintarCierresZ()` en el panel Cierres
+  Z: la confirmación se escribe sobre el DOM post-refresco, no antes). Test
+  `tests/test_admin_ui.py::test_admin_convertir_confirmacion_sobrevive_al_refresco`
+  (regresión estructural: orden en el fuente de `await pintarConvertir()` vs
+  la asignación de `#cvMsg`; se documenta en el propio test la limitación de
+  la capa de test estática de este repo — sin navegador/motor de plantillas).
+- [x] FIX 2 `tests/test_admin_api.py::test_convertir_exige_sesion` — regresión
+  que bloquea un futuro refactor que retire `Depends(require_admin)` del
+  endpoint de escritura (mismo patrón que el resto de tests `_exige_sesion` de
+  escritura ya existentes en el fichero). El código ya era correcto; solo
+  faltaba el test de bloqueo.
+- [x] FIX 3 `app/presentacion/admin.py::convertir_en_factura` — se sustituye
+  `motor = NullEngine(settings.nif_emisor, settings.nombre_emisor)` (inline)
+  por `motor: FiscalEngine = Depends(get_motor)` (mismo punto único de
+  inyección que `tpv.py`, camino de emisión de venta). Comportamiento
+  idéntico hoy (`get_motor` devuelve `NullEngine` en ambas ramas); honra el
+  punto de swap documentado para un futuro `VerifactuEngine` y habilita
+  overrides en tests. `fiscal_estado` (otro uso de `NullEngine` inline, no
+  señalado por los jueces) queda fuera de alcance de este fix.
+- [x] FIX 4a `app/presentacion/admin.py::convertir_en_factura` — nuevo
+  `except RegistroOrigenNoEncontrado as exc: raise HTTPException(500,
+  str(exc)) from exc`. Es un invariante roto (defensa en profundidad, ver
+  docstring de la excepción en `convertir_en_factura_f3.py`: "nunca debería
+  ocurrir con datos consistentes"), no un conflicto de negocio identificable
+  como `SimplificadaNoElegible`/`YaSustituida` (409) ni un error de entrada
+  del cliente (422) — de ahí 500 controlado (sin traza, sin PII; el mensaje
+  solo referencia el id interno de la venta). Test OMITIDO POR DISEÑO: para
+  disparar esta excepción hay que fabricar una T `cobrada`/`sustituida` SIN
+  su registro de alta fiscal (estado de BD corrupto que ningún camino de
+  negocio produce), mismo precedente que otros invariantes de defensa en
+  profundidad de este cambio (p. ej. Fase 2, nota de alcance).
+- [x] FIX 4b `app/presentacion/admin.py::ConvertirReq.ids` — se añade
+  `Field(min_length=1, max_length=100)`: `"ids": []` ahora se rechaza en la
+  capa Pydantic con un 422 limpio, ANTES de llegar a `SinSimplificadas` (cuyo
+  422 genérico "Destinatario invalido..." era engañoso para ese caso — WARNING
+  de ambos jueces). Test `tests/test_admin_api.py::test_convertir_endpoint_ids_vacio_da_422`.
+- [x] 7.1 (para la corrección Fase 5/6 bis) `.venv/Scripts/python -m pytest`:
+  623 → 626 passed (3 tests nuevos: confirmación sobrevive al refresco +
+  exige-sesión del POST + `ids` vacío → 422), 0 failed.
+- [x] 7.2 (para la corrección Fase 5/6 bis) `.venv/Scripts/lint-imports`: 3/3
   contratos kept.
 
 Nota: cada Work Unit (PR 1/2/3) debe correr 7.1-7.2 de forma independiente antes de

@@ -202,6 +202,31 @@ def test_nif_destinatario_invalido(crear_sesion, motor, datos_base):
         assert t.estado == "cobrada"  # nada cambio: rechazo antes de tocar la sesion
 
 
+# --- endurecimiento HTTP-boundary: DestinatarioInvalido NUNCA expone el NIF en bruto
+# en su mensaje (podria acabar en un HTTPException/log; ver admin.py convertir_en_factura) -
+
+
+def test_destinatario_invalido_no_expone_nif_en_bruto(crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+    nif_invalido = "A58818500"  # digito de control incorrecto (correcto es 1)
+
+    with crear_sesion() as s, s.begin():
+        t_id = _emitir_t(s, motor, usuario_id, ejercicio, [("Neon", "2.50", "1", "21")])
+
+    destinatario_invalido = DatosDestinatario(
+        nif=nif_invalido, nombre="Acuario S.L.", domicilio="Calle Mayor 1",
+    )
+
+    with crear_sesion() as s, pytest.raises(DestinatarioInvalido) as exc:
+        _uc(s, motor).ejecutar(
+            usuario_id=usuario_id, origen="local",
+            simplificada_ids=[t_id], destinatario=destinatario_invalido,
+        )
+    assert nif_invalido not in str(exc.value)
+    assert str(exc.value)  # mensaje no vacio: describe el motivo del rechazo
+
+
 # --- art. 6 ROF: nombre/domicilio del destinatario vacios rechaza sin persistir -----
 
 

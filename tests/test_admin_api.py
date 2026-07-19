@@ -10,7 +10,14 @@ import app.infraestructura.imagenes as imagenes_mod
 from app.infraestructura.seguridad import hash_pin
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.main import crear_app
-from app.infraestructura.persistencia.modelos import Articulo, Familia, LogAuditoria, Usuario
+from app.infraestructura.persistencia.modelos import (
+    Articulo,
+    Familia,
+    LogAuditoria,
+    Usuario,
+    Venta,
+    VentaSustitucion,
+)
 
 
 @pytest.fixture
@@ -692,3 +699,163 @@ def test_put_articulo_con_imagen_en_el_body_se_ignora(
     assert r.status_code == 200
     with crear_sesion() as s:
         assert s.get(Articulo, articulo_id).imagen == ruta_original
+
+
+# --- Fase 5: conversion de simplificadas en factura F3 (Requirement: Listado de
+# simplificadas elegibles + Endpoint de conversion -- consola-administracion spec) ----
+
+_DESTINATARIO_OK = {"nif": "A58818501", "nombre": "Acuario S.L.", "domicilio": "Calle Mayor 1"}
+
+
+def _t_cobrada(crear_sesion, motor, usuario_id, ejercicio,
+                lineas_spec=(("Neon", "2.50", "1", "21"),)):
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(usuario_id, list(lineas_spec))
+        s.add(venta)
+        motor.emit(s, venta, serie="T", ejercicio=ejercicio, tipo_factura="F2")
+        venta_id = venta.id
+    return venta_id
+
+
+def _t_sustituida(crear_sesion, motor, usuario_id, ejercicio) -> int:
+    """T cobrada y ya sustituida por una F3 (a mano, mismo patron que
+    test_convertir_en_factura_f3.py::_crear_t_ya_sustituida): no debe aparecer en el
+    listado de convertibles ni volver a convertirse."""
+    with crear_sesion() as s, s.begin():
+        origen = construir_venta(usuario_id, [("Neon", "2.50", "1", "21")])
+        s.add(origen)
+        motor.emit(s, origen, serie="T", ejercicio=ejercicio, tipo_factura="F2")
+        origen_id = origen.id
+        f3 = construir_venta(usuario_id, [("Neon", "2.50", "1", "21")])
+        s.add(f3)
+        motor.emit(s, f3, serie="F", ejercicio=ejercicio, tipo_factura="F3")
+        s.add(VentaSustitucion(venta_sustituta_id=f3.id, venta_sustituida_id=origen_id))
+        s.get(Venta, origen_id).estado = "sustituida"
+    return origen_id
+
+
+def test_listado_convertibles_exige_sesion(cliente, datos_base):
+    assert cliente.get("/admin/api/ventas/convertibles").status_code == 401
+
+
+def test_convertir_exige_sesion(cliente, datos_base):
+    # Regresion: bloquea un futuro refactor que retire `Depends(require_admin)`
+    # del endpoint de escritura (mismo patron que test_crear_cliente_exige_sesion
+    # y el resto de tests `_exige_sesion` de escritura en este fichero).
+    assert cliente.post("/admin/api/ventas/convertir",
+                        json={"ids": [1], **_DESTINATARIO_OK}).status_code == 401
+
+
+def test_listado_convertibles_excluye_no_elegibles(cliente, admin, crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+    elegible_id = _t_cobrada(crear_sesion, motor, usuario_id, ejercicio)
+    ya_sustituida_id = _t_sustituida(crear_sesion, motor, usuario_id, ejercicio)
+
+    _login(cliente, admin)
+    r = cliente.get("/admin/api/ventas/convertibles")
+    assert r.status_code == 200
+    filas = r.json()
+    ids = [f["id"] for f in filas]
+    assert elegible_id in ids
+    assert ya_sustituida_id not in ids
+
+    fila = next(f for f in filas if f["id"] == elegible_id)
+    assert set(fila.keys()) == {"id", "num_serie_factura", "fecha_hora_huso", "total_con_iva"}
+
+
+def test_convertir_endpoint_2_ventas_devuelve_f3(cliente, admin, crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+    id1 = _t_cobrada(crear_sesion, motor, usuario_id, ejercicio, [("Neon", "2.50", "1", "21")])
+    id2 = _t_cobrada(crear_sesion, motor, usuario_id, ejercicio,
+                      [("Musgo de Java", "4.00", "1", "10")])
+
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/ventas/convertir", json={"ids": [id1, id2], **_DESTINATARIO_OK})
+    assert r.status_code == 200
+    cuerpo = r.json()
+    assert cuerpo["num_serie"].startswith("F")
+    assert cuerpo["num_origenes"] == 2
+
+    with crear_sesion() as s:
+        assert s.get(Venta, id1).estado == "sustituida"
+        assert s.get(Venta, id2).estado == "sustituida"
+        assert s.query(LogAuditoria).filter_by(accion="conversion_f3").count() == 1
+
+
+def test_convertir_endpoint_rechaza_venta_no_elegible(cliente, admin, crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+    elegible_id = _t_cobrada(crear_sesion, motor, usuario_id, ejercicio)
+    ya_sustituida_id = _t_sustituida(crear_sesion, motor, usuario_id, ejercicio)
+
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/ventas/convertir",
+                     json={"ids": [elegible_id, ya_sustituida_id], **_DESTINATARIO_OK})
+    assert r.status_code == 409
+
+    with crear_sesion() as s:
+        # Nada persistido: la T elegible sigue 'cobrada' (rollback total, atomicidad).
+        assert s.get(Venta, elegible_id).estado == "cobrada"
+        assert s.query(LogAuditoria).filter_by(accion="conversion_f3").count() == 0
+
+
+def test_convertir_endpoint_rechaza_nif_invalido(cliente, admin, crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+    elegible_id = _t_cobrada(crear_sesion, motor, usuario_id, ejercicio)
+
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/ventas/convertir", json={
+        "ids": [elegible_id], "nif": "A58818500",  # digito de control incorrecto
+        "nombre": "Acuario S.L.", "domicilio": "Calle Mayor 1",
+    })
+    assert r.status_code == 422
+
+    with crear_sesion() as s:
+        assert s.get(Venta, elegible_id).estado == "cobrada"
+        assert s.query(LogAuditoria).filter_by(accion="conversion_f3").count() == 0
+
+
+# --- Fase 5 (bis): endurecimiento HTTP-boundary -- destinatario nulo/ausente no
+# debe producir un 500 crudo (AttributeError sobre None), sino un 422 controlado ----
+
+
+def test_convertir_endpoint_nombre_nulo_da_422_no_500(cliente, admin, crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+    elegible_id = _t_cobrada(crear_sesion, motor, usuario_id, ejercicio)
+
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/ventas/convertir", json={
+        "ids": [elegible_id], "nif": "A58818501", "nombre": None, "domicilio": "Calle Mayor 1",
+    })
+    assert r.status_code == 422
+
+    with crear_sesion() as s:
+        assert s.get(Venta, elegible_id).estado == "cobrada"
+
+
+def test_convertir_endpoint_domicilio_ausente_da_422_no_500(cliente, admin, crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+    elegible_id = _t_cobrada(crear_sesion, motor, usuario_id, ejercicio)
+
+    _login(cliente, admin)
+    # "domicilio" ni siquiera se envia en el JSON (payload de un cliente antiguo/parcial).
+    r = cliente.post("/admin/api/ventas/convertir",
+                     json={"ids": [elegible_id], "nif": "A58818501", "nombre": "Acuario S.L."})
+    assert r.status_code == 422
+
+    with crear_sesion() as s:
+        assert s.get(Venta, elegible_id).estado == "cobrada"
+
+
+def test_convertir_endpoint_ids_vacio_da_422(cliente, admin, datos_base):
+    # `ConvertirReq.ids` exige `min_length=1` (Pydantic): "ids": [] se rechaza en la
+    # capa Pydantic ANTES de llegar al caso de uso, en vez de colar por `SinSimplificadas`
+    # y caer en el mensaje generico "Destinatario invalido" (misleading, Judge A/B WARNING).
+    _login(cliente, admin)
+    r = cliente.post("/admin/api/ventas/convertir", json={"ids": [], **_DESTINATARIO_OK})
+    assert r.status_code == 422

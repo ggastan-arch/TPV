@@ -13,7 +13,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -30,6 +30,15 @@ from app.aplicacion.clientes import (
     DatosCliente,
     NifInvalido,
     ServicioClientes,
+)
+from app.aplicacion.convertir_en_factura_f3 import (
+    ConvertirEnFacturaF3,
+    DatosDestinatario,
+    DestinatarioInvalido,
+    RegistroOrigenNoEncontrado,
+    SimplificadaNoElegible,
+    SinSimplificadas,
+    YaSustituida,
 )
 from app.aplicacion.usuarios import (
     DatosUsuario,
@@ -74,7 +83,7 @@ from app.aplicacion.tipos_iva import (
     ServicioTiposIva,
     TipoIvaNoEncontrado,
 )
-from app.presentacion.deps import get_session, get_uow
+from app.presentacion.deps import get_motor, get_session, get_uow
 from app.infraestructura.config import settings
 from app.infraestructura.imagenes import (
     ImagenInvalida,
@@ -85,7 +94,7 @@ from app.infraestructura.imagenes import (
 )
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.seguridad import verificar_pin
-from app.infraestructura.fiscal.engine import NullEngine
+from app.infraestructura.fiscal.engine import FiscalEngine, NullEngine
 from app.infraestructura.persistencia.modelos import (
     Articulo,
     Cliente,
@@ -211,6 +220,21 @@ class MermaStockReq(BaseModel):
 
 class ReencolarReq(BaseModel):
     registro_id: int
+
+
+class ConvertirReq(BaseModel):
+    """DTO del endpoint de conversion (Fase 5). Los campos del destinatario son
+    `str | None` (NO `str` a secas): un `null`/campo ausente en el JSON debe llegar
+    intacto hasta el `ConvertirEnFacturaF3` y convertirse en un `DestinatarioInvalido`
+    (422) controlado -- si fueran `str` obligatorios, un cliente que mande `null`
+    recibiria un 422 generico de Pydantic, pero cualquier consumidor que construyera
+    el DTO en Python (sin pasar por HTTP) podria seguir colando `None` hasta el caso
+    de uso. La guarda real vive en `convertir_en_factura`, no aqui."""
+
+    ids: list[int] = Field(min_length=1, max_length=100)
+    nif: str | None = None
+    nombre: str | None = None
+    domicilio: str | None = None
 
 
 def _origen(request: Request) -> str:
@@ -384,6 +408,53 @@ def informe_dia(_: int = Depends(require_admin), s: Session = Depends(get_sessio
         "num_ventas": len(ventas),
         "total": str(total),
         "por_medio": {k: str(val) for k, val in por_medio.items()},
+    }
+
+
+# --- Ventas: conversion de simplificadas en factura F3 (Requirement: Listado de
+# simplificadas elegibles + Endpoint de conversion -- consola-administracion spec) --
+@router.get("/api/ventas/convertibles")
+def listar_convertibles(_: int = Depends(require_admin), uow=Depends(get_uow)) -> list[dict]:
+    return [
+        {"id": v.id, "num_serie_factura": v.num_serie_factura,
+         "fecha_hora_huso": v.fecha_hora_huso, "total_con_iva": str(v.total_con_iva)}
+        for v in uow.ventas.convertibles()
+    ]
+
+
+@router.post("/api/ventas/convertir")
+def convertir_en_factura(req: ConvertirReq, request: Request,
+                         usuario_id: int = Depends(require_admin), uow=Depends(get_uow),
+                         motor: FiscalEngine = Depends(get_motor)) -> dict:
+    # Boundary guard (`(x or "").strip()`): un NIF/nombre/domicilio `null` u omitido
+    # en el JSON llega aqui como `None` (ver docstring de `ConvertirReq`); se coacciona
+    # a cadena vacia ANTES de construir `DatosDestinatario`, para que el rechazo salga
+    # siempre por `DestinatarioInvalido` (422 controlado) y nunca por un
+    # `AttributeError` (`None.strip()`) que subiria como 500 crudo.
+    destinatario = DatosDestinatario(
+        nif=(req.nif or "").strip(),
+        nombre=(req.nombre or "").strip(),
+        domicilio=(req.domicilio or "").strip(),
+    )
+    try:
+        resultado = ConvertirEnFacturaF3(uow, motor).ejecutar(
+            usuario_id=usuario_id, origen=_origen(request),
+            simplificada_ids=req.ids, destinatario=destinatario,
+        )
+    except (SinSimplificadas, DestinatarioInvalido) as exc:
+        raise HTTPException(422, str(exc) or "Destinatario invalido (NIF/nombre/domicilio)") from exc
+    except (SimplificadaNoElegible, YaSustituida) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except RegistroOrigenNoEncontrado as exc:
+        # Invariante roto (defensa en profundidad, ver docstring de la excepcion en
+        # convertir_en_factura_f3.py): nunca deberia ocurrir con datos consistentes.
+        # 500 controlado -- sin traza, sin PII (el mensaje solo referencia el id
+        # interno de la venta) -- en vez de dejar subir un 500 crudo con traceback.
+        raise HTTPException(500, str(exc)) from exc
+    return {
+        "venta_id": resultado.venta_id, "num_serie": resultado.num_serie,
+        "fecha": resultado.fecha, "total": resultado.total,
+        "num_origenes": resultado.num_origenes,
     }
 
 
