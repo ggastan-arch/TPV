@@ -140,19 +140,27 @@ def test_venta_aparcada_si_es_editable(crear_sesion, datos_base):
         s.delete(venta)  # permitido
 
 
-# --- Drift guard (FIX Judgment Day round 3): footgun de las DOS constantes ------
+# --- Drift guard (FIX Judgment Day round 3, endurecido en round 4) -------------
 def test_trigger_venta_no_update_no_diverge_de_ddl_v2(engine):
     """`app/infraestructura/persistencia/ddl.py` tiene DOS constantes de campos
     congelados: `_VENTA_CAMPOS_CONGELADOS_0001` (historica, SOLO usada por la
     migracion 0001 para crear el trigger desde cero -- muerta a HEAD, nunca
     tocar) y `_VENTA_CAMPOS_CONGELADOS_V2`/`TRIGGER_VENTA_NO_UPDATE_V2`
-    (autoritativa a HEAD, aplicada por la migracion 0011 via DROP+CREATE). Este
-    test es la guarda DIRECTA contra el footgun: construye una BD desde cero
-    hasta `head` (fixture `engine`, migraciones reales) y compara el cuerpo VIVO
-    de `trg_venta_no_update` en `sqlite_master` contra `TRIGGER_VENTA_NO_UPDATE_V2`
-    byte a byte. Si una migracion futura anade una columna congelada y olvida el
-    DROP+CREATE (o lo hace con un cuerpo distinto de `ddl.py`), este test falla
-    inmediatamente -- sin depender de un vector de ataque concreto como
+    (autoritativa a HEAD, cuyo texto la migracion 0011 congela en su propio
+    literal `_TRIGGER_VENTA_NO_UPDATE_ENDURECIDO` y aplica via DROP+CREATE).
+
+    Round 4 (footgun de la fuente compartida, corregido): antes, `upgrade()` de la
+    migracion 0011 importaba `TRIGGER_VENTA_NO_UPDATE_V2` EN VIVO -- la MISMA
+    constante que este test usaba como `esperado`. Editar `_VENTA_CAMPOS_CONGELADOS_V2`
+    sin anadir una migracion nueva no se detectaba: el trigger real y `esperado`
+    cambiaban juntos y el test seguia en verde. Ahora que la migracion 0011 congela
+    su propio literal historico (decoplado de `ddl.py`), esta comparacion es
+    GENUINA: construye una BD desde cero hasta `head` (fixture `engine`, migraciones
+    reales) y compara el cuerpo VIVO de `trg_venta_no_update` en `sqlite_master`
+    contra la constante VIVA `TRIGGER_VENTA_NO_UPDATE_V2` byte a byte. Si alguien
+    edita `_VENTA_CAMPOS_CONGELADOS_V2` en `ddl.py` y OLVIDA anadir el DROP+CREATE
+    correspondiente en una migracion nueva, este test FALLA inmediatamente -- sin
+    depender de un vector de ataque concreto como
     `test_no_se_puede_colar_destinatario_ni_cualificada_en_transicion_permitida`."""
     from sqlalchemy import text
 
@@ -168,7 +176,9 @@ def test_trigger_venta_no_update_no_diverge_de_ddl_v2(engine):
 
     assert fila is not None, "trg_venta_no_update no existe en la BD migrada a head"
     # SQLite guarda en `sqlite_master.sql` el texto EXACTO de la sentencia CREATE
-    # que se ejecuto, sin el `;` final ni espacios en blanco de borde: se normaliza
-    # `TRIGGER_VENTA_NO_UPDATE_V2` de la misma forma para una comparacion justa.
+    # que se ejecuto, sin el `;` final ni espacios en blanco de borde. Se normaliza
+    # AMBOS lados (`fila[0]` vivo y `TRIGGER_VENTA_NO_UPDATE_V2`) de la misma forma
+    # para una comparacion simetrica y justa.
+    vivo = fila[0].strip().rstrip(";")
     esperado = ddl.TRIGGER_VENTA_NO_UPDATE_V2.strip().rstrip(";")
-    assert fila[0] == esperado
+    assert vivo == esperado

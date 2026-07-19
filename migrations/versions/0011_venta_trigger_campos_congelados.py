@@ -56,12 +56,22 @@ migracion aplica DESPUES de que 0009/0010 ya anadieron esas columnas -- momento 
 que SI es seguro referenciarlas. El cuerpo ANTERIOR (para `downgrade`) queda fijado
 como literal historico en este fichero -- una migracion es un hecho historico y no
 debe depender de que `ddl.py` conserve versiones antiguas del trigger.
+
+FIX (Judgment Day, round 3 -- footgun de la fuente compartida): `upgrade` importaba
+`ddl.TRIGGER_VENTA_NO_UPDATE_V2` EN VIVO, la misma constante mutable que el test de
+drift (`tests/test_inmutabilidad.py::test_trigger_venta_no_update_no_diverge_de_ddl_v2`)
+usa como `esperado`. Ambos lados de esa comparacion derivaban de la MISMA fuente: editar
+`_VENTA_CAMPOS_CONGELADOS_V2` en `ddl.py` sin anadir una migracion nueva NO se detectaba
+(el test seguia en verde) porque el trigger recreado desde cero y el `esperado` cambiaban
+juntos. Se corrige fijando aqui, igual que en `downgrade`, un literal historico
+(`_TRIGGER_VENTA_NO_UPDATE_ENDURECIDO`) con el cuerpo EXACTO que `TRIGGER_VENTA_NO_UPDATE_V2`
+produce a fecha de esta migracion -- byte a byte identico, sin cambiar el trigger
+resultante en ninguna BD. `upgrade` ya no importa nada de `ddl.py`: una migracion es un
+hecho historico en AMBAS direcciones.
 """
 from __future__ import annotations
 
 from alembic import op
-
-from app.infraestructura.persistencia.ddl import TRIGGER_VENTA_NO_UPDATE_V2
 
 revision = "0011_venta_trigger_campos_congelados"
 down_revision = "0010_venta_destinatario_f3"
@@ -97,9 +107,32 @@ END;
 """
 
 
+# Version ENDURECIDA del trigger (esta migracion). Literal historico fijo -- copia
+# EXACTA, byte a byte, de `ddl.TRIGGER_VENTA_NO_UPDATE_V2` en el momento de escribir
+# esta migracion. NO se reimporta de `ddl.py`: si una migracion FUTURA edita
+# `_VENTA_CAMPOS_CONGELADOS_V2` sin anadir su propio DROP+CREATE, este literal se
+# queda congelado tal cual, y el test de drift
+# (`test_trigger_venta_no_update_no_diverge_de_ddl_v2`) detecta la divergencia entre
+# el trigger real (derivado de este literal) y la constante viva de `ddl.py`.
+_TRIGGER_VENTA_NO_UPDATE_ENDURECIDO = """
+CREATE TRIGGER trg_venta_no_update
+BEFORE UPDATE ON venta
+FOR EACH ROW
+WHEN OLD.estado <> 'aparcada'
+ AND NOT (
+    OLD.estado = 'cobrada'
+    AND NEW.estado IN ('anulada_con_rastro', 'sustituida')
+    AND NEW.serie IS OLD.serie AND NEW.ejercicio IS OLD.ejercicio AND NEW.numero IS OLD.numero AND NEW.num_serie_factura IS OLD.num_serie_factura AND NEW.fecha_hora_huso IS OLD.fecha_hora_huso AND NEW.usuario_id IS OLD.usuario_id AND NEW.cliente_id IS OLD.cliente_id AND NEW.base_total IS OLD.base_total AND NEW.cuota_total IS OLD.cuota_total AND NEW.total_con_iva IS OLD.total_con_iva AND NEW.cualificada IS OLD.cualificada AND NEW.destinatario_nombre IS OLD.destinatario_nombre AND NEW.destinatario_nif IS OLD.destinatario_nif
+ )
+BEGIN
+    SELECT RAISE(ABORT, 'Venta emitida inmutable (RRSIF art. 8): solo transicion de estado permitida');
+END;
+"""
+
+
 def upgrade() -> None:
     op.execute("DROP TRIGGER trg_venta_no_update;")
-    op.execute(TRIGGER_VENTA_NO_UPDATE_V2)
+    op.execute(_TRIGGER_VENTA_NO_UPDATE_ENDURECIDO)
 
 
 def downgrade() -> None:

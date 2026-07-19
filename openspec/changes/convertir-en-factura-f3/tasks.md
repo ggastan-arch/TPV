@@ -378,5 +378,23 @@ Chain strategy: pending
 - [x] 7.2 (para la corrección round 3) `.venv/Scripts/lint-imports`: 3/3
   contratos kept.
 
+**Fase 3 (bis, round 4), judgment-day (rama `-c2`, tras el batch anterior)**:
+- [x] Footgun de fuente compartida en el guard de drift (round 3): `upgrade()` de
+  la migración `0011_venta_trigger_campos_congelados.py` importaba
+  `ddl.TRIGGER_VENTA_NO_UPDATE_V2` EN VIVO, la MISMA constante que
+  `test_trigger_venta_no_update_no_diverge_de_ddl_v2` usaba como `esperado` —
+  editar `_VENTA_CAMPOS_CONGELADOS_V2` sin migración nueva no se detectaba.
+  Corregido: `upgrade()` ahora ejecuta un literal histórico congelado
+  (`_TRIGGER_VENTA_NO_UPDATE_ENDURECIDO`, byte a byte idéntico al `V2` vigente,
+  sin import de `ddl.py`) y el test normaliza ambos lados (`fila[0]` y
+  `esperado`) simétricamente. Probado empíricamente RED→revert→GREEN: añadir
+  una columna dummy a `_VENTA_CAMPOS_CONGELADOS_V2` sin migración hace fallar
+  el test de drift; al revertir, vuelve a pasar.
+- [x] 7.1 (para la corrección round 4) `.venv/Scripts/python -m pytest`:
+  606 → 606 passed (mismo recuento: fix sin tests nuevos, solo re-acopla el
+  guard de drift existente a una fuente independiente), 0 failed.
+- [x] 7.2 (para la corrección round 4) `.venv/Scripts/lint-imports`: 3/3
+  contratos kept.
+
 Nota: cada Work Unit (PR 1/2/3) debe correr 7.1-7.2 de forma independiente antes de
 integrarse (ver skill `chained-pr`); 7.3 se ejecuta completo solo tras la última PR.
