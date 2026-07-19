@@ -16,6 +16,13 @@ Politica:
 from __future__ import annotations
 
 # Igualdad null-safe de los campos que NO pueden cambiar en una venta emitida.
+# NOTA (D2 override, migraciones 0009/0010): `cualificada` y
+# `destinatario_nombre`/`destinatario_nif` se anadieron DESPUES via `op.add_column`
+# y deliberadamente NO estan en esta lista -- una venta `cobrada` ya esta
+# bloqueada para CUALQUIER UPDATE que no sea la transicion de estado controlada
+# (ver `trg_venta_no_update` mas abajo), y ningun codigo actual escribe esas
+# columnas durante esa transicion. Ver el docstring de cada migracion para el
+# analisis completo antes de asumir que serian seguras de anadir sin mas.
 _VENTA_CAMPOS_CONGELADOS = " AND ".join(
     f"NEW.{c} IS OLD.{c}"
     for c in (
