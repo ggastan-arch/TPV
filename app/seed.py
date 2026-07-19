@@ -215,17 +215,19 @@ def _sembrar_catalogo_demo(s: Session, ejercicio: int) -> None:
             s.add(CodigoBarras(articulo_id=articulo.id, codigo=ean, principal=True))
         articulos[datos["corto"]] = articulo
 
-    _sembrar_botonera_demo(s, familias)
+    _sembrar_botonera_demo(s, familias, articulos)
 
 
 def _sembrar_botonera_demo(
     s: Session,
     familias: dict[str, Familia],
+    articulos: dict[str, Articulo],
 ) -> None:
-    """Botonera demo: la pagina de Inicio muestra SOLO familias de nivel raiz
-    (una por familia, `tipo="familia"` en la API/tpv.html), no una mezcla de
-    articulos sueltos: la persona operadora entra a cada familia por boton y
-    llega a sus articulos por drill-down (`abrirFamilia` en tpv.html).
+    """Botonera demo: la pagina de Inicio se organiza por FAMILIAS de nivel
+    raiz (una por familia, `tipo="familia"` en la API/tpv.html) mas el cobro
+    rapido de "Bolsa": la operadora entra a cada familia por boton y llega a
+    sus articulos por drill-down (`abrirFamilia` en tpv.html), sin la mezcla
+    de articulos sueltos que habia antes.
 
     Solo se siembra boton para las familias raiz VISIBLES en tactil (peces,
     plantas, agua fria); el material con codigo de barras (alimento,
@@ -234,13 +236,13 @@ def _sembrar_botonera_demo(
     venden por escaner/buscador, no tocando botones (ver
     `test_sembrar_demo_oculta_familias_de_material`).
 
-    La rejilla se ajusta al numero de botones (3 familias + 1 funcion de
-    apoyo) en vez de dejar sin usar la mayor parte de una rejilla 5x4."""
+    Rejilla 3x2: fila 0 las 3 familias raiz, fila 1 "Bolsa" (0,10 EUR,
+    presente en casi cada ticket) mas la funcion "abrir cajon"."""
     perfil = PerfilBotonera(nombre="Principal")
     s.add(perfil)
     s.flush()
     pagina = PaginaBotonera(
-        perfil_id=perfil.id, nombre="Inicio", orden=0, columnas=2, filas=2
+        perfil_id=perfil.id, nombre="Inicio", orden=0, columnas=3, filas=2
     )
     s.add(pagina)
     s.flush()
@@ -256,9 +258,13 @@ def _sembrar_botonera_demo(
             s.add(Boton(pagina_id=pagina.id, fila=i // pagina.columnas,
                         columna=i % pagina.columnas, texto=texto, familia_id=fam.id))
 
-    # Unica funcion (no articulo, no familia) que ya tenia hueco en el inicio
-    # demo: abrir el cajon sin venta. No se siembra "convertir_factura"
-    # mientras la funcion no exista (evita un boton que no hace nada).
+    # Fila 1: cobro rapido de "Bolsa" (art. 0,10 EUR, en casi cada ticket) +
+    # funcion "abrir cajon". No se siembra "convertir_factura" mientras la
+    # funcion no exista (evita un boton que no hace nada).
+    bolsa = articulos.get("Bolsa")
+    if bolsa is not None:
+        s.add(Boton(pagina_id=pagina.id, fila=1, columna=0,
+                    texto=bolsa.nombre_corto, articulo_id=bolsa.id))
     s.add(Boton(pagina_id=pagina.id, fila=1, columna=1, texto="Abrir cajón",
                 funcion="abrir_cajon"))
 
