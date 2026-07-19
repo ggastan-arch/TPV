@@ -72,6 +72,7 @@
   .b-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
   .b-fallback { display:flex; align-items:center; justify-content:center; color:color-mix(in srgb, var(--color-text) 40%, transparent); }
   .b-fallback svg { width:32px; height:32px; display:block; }
+  .b-fallback-img { width:84px; height:84px; object-fit:contain; display:block; opacity:.92; }
   .b-cap { position:relative; z-index:1; width:100%; display:flex; flex-direction:column; align-items:center; gap:1px; }
   .btn.con-img .b-cap { padding:8px 6px 7px; background:linear-gradient(to top, rgba(2,6,23,.92) 25%, rgba(2,6,23,0)); }
   .b-tit { line-height:1.15; text-shadow:0 1px 3px rgba(0,0,0,.75); }
@@ -240,10 +241,13 @@ const eur = (s) => (s ?? "0.00").toString().replace(".", ",") + " €";
 // icono generico (Nocturne, /static/nocturne-icons.js) ocupa el lugar de la foto
 // y el titulo va centrado debajo. Un unico punto para todos los botones
 // (botonera, familia, buscador).
-function pintarContenido(btn, imagen, titulo, precioHtml = "", iconoFallback = "basket") {
+function pintarContenido(btn, imagen, titulo, precioHtml = "", iconoFallback = "basket", iconoImg = "") {
   btn.classList.toggle("con-img", !!imagen);
   const img = imagen ? `<img class="b-img" src="${imagen}" alt="">` : "";
-  const relleno = imagen ? "" : `<span class="b-fallback" aria-hidden="true">${icono(iconoFallback)}</span>`;
+  const glifo = iconoImg
+    ? `<img class="b-fallback-img" src="${iconoImg}" alt="">`
+    : icono(iconoFallback);
+  const relleno = imagen ? "" : `<span class="b-fallback" aria-hidden="true">${glifo}</span>`;
   const precio = precioHtml ? `<span class="b-precio">${precioHtml}</span>` : "";
   btn.innerHTML = `${img}${relleno}<span class="b-cap"><span class="b-tit">${titulo}</span>${precio}</span>`;
 }
@@ -294,6 +298,10 @@ async function irInicio() {
 // para el resto (cobrar, aparcar, etc., ya llevan su propio icono estatico
 // en la barra de funciones y no pasan por este mapa).
 const ICONOS_FUNCION = { abrir_cajon: "cash-register", cierre_z: "chart-bar" };
+// Iconos-imagen propios (PNG) para botones sin foto: sustituyen al glifo SVG
+// generico. Bolsa (articulo sin foto), abrir cajon y cierre Z.
+const ICONOS_IMG_FUNCION = { abrir_cajon: "/static/img/icono-cajon.png", cierre_z: "/static/img/icono-cierre-z.png" };
+const ICONO_IMG_ARTICULO = "/static/img/icono-bolsa.png";
 
 // Pinta la botonera normal SIN tocar el campo de busqueda. La busqueda por
 // nombre la usa para restaurar la rejilla cuando el texto es demasiado corto,
@@ -314,13 +322,13 @@ async function pintarBotonera() {
     btn.style.gridRow = `${b.fila + 1} / span ${b.alto}`;
     if (b.color) btn.style.background = b.color;
     if (b.tipo === "articulo") {
-      pintarContenido(btn, b.articulo.imagen, b.articulo.nombre_corto, precioBoton(b.articulo), "shopping-bag");
+      pintarContenido(btn, b.articulo.imagen, b.articulo.nombre_corto, precioBoton(b.articulo), "shopping-bag", ICONO_IMG_ARTICULO);
       btn.onclick = () => anadir(b.articulo);
     } else if (b.tipo === "familia") {
       pintarContenido(btn, b.familia.imagen, b.texto || b.familia.nombre);
       btn.onclick = () => abrirFamilia(b.familia.id);
     } else {
-      pintarContenido(btn, null, b.texto || b.funcion, "", ICONOS_FUNCION[b.funcion] || "basket");
+      pintarContenido(btn, null, b.texto || b.funcion, "", ICONOS_FUNCION[b.funcion] || "basket", ICONOS_IMG_FUNCION[b.funcion] || "");
       btn.onclick = () => ejecutarFuncion(b.funcion);
     }
     grid.appendChild(btn);
@@ -343,7 +351,7 @@ async function abrirFamilia(id) {
   for (const a of fam.articulos) {
     const b = document.createElement("button");
     b.className = "btn b-articulo";
-    pintarContenido(b, a.imagen, a.nombre_corto, precioBoton(a), "shopping-bag");
+    pintarContenido(b, a.imagen, a.nombre_corto, precioBoton(a), "shopping-bag", ICONO_IMG_ARTICULO);
     b.onclick = () => anadir(a); grid.appendChild(b);
   }
 }
