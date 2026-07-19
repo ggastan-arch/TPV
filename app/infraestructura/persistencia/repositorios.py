@@ -319,6 +319,15 @@ class RepositorioRegistrosSQL:
         )
         return self._s.execute(stmt).scalar_one_or_none() or 0
 
+    def buscar_alta_por_venta(self, venta_id: int) -> RegistroFiscal | None:
+        """El registro de ALTA (nunca de anulacion) de una venta dada. Usado por
+        `ConvertirEnFacturaF3` para conocer el NumSerieFactura/fecha de expedicion
+        ORIGINALES de cada simplificada al construir `FacturasSustituidas`."""
+        stmt = select(RegistroFiscal).where(
+            RegistroFiscal.venta_id == venta_id, RegistroFiscal.tipo_registro == "alta"
+        )
+        return self._s.execute(stmt).scalars().first()
+
     def registrar_resultado(
         self, registro: RegistroFiscal, resultado: str, *,
         codigo_error: str | None = None, descripcion: str | None = None,
