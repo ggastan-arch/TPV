@@ -411,6 +411,66 @@ def test_verify_chain_ok_tras_conversion_f3(crear_sesion, motor, datos_base):
     assert informe_despues.registros == informe_antes.registros + 1
 
 
+# --- 3.8/3.9/3.10: snapshot congelado del destinatario en la F3 ---------------------
+# Riesgo fiscal (Judgment Day): la F3 debe congelar el destinatario RESUELTO al
+# emitir, INDEPENDIENTE de ediciones posteriores del Cliente (art. 29.2.j LGT:
+# un documento fiscal expedido es inmutable).
+
+
+def test_conversion_congela_destinatario_resuelto_en_la_f3(crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+
+    with crear_sesion() as s, s.begin():
+        t_id = _emitir_t(s, motor, usuario_id, ejercicio, [("Neon", "2.50", "1", "21")])
+
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=usuario_id, origen="local",
+            simplificada_ids=[t_id], destinatario=_DESTINATARIO_OK,
+        )
+
+    with crear_sesion() as s:
+        f3 = s.get(Venta, resultado.venta_id)
+        cliente = s.get(Cliente, f3.cliente_id)
+        assert f3.destinatario_nombre == cliente.nombre == _DESTINATARIO_OK.nombre
+        assert f3.destinatario_nif == cliente.nif == _DESTINATARIO_OK.nif
+
+
+def test_editar_cliente_tras_conversion_no_afecta_snapshot_f3(crear_sesion, motor, datos_base):
+    """El destinatario congelado en la F3 (`venta.destinatario_nombre/nif`) es
+    INMUNE a ediciones posteriores del `Cliente` -- si un admin edita el cliente
+    DESPUES de la conversion (p.ej. antes de que la remision FIFO asincrona
+    procese el registro), el destinatario emitido/impreso NO cambia. Sin este
+    snapshot, la remision resolveria en vivo desde `cliente.nombre/nif` y la AEAT
+    recibiria un destinatario distinto del que aparece en la factura ya expedida."""
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+
+    with crear_sesion() as s, s.begin():
+        t_id = _emitir_t(s, motor, usuario_id, ejercicio, [("Neon", "2.50", "1", "21")])
+
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
+            usuario_id=usuario_id, origen="local",
+            simplificada_ids=[t_id], destinatario=_DESTINATARIO_OK,
+        )
+
+    with crear_sesion() as s, s.begin():
+        f3 = s.get(Venta, resultado.venta_id)
+        cliente = s.get(Cliente, f3.cliente_id)
+        cliente.nombre = "Otro Nombre Editado S.L."
+        cliente.nif = "B12345674"  # NIF distinto, digito de control valido
+
+    with crear_sesion() as s:
+        f3 = s.get(Venta, resultado.venta_id)
+        assert f3.destinatario_nombre == _DESTINATARIO_OK.nombre
+        assert f3.destinatario_nif == _DESTINATARIO_OK.nif
+        cliente_editado = s.get(Cliente, f3.cliente_id)
+        assert cliente_editado.nombre == "Otro Nombre Editado S.L."  # el cliente SI cambio
+        assert f3.destinatario_nombre != cliente_editado.nombre  # la F3 NO se entera
+
+
 # --- 2.15 (regresion): importes de la T congelados tras sustituir -------------------
 
 

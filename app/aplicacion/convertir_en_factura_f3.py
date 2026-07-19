@@ -119,8 +119,15 @@ class ConvertirEnFacturaF3:
         # la sesion (2.6, atomicidad por construccion: nada se persiste antes).
         cliente = self._resolver_cliente(destinatario)
 
+        # Snapshot CONGELADO del destinatario RESUELTO para ESTA F3 (fix Judgment
+        # Day, migracion 0010): se fija AQUI, mientras la venta aun esta
+        # `aparcada` (antes de `motor.emit`), con el valor de `cliente` REALMENTE
+        # usado -- inmune a cualquier edicion posterior del `Cliente` (invariante
+        # 1: un documento fiscal expedido es inmutable). `RemitirLote` debe leer
+        # este snapshot, NUNCA `venta.cliente` en vivo (ver remitir_lote.py).
         f3 = Venta(
             estado="aparcada", usuario_id=usuario_id, cliente_id=cliente.id,
+            destinatario_nombre=cliente.nombre, destinatario_nif=cliente.nif,
             base_total=Decimal("0.00"), cuota_total=Decimal("0.00"),
             total_con_iva=Decimal("0.00"),
         )
