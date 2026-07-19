@@ -30,6 +30,7 @@ from app.infraestructura.persistencia.modelos import (
     TipoIVA,
     Usuario,
     Venta,
+    VentaSustitucion,
 )
 
 # Estados terminales de aceptacion: ya no hace falta reintentar la remision.
@@ -204,6 +205,21 @@ class RepositorioVentasSQL:
         # Solo aparcada: los triggers de inmutabilidad eximen ese estado (ADR-0003).
         self._s.delete(venta)
 
+    def convertibles(self) -> list[Venta]:
+        """Simplificadas (serie 'T') cobradas y aun no sustituidas por una F3
+        (Requirement "Elegibilidad de simplificadas convertibles", spec
+        conversion-factura-f3)."""
+        stmt = (
+            select(Venta)
+            .where(
+                Venta.serie == "T",
+                Venta.estado == "cobrada",
+                Venta.id.notin_(select(VentaSustitucion.venta_sustituida_id)),
+            )
+            .order_by(Venta.id)
+        )
+        return list(self._s.execute(stmt).scalars())
+
 
 class RepositorioUsuariosSQL:
     def __init__(self, session: Session):
@@ -302,6 +318,15 @@ class RepositorioRegistrosSQL:
             RegistroFiscal.tipo_registro == "alta"
         )
         return self._s.execute(stmt).scalar_one_or_none() or 0
+
+    def buscar_alta_por_venta(self, venta_id: int) -> RegistroFiscal | None:
+        """El registro de ALTA (nunca de anulacion) de una venta dada. Usado por
+        `ConvertirEnFacturaF3` para conocer el NumSerieFactura/fecha de expedicion
+        ORIGINALES de cada simplificada al construir `FacturasSustituidas`."""
+        stmt = select(RegistroFiscal).where(
+            RegistroFiscal.venta_id == venta_id, RegistroFiscal.tipo_registro == "alta"
+        )
+        return self._s.execute(stmt).scalars().first()
 
     def registrar_resultado(
         self, registro: RegistroFiscal, resultado: str, *,

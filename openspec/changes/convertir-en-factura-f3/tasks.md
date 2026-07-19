@@ -40,61 +40,61 @@ Chain strategy: pending
 
 ## Fase 1: Elegibilidad — puerto + repositorio (Requirement: Elegibilidad de simplificadas convertibles — conversion-factura-f3 spec — dep. ninguna)
 
-- [ ] 1.1 RED `tests/test_repositorios.py` (o nuevo `tests/test_ventas_convertibles.py`):
+- [x] 1.1 RED `tests/test_repositorios.py` (o nuevo `tests/test_ventas_convertibles.py`):
   crear 3 T — cobrada sin sustituir, cobrada ya sustituida (vía `VentaSustitucion`),
   aparcada — assert `RepositorioVentasSQL.convertibles()` devuelve solo la primera
-- [ ] 1.2 GREEN `app/dominio/puertos.py`: `def convertibles(self) -> list["Venta"]: ...`
+- [x] 1.2 GREEN `app/dominio/puertos.py`: `def convertibles(self) -> list["Venta"]: ...`
   en el Protocol `RepositorioVentas`
-- [ ] 1.3 GREEN `app/infraestructura/persistencia/repositorios.py`:
+- [x] 1.3 GREEN `app/infraestructura/persistencia/repositorios.py`:
   `RepositorioVentasSQL.convertibles()` — `select(Venta).where(Venta.serie == "T",
   Venta.estado == "cobrada", Venta.id.notin_(select(VentaSustitucion.venta_sustituida_id)))`
 
 ## Fase 2: Caso de uso `ConvertirEnFacturaF3` (Requirement: Conversión atómica 1..N→1 F3 + Transición sin borrado + Destinatario inline + Auditoría + Integridad de cadena — conversion-factura-f3 spec — dep. Fase 1)
 
-- [ ] 2.1 RED `tests/test_convertir_en_factura_f3.py` (nuevo)
+- [x] 2.1 RED `tests/test_convertir_en_factura_f3.py` (nuevo)
   `::test_elegibilidad_rechaza_no_cobrada_no_t_o_inexistente` — id inexistente, id
   aparcada, id serie F → `SimplificadaNoElegible`
-- [ ] 2.2 GREEN `app/aplicacion/convertir_en_factura_f3.py` (nuevo): dataclasses
+- [x] 2.2 GREEN `app/aplicacion/convertir_en_factura_f3.py` (nuevo): dataclasses
   `DatosDestinatario(nif, nombre, domicilio)`, `ResultadoConversion`; excepciones
   `SinSimplificadas`, `SimplificadaNoElegible`, `YaSustituida`, `DestinatarioInvalido`;
   `ConvertirEnFacturaF3(uow, motor).ejecutar(usuario_id, origen, simplificada_ids,
   destinatario)` — por cada id: `uow.ventas.buscar(id)`; si `None`/`serie != "T"`/
   `estado` fuera de `{"cobrada","sustituida"}` → `SimplificadaNoElegible`
-- [ ] 2.3 RED `::test_convertir_dos_veces_una_t_falla` — T ya `sustituida` →
+- [x] 2.3 RED `::test_convertir_dos_veces_una_t_falla` — T ya `sustituida` →
   `YaSustituida` (no `IntegrityError` crudo)
-- [ ] 2.4 GREEN: distinguir en 2.2 el caso `estado == "sustituida"` → `YaSustituida`
+- [x] 2.4 GREEN: distinguir en 2.2 el caso `estado == "sustituida"` → `YaSustituida`
   del resto de casos no elegibles → `SimplificadaNoElegible`
-- [ ] 2.5 RED `::test_nif_destinatario_invalido` — NIF con dígito de control
+- [x] 2.5 RED `::test_nif_destinatario_invalido` — NIF con dígito de control
   incorrecto → `DestinatarioInvalido`, nada persistido
-- [ ] 2.6 GREEN: validar `destinatario.nif` con `validar_documento` (dominio/servicios/
+- [x] 2.6 GREEN: validar `destinatario.nif` con `validar_documento` (dominio/servicios/
   validadores) ANTES de cualquier `INSERT`; sin ids no vacíos ni destinatario válido
   no se toca la sesión
-- [ ] 2.7 RED `::test_convertir_una_sola_simplificada_n1` — 1 T elegible → F3 con
+- [x] 2.7 RED `::test_convertir_una_sola_simplificada_n1` — 1 T elegible → F3 con
   correlativo propio serie F, huella encadenada al último registro global, 1 entrada
   en `FacturasSustituidas`, T origen → `sustituida`
-- [ ] 2.8 GREEN completar `ejecutar()`: copiar como nuevas `VentaLinea` TODAS las
+- [x] 2.8 GREEN completar `ejecutar()`: copiar como nuevas `VentaLinea` TODAS las
   líneas de las simplificadas origen (helper `_copiar_lineas`, valores
   `base_linea/cuota_linea/total_linea` ya cuantizados, SIN recalcular); resolver
   `Cliente` (`buscar_por_nif` → si no existe, crear con `validar_documento`/
   `normalizar_documento`, fijar `f3.cliente_id`); `motor.emit(session, f3, serie="F",
   tipo_factura="F3")`; por origen `RegistroFacturaSustituida` + `VentaSustitucion`;
   transición `origen.estado = "sustituida"`; `uow.commit()`
-- [ ] 2.9 RED `::test_convertir_dos_simplificadas_iva_mixto_en_una_f3` — 2 T (21% y
+- [x] 2.9 RED `::test_convertir_dos_simplificadas_iva_mixto_en_una_f3` — 2 T (21% y
   10%) → 1 F3, `Desglose` separa ambos tipos, `ImporteTotal` == suma exacta de ambas
-- [ ] 2.10 RED `::test_totales_f3_reconcilian_sin_deriva` — 3+ líneas con decimales
+- [x] 2.10 RED `::test_totales_f3_reconcilian_sin_deriva` — 3+ líneas con decimales
   de borde → `CuotaTotal`/`ImporteTotal` de la F3 == Σ de las sustituidas al céntimo
   (JAMÁS re-redondeo; confirma que sumar `Decimal` ya cuantizados es exacto)
-- [ ] 2.11 RED `::test_rechazo_atomico_si_una_t_no_es_elegible` — 2 ids, uno ya
+- [x] 2.11 RED `::test_rechazo_atomico_si_una_t_no_es_elegible` — 2 ids, uno ya
   `sustituida` → excepción, CERO `Venta`/`RegistroFacturaSustituida`/
   `VentaSustitucion` nuevos persistidos (rollback total)
-- [ ] 2.12 RED `::test_conversion_registra_auditoria_conversion_f3` —
+- [x] 2.12 RED `::test_conversion_registra_auditoria_conversion_f3` —
   `LogAuditoria(accion="conversion_f3")` referencia las T origen y la F3
-- [ ] 2.13 GREEN: `uow.auditoria.registrar(accion="conversion_f3", entidad="venta",
+- [x] 2.13 GREEN: `uow.auditoria.registrar(accion="conversion_f3", entidad="venta",
   entidad_id=str(f3.id), detalle=<num_serie de cada T origen>, usuario_id=usuario_id,
   origen=origen)` dentro de la misma transacción, antes del `commit()`
-- [ ] 2.14 RED `::test_verify_chain_ok_tras_conversion_f3` — `motor.verify_chain(session)`
+- [x] 2.14 RED `::test_verify_chain_ok_tras_conversion_f3` — `motor.verify_chain(session)`
   sigue `ok=True` tras convertir, incluyendo el nuevo registro F3 (+1 registro)
-- [ ] 2.15 RED (regresión) `::test_importes_t_congelados_tras_sustituir` — intentar
+- [x] 2.15 RED (regresión) `::test_importes_t_congelados_tras_sustituir` — intentar
   modificar `total_con_iva` de una T ya `sustituida` → `sa.exc.DatabaseError` (trigger
   existente, invariante 1; sin código nuevo)
 
