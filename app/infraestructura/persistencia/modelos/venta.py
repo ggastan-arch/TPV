@@ -56,6 +56,10 @@ class Venta(Base):
         Dinero(), nullable=False, default=Decimal("0.00")
     )
 
+    # Etiqueta de texto libre, opcional, para borradores aparcados (no fiscal:
+    # ajena a la huella y a `_VENTA_CAMPOS_CONGELADOS`, ver ddl.py).
+    etiqueta_aparcada: Mapped[str | None] = mapped_column(String, nullable=True)
+
     lineas: Mapped[list["VentaLinea"]] = relationship(
         back_populates="venta", cascade="all, delete-orphan"
     )

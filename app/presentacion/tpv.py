@@ -15,6 +15,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.aplicacion.aparcar_venta import (
+    AparcarVenta,
+    BorradorNoEncontrado,
+    ListarAparcadas,
+    RecuperarAparcada,
+)
+from app.aplicacion.aparcar_venta import TicketVacio as TicketVacioAparcar
 from app.aplicacion.emitir_venta import (
     EmitirVenta,
     PagoVenta,
@@ -78,6 +85,12 @@ class CobrarReq(BaseModel):
     usuario_id: int
     items: list[ItemVenta]
     pagos: list[PagoReq] = Field(default_factory=list)
+
+
+class AparcarReq(BaseModel):
+    usuario_id: int  # kiosco: FK NOT NULL de venta.usuario_id
+    items: list[ItemVenta]
+    etiqueta: str | None = None
 
 
 class LoginReq(BaseModel):
@@ -243,6 +256,63 @@ def cobrar(
         "total": resultado.total,
         "cambio": resultado.cambio,
     }
+
+
+# --- Aparcar / listar / desaparcar (borradores no fiscales, ver ADR-0004) ------
+@router.post("/api/aparcar")
+def aparcar(req: AparcarReq, uow=Depends(get_uow)) -> dict:
+    # Endpoint fino: mapea el DTO HTTP y delega en el caso de uso (SIN motor:
+    # frontera fiscal por construccion, nunca invoca emit).
+    try:
+        venta_id = AparcarVenta(uow).ejecutar(
+            usuario_id=req.usuario_id,
+            items=[ItemAplicacion(articulo_id=i.articulo_id, cantidad=i.cantidad,
+                                   pvp=i.pvp, descripcion=i.descripcion)
+                   for i in req.items],
+            etiqueta=req.etiqueta,
+        )
+    except TicketVacioAparcar as exc:
+        raise HTTPException(400, "El ticket esta vacio") from exc
+    except ArticuloNoExiste as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+    venta = uow.ventas.buscar(venta_id)
+    return {
+        "venta_id": venta.id,
+        "etiqueta": venta.etiqueta_aparcada,
+        "total": str(venta.total_con_iva),
+        "n_lineas": len(venta.lineas),
+    }
+
+
+@router.get("/api/aparcadas")
+def aparcadas(uow=Depends(get_uow)) -> list[dict]:
+    return [
+        {"venta_id": a.venta_id, "etiqueta": a.etiqueta, "total": str(a.total),
+         "n_lineas": a.n_lineas}
+        for a in ListarAparcadas(uow).ejecutar()
+    ]
+
+
+@router.delete("/api/aparcadas/{venta_id}")
+def desaparcar(venta_id: int, uow=Depends(get_uow)) -> dict:
+    try:
+        lineas = RecuperarAparcada(uow).ejecutar(venta_id)
+    except BorradorNoEncontrado as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+    resultado = []
+    for l in lineas:
+        articulo = uow.articulos.buscar(l.articulo_id) if l.articulo_id is not None else None
+        resultado.append({
+            "articulo_id": l.articulo_id,
+            "cantidad": str(l.cantidad),
+            "pvp": str(l.pvp),
+            "descripcion": l.descripcion,
+            "modo_precio": articulo.modo_precio if articulo else None,
+            "nombre_corto": articulo.nombre_corto if articulo else None,
+        })
+    return {"lineas": resultado}
 
 
 @router.get("/api/stock/alarma")

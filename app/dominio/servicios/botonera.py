@@ -19,7 +19,7 @@ FUNCIONES = (
     "convertir_factura",
     "devolucion",
     "aparcar",
-    "recuperar",
+    "desaparcar",
     "abrir_cajon",
     "descuento",
     "cierre_caja",

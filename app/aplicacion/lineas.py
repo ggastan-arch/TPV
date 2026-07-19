@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from app.dominio.servicios.redondeo import Linea, Totales, agregar_totales, calcular_linea
+from app.infraestructura.persistencia.modelos.venta import VentaLinea
 
 if TYPE_CHECKING:
     from app.dominio.puertos import RepositorioArticulos
@@ -71,3 +72,18 @@ def resolver_items(
         )
         calculos.append(calculo)
     return resueltas, agregar_totales(calculos)
+
+
+def construir_lineas(resueltas: list[LineaResuelta]) -> list[VentaLinea]:
+    """Construye las `VentaLinea` (precios/descripcion CONGELADOS) a partir de
+    lineas ya resueltas. Compartido por `EmitirVenta` y `AparcarVenta`: DRY sin
+    cambiar los objetos que produce cada linea (mismos campos, mismo orden)."""
+    return [
+        VentaLinea(
+            articulo_id=lr.articulo.id, descripcion=lr.descripcion,
+            cantidad=lr.cantidad, pvp_unitario=lr.pvp,
+            tipo_iva_porcentaje=lr.calculo.porcentaje, base_linea=lr.calculo.base,
+            cuota_linea=lr.calculo.cuota, total_linea=lr.calculo.total,
+        )
+        for lr in resueltas
+    ]
