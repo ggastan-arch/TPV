@@ -567,6 +567,86 @@ def test_remitir_lote_registro_invalido_no_es_el_ultimo_detiene_el_lote_ahi(
         assert regs[f3_posterior_num].id in [r.id for r in repo.pendientes()]
 
 
+def test_remitir_lote_barrera_persiste_entre_ciclos_orden_posterior_nunca_se_remite(
+    crear_sesion, motor, datos_base
+):
+    """FIX Judgment Day round 3 (barrera FIFO PERSISTENTE): el `break` dentro de
+    un mismo ciclo de `RemitirLote` (ver
+    `test_remitir_lote_registro_invalido_no_es_el_ultimo_detiene_el_lote_ahi`)
+    solo difiere el posterior DENTRO de ese ciclo. Pero `requiere_intervencion`
+    es un ESTADO TERMINAL (`ESTADOS_TERMINALES`, repositorios.py) que
+    `pendientes()` EXCLUYE -- en el ciclo SIGUIENTE, `pendientes()` ya no ve el
+    registro held (por ser terminal) y, sin una barrera persistente, remitiria
+    el posterior, referenciando en su Encadenamiento una huella que la AEAT
+    NUNCA recibio: rotura PERMANENTE de la cadena.
+
+    orden 1: F3 valida.
+    orden 2: F3 SIN destinatario congelado -- queda `requiere_intervencion`
+    tras el CICLO 1.
+    orden 3: F3 valida, POSTERIOR al held.
+
+    CICLO 1: remite orden 1, marca orden 2 `requiere_intervencion`, NO remite
+    orden 3. CICLO 2: NO debe remitir NADA nuevo -- orden 3 NO debe remitirse
+    NUNCA, en NINGUN ciclo, mientras orden 2 siga `requiere_intervencion`."""
+    with crear_sesion() as s, s.begin():
+        cliente = Cliente(nif="A58818501", nombre="Acuario S.L.")
+        s.add(cliente)
+        s.flush()
+
+        f3_orden1 = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        f3_orden1.cliente_id = cliente.id
+        f3_orden1.destinatario_nombre = cliente.nombre
+        f3_orden1.destinatario_nif = cliente.nif
+        s.add(f3_orden1)
+        motor.emit(s, f3_orden1, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+        num_orden1 = f3_orden1.num_serie_factura
+
+        f3_orden2 = construir_venta(datos_base["usuario_id"], [("Guppy", "3.00", "1", "21")])
+        s.add(f3_orden2)
+        motor.emit(s, f3_orden2, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+        num_orden2 = f3_orden2.num_serie_factura
+
+        f3_orden3 = construir_venta(datos_base["usuario_id"], [("Guppy", "3.00", "1", "21")])
+        f3_orden3.cliente_id = cliente.id
+        f3_orden3.destinatario_nombre = cliente.nombre
+        f3_orden3.destinatario_nif = cliente.nif
+        s.add(f3_orden3)
+        motor.emit(s, f3_orden3, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+        num_orden3 = f3_orden3.num_serie_factura
+
+    enviados: list[str] = []
+
+    def poster(url, headers, body):
+        root = etree.fromstring(body)
+        nums = [e.text for e in root.findall(f".//{_E_SF}IDFactura/{_E_SF}NumSerieFactura")]
+        enviados.extend(nums)
+        return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
+
+    # CICLO 1: prefijo valido se remite, el held marca requiere_intervencion, el
+    # posterior queda diferido (comportamiento ya cubierto por otro test).
+    respuesta1 = _remitir(crear_sesion, poster)
+    assert respuesta1 is not None
+    assert num_orden1 in enviados
+    assert num_orden3 not in enviados
+
+    # CICLO 2 (el hallazgo real): sin barrera persistente, `pendientes()` ya no
+    # ve orden 2 (terminal) y remitiria orden 3 aqui. NO debe llamarse al
+    # remitente para nada nuevo.
+    respuesta2 = _remitir(crear_sesion, poster)
+    assert respuesta2 is None
+    assert num_orden3 not in enviados  # a traves de AMBOS ciclos, nunca se envio
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).registros
+        regs = {r.num_serie_factura: r for r in repo.ultimos(3)}
+        assert regs[num_orden1].estado_remision == "aceptado"
+        assert regs[num_orden2].estado_remision == "requiere_intervencion"
+        # El posterior sigue pendiente, disponible para un futuro reintento una
+        # vez se reencole (o resuelva) el held.
+        assert regs[num_orden3].estado_remision not in ("aceptado", "requiere_intervencion")
+        assert regs[num_orden3].id in [r.id for r in repo.pendientes()]
+
+
 # --- Item 7: `_TIPOS_CON_DESTINATARIO` alineado con validaciones_negocio -------
 def test_tipos_con_destinatario_alineado_con_validaciones_negocio():
     """`remitir_lote._TIPOS_CON_DESTINATARIO` NUNCA debe divergir silenciosamente

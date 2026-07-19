@@ -295,6 +295,22 @@ class RepositorioRegistrosSQL:
         )
         return self._s.execute(stmt).scalar_one()
 
+    def orden_minimo_requiere_intervencion(self) -> int | None:
+        """Menor `orden` entre los registros en `requiere_intervencion`, o `None`
+        si no hay ninguno. Barrera FIFO PERSISTENTE (FIX Judgment Day round 3):
+        `requiere_intervencion` es un estado TERMINAL (`ESTADOS_TERMINALES`, arriba)
+        que `pendientes()` excluye -- una vez marcado, el registro deja de aparecer
+        en `pendientes()` en TODOS los ciclos siguientes, no solo en el que lo
+        genero. `RemitirLote` usa este valor para impedir que se remita cualquier
+        registro de `orden` mayor mientras el held siga sin resolverse (via
+        `reencolar` o equivalente), preservando el "cola persistente FIFO
+        respetando orden de generacion" de CLAUDE.md a traves de multiples ciclos,
+        no solo dentro de una misma llamada."""
+        stmt = select(func.min(RegistroFiscal.orden)).where(
+            RegistroFiscal.estado_remision == "requiere_intervencion"
+        )
+        return self._s.execute(stmt).scalar_one_or_none()
+
     def registros_a_reintentar(
         self, ahora: datetime | None = None, intervalo_horas: int = 1
     ) -> list[RegistroFiscal]:

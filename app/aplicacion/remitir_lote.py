@@ -53,6 +53,24 @@ class RemitirLote:
         if not lote:
             return None
 
+        # Barrera FIFO PERSISTENTE (FIX Judgment Day round 3): `requiere_intervencion`
+        # es un estado TERMINAL (`ESTADOS_TERMINALES`, repositorios.py) que
+        # `pendientes()` ya EXCLUYE -- por eso, en el ciclo SIGUIENTE al que
+        # genero el held, `pendientes()` deja de verlo y ya no basta con el
+        # `break` de mas abajo (que solo actua DENTRO de este mismo ciclo). Sin
+        # este filtro, un registro de `orden` mayor que el held se remitiria en
+        # un ciclo posterior, referenciando en su Encadenamiento una huella que
+        # la AEAT NUNCA recibio (el held nunca llego a remitirse): rotura
+        # PERMANENTE de la cadena. Mientras exista un `requiere_intervencion`
+        # pendiente de `reencolar`, ningun registro con `orden` mayor entra al
+        # bucle de abajo, en NINGUN ciclo -- el prefijo ya `aceptado` (orden
+        # menor) no se ve afectado.
+        barrera = registros.orden_minimo_requiere_intervencion()
+        if barrera is not None:
+            lote = [reg for reg in lote if reg.orden < barrera]
+            if not lote:
+                return None
+
         elementos = []
         lote_valido = []
         for reg in lote:
