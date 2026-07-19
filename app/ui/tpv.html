@@ -193,11 +193,11 @@
       <span class="fn-ico" data-icono="file-text" aria-hidden="true"></span>
       <span class="fn-txt">Convertir en factura</span>
     </button>
-    <button class="btn fn-btn" disabled title="Próximamente">
+    <button class="btn fn-btn" onclick="ejecutarFuncion('aparcar')">
       <span class="fn-ico" data-icono="pause-circle" aria-hidden="true"></span>
       <span class="fn-txt">Aparcar ticket</span>
     </button>
-    <button class="btn fn-btn" disabled title="Próximamente">
+    <button class="btn fn-btn" onclick="ejecutarFuncion('desaparcar')">
       <span class="fn-ico" data-icono="play-circle" aria-hidden="true"></span>
       <span class="fn-txt">Desaparcar</span>
     </button>
@@ -364,7 +364,61 @@ function ejecutarFuncion(f) {
   if (f === "cobrar") abrirCobro();
   else if (f === "abrir_cajon")
     api("/tpv/api/cajon", { method:"POST", body: JSON.stringify({ usuario_id: usuario.usuario_id }) }).catch(()=>{});
+  else if (f === "aparcar") aparcarTicket();
+  else if (f === "desaparcar") abrirDesaparcar();
   else alert("Funcion '" + f + "': disponible en una fase siguiente.");
+}
+
+/* ---------- APARCAR / DESAPARCAR (borradores no fiscales) ---------- */
+async function aparcarTicket() {
+  if (!carrito.length) { alert("El ticket esta vacio."); return; }
+  const etiqueta = prompt("Etiqueta (opcional):", "");
+  if (etiqueta === null) return;
+  const items = carrito.map((l) => ({ articulo_id: l.articulo_id, cantidad: String(l.cantidad),
+                                      pvp: l.pvp, descripcion: l.descripcion }));
+  try {
+    await api("/tpv/api/aparcar", { method:"POST", body: JSON.stringify({
+      usuario_id: usuario.usuario_id, items, etiqueta: etiqueta.trim() || null }) });
+    vaciar();
+  } catch (e) { alert(e.message); }
+}
+
+async function abrirDesaparcar() {
+  let lista;
+  try { lista = await api("/tpv/api/aparcadas"); }
+  catch (e) { alert(e.message); return; }
+
+  const ov = document.createElement("div"); ov.className = "overlay";
+  ov.innerHTML = `<div class="modal"><h2>Tickets aparcados</h2>
+    <div id="listaAparcadas"></div>
+    <div class="fila-modal">
+      <button class="btn b-vaciar" onclick="this.closest('.overlay').remove()">Cerrar</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+
+  const cont = ov.querySelector("#listaAparcadas");
+  if (!lista.length) { cont.textContent = "No hay tickets aparcados."; }
+  for (const a of lista) {
+    const b = document.createElement("button");
+    b.className = "btn"; b.style.width = "100%"; b.style.marginBottom = "8px";
+    b.textContent = (a.etiqueta || ("Ticket " + a.venta_id))
+      + " · " + a.n_lineas + " lineas · " + eur(a.total);
+    b.onclick = () => desaparcarTicket(a.venta_id, ov);
+    cont.appendChild(b);
+  }
+}
+
+async function desaparcarTicket(ventaId, ov) {
+  try {
+    const r = await api("/tpv/api/aparcadas/" + ventaId, { method:"DELETE" });
+    for (const l of r.lineas) {
+      carrito.push({ articulo_id: l.articulo_id, nombre_corto: l.nombre_corto,
+                     modo_precio: l.modo_precio, cantidad: parseFloat(l.cantidad),
+                     pvp: l.pvp, descripcion: l.descripcion, editado: true });
+    }
+    ov.remove();
+    recalcular();
+  } catch (e) { alert(e.message); }
 }
 
 /* ---------- CARRITO ---------- */

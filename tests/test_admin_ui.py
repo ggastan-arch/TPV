@@ -128,10 +128,11 @@ def test_admin_clientes_toggle_activo_sin_confirmacion_extra():
 
 # --- Fase 2.4: cierre C2 (no regresion) -------------------------------------
 def test_tpv_funciones_sin_backend_siguen_deshabilitadas_tras_reskin_admin():
-    """No regresion: el reskin de admin.html (Corte 2) no toca tpv.html; los
-    botones de funciones sin backend maquetados en Corte 1 (Convertir en
-    factura, Aparcar ticket, Desaparcar, Cliente en venta) siguen `disabled`."""
+    """No regresion: el reskin de admin.html (Corte 2) no toca tpv.html. De los
+    4 botones de funciones maquetados en Corte 1, 'Convertir en factura' y
+    'Cliente en venta' siguen sin backend (`disabled`); 'Aparcar ticket' y
+    'Desaparcar' pasaron a tener backend en este cambio (aparcar-desaparcar)."""
     html = TestClient(crear_app()).get("/tpv/").text
     for texto in ("Convertir en factura", "Aparcar ticket", "Desaparcar", "Cliente en venta"):
         assert texto in html
-    assert html.count('<button class="btn fn-btn" disabled') == 4
+    assert html.count('<button class="btn fn-btn" disabled') == 2
