@@ -30,6 +30,7 @@ from app.infraestructura.persistencia.modelos import (
     TipoIVA,
     Usuario,
     Venta,
+    VentaSustitucion,
 )
 
 # Estados terminales de aceptacion: ya no hace falta reintentar la remision.
@@ -203,6 +204,21 @@ class RepositorioVentasSQL:
     def eliminar(self, venta: Venta) -> None:
         # Solo aparcada: los triggers de inmutabilidad eximen ese estado (ADR-0003).
         self._s.delete(venta)
+
+    def convertibles(self) -> list[Venta]:
+        """Simplificadas (serie 'T') cobradas y aun no sustituidas por una F3
+        (Requirement "Elegibilidad de simplificadas convertibles", spec
+        conversion-factura-f3)."""
+        stmt = (
+            select(Venta)
+            .where(
+                Venta.serie == "T",
+                Venta.estado == "cobrada",
+                Venta.id.notin_(select(VentaSustitucion.venta_sustituida_id)),
+            )
+            .order_by(Venta.id)
+        )
+        return list(self._s.execute(stmt).scalars())
 
 
 class RepositorioUsuariosSQL:

@@ -40,12 +40,12 @@ Chain strategy: pending
 
 ## Fase 1: Elegibilidad — puerto + repositorio (Requirement: Elegibilidad de simplificadas convertibles — conversion-factura-f3 spec — dep. ninguna)
 
-- [ ] 1.1 RED `tests/test_repositorios.py` (o nuevo `tests/test_ventas_convertibles.py`):
+- [x] 1.1 RED `tests/test_repositorios.py` (o nuevo `tests/test_ventas_convertibles.py`):
   crear 3 T — cobrada sin sustituir, cobrada ya sustituida (vía `VentaSustitucion`),
   aparcada — assert `RepositorioVentasSQL.convertibles()` devuelve solo la primera
-- [ ] 1.2 GREEN `app/dominio/puertos.py`: `def convertibles(self) -> list["Venta"]: ...`
+- [x] 1.2 GREEN `app/dominio/puertos.py`: `def convertibles(self) -> list["Venta"]: ...`
   en el Protocol `RepositorioVentas`
-- [ ] 1.3 GREEN `app/infraestructura/persistencia/repositorios.py`:
+- [x] 1.3 GREEN `app/infraestructura/persistencia/repositorios.py`:
   `RepositorioVentasSQL.convertibles()` — `select(Venta).where(Venta.serie == "T",
   Venta.estado == "cobrada", Venta.id.notin_(select(VentaSustitucion.venta_sustituida_id)))`
 
