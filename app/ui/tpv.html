@@ -63,7 +63,12 @@
   .b-inicio { min-height:auto !important; padding:8px 16px; background:transparent; }
   .b-inicio [data-icono] svg { width:16px; height:16px; display:block; }
 
-  .btn.con-img { justify-content:flex-end; padding:0; }
+  /* Prefijo #app: iguala la especificidad ID+clase de `#app .btn{justify-content:center}`
+     de arriba (que si no, GANA siempre sobre estas dos clases y deja la franja
+     de titulo/precio centrada tapando la foto en TODO boton con imagen -
+     articulo o familia -, por especificidad, nunca por el orden en la hoja;
+     ver el mismo razonamiento en el comentario de `#app .acciones .btn`). */
+  #app .btn.con-img { justify-content:flex-end; padding:0; }
   .b-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
   .b-fallback { display:flex; align-items:center; justify-content:center; color:color-mix(in srgb, var(--color-text) 40%, transparent); }
   .b-fallback svg { width:32px; height:32px; display:block; }
