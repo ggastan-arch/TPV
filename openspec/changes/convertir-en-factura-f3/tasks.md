@@ -431,5 +431,65 @@ sin NIF en bruto (follow-up de revisión PR1/PR2, resuelto al construir el DTO) 
 - [x] 7.2 (para la corrección round 4) `.venv/Scripts/lint-imports`: 3/3
   contratos kept.
 
+### Fase 5/6 (bis): judgment-day sobre PR3 — confirmación de éxito destruida por el
+refresco + endurecimientos de la consola de administración — [APLICADO, rama `-c3`]
+
+> Hallazgo (ambos jueces): en `pintarConvertir` (Fase 6), el éxito fijaba
+> `#cvMsg` con el `num_serie` de la F3 y ACTO SEGUIDO llamaba
+> `await pintarConvertir()`, que reescribe `#main.innerHTML` completo —
+> destruyendo el nodo `#cvMsg` recién escrito. El operador nunca llegaba a ver
+> la confirmación en el camino feliz (objetivo declarado de 6.1). Además,
+> ambos jueces señalaron: el motor fiscal se instanciaba inline
+> (`NullEngine(...)`) en vez de inyectarse como en el resto de endpoints de
+> emisión (`Depends(get_motor)`, ver `tpv.py`); `RegistroOrigenNoEncontrado`
+> quedaba sin mapear (500 crudo con traza); y `ConvertirReq.ids` sin
+> restricción de longitud dejaba colar `"ids": []` hasta `SinSimplificadas`,
+> cuyo mensaje genérico ("Destinatario invalido...") es engañoso para ese caso.
+
+- [x] FIX 1 `app/ui/admin.html::pintarConvertir` — la asignación de `#cvMsg`
+  con el mensaje de éxito se mueve a DESPUÉS de `await pintarConvertir()`,
+  sobre el nodo recién reconstruido (mismo principio que `detalleCierreZ`
+  pintando en `#czDetalle` tras `await pintarCierresZ()` en el panel Cierres
+  Z: la confirmación se escribe sobre el DOM post-refresco, no antes). Test
+  `tests/test_admin_ui.py::test_admin_convertir_confirmacion_sobrevive_al_refresco`
+  (regresión estructural: orden en el fuente de `await pintarConvertir()` vs
+  la asignación de `#cvMsg`; se documenta en el propio test la limitación de
+  la capa de test estática de este repo — sin navegador/motor de plantillas).
+- [x] FIX 2 `tests/test_admin_api.py::test_convertir_exige_sesion` — regresión
+  que bloquea un futuro refactor que retire `Depends(require_admin)` del
+  endpoint de escritura (mismo patrón que el resto de tests `_exige_sesion` de
+  escritura ya existentes en el fichero). El código ya era correcto; solo
+  faltaba el test de bloqueo.
+- [x] FIX 3 `app/presentacion/admin.py::convertir_en_factura` — se sustituye
+  `motor = NullEngine(settings.nif_emisor, settings.nombre_emisor)` (inline)
+  por `motor: FiscalEngine = Depends(get_motor)` (mismo punto único de
+  inyección que `tpv.py`, camino de emisión de venta). Comportamiento
+  idéntico hoy (`get_motor` devuelve `NullEngine` en ambas ramas); honra el
+  punto de swap documentado para un futuro `VerifactuEngine` y habilita
+  overrides en tests. `fiscal_estado` (otro uso de `NullEngine` inline, no
+  señalado por los jueces) queda fuera de alcance de este fix.
+- [x] FIX 4a `app/presentacion/admin.py::convertir_en_factura` — nuevo
+  `except RegistroOrigenNoEncontrado as exc: raise HTTPException(500,
+  str(exc)) from exc`. Es un invariante roto (defensa en profundidad, ver
+  docstring de la excepción en `convertir_en_factura_f3.py`: "nunca debería
+  ocurrir con datos consistentes"), no un conflicto de negocio identificable
+  como `SimplificadaNoElegible`/`YaSustituida` (409) ni un error de entrada
+  del cliente (422) — de ahí 500 controlado (sin traza, sin PII; el mensaje
+  solo referencia el id interno de la venta). Test OMITIDO POR DISEÑO: para
+  disparar esta excepción hay que fabricar una T `cobrada`/`sustituida` SIN
+  su registro de alta fiscal (estado de BD corrupto que ningún camino de
+  negocio produce), mismo precedente que otros invariantes de defensa en
+  profundidad de este cambio (p. ej. Fase 2, nota de alcance).
+- [x] FIX 4b `app/presentacion/admin.py::ConvertirReq.ids` — se añade
+  `Field(min_length=1, max_length=100)`: `"ids": []` ahora se rechaza en la
+  capa Pydantic con un 422 limpio, ANTES de llegar a `SinSimplificadas` (cuyo
+  422 genérico "Destinatario invalido..." era engañoso para ese caso — WARNING
+  de ambos jueces). Test `tests/test_admin_api.py::test_convertir_endpoint_ids_vacio_da_422`.
+- [x] 7.1 (para la corrección Fase 5/6 bis) `.venv/Scripts/python -m pytest`:
+  623 → 626 passed (3 tests nuevos: confirmación sobrevive al refresco +
+  exige-sesión del POST + `ids` vacío → 422), 0 failed.
+- [x] 7.2 (para la corrección Fase 5/6 bis) `.venv/Scripts/lint-imports`: 3/3
+  contratos kept.
+
 Nota: cada Work Unit (PR 1/2/3) debe correr 7.1-7.2 de forma independiente antes de
 integrarse (ver skill `chained-pr`); 7.3 se ejecuta completo solo tras la última PR.
