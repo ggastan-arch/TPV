@@ -1,7 +1,7 @@
 """Migracion 0009: `cualificada` en `venta`, columna NATIVA (`op.add_column`).
 
 Guarda de regresion (D2, override de design.md — ver tasks.md "Nota de override"):
-NO se toca `trg_venta_no_update` ni `_VENTA_CAMPOS_CONGELADOS`. Una venta `cobrada`
+NO se toca `trg_venta_no_update` ni `_VENTA_CAMPOS_CONGELADOS_0001`. Una venta `cobrada`
 ya esta totalmente congelada por el trigger vigente (ningun UPDATE plano pasa);
 ningun codigo cambia el flag durante las transiciones de estado permitidas. `ADD
 COLUMN` nativo (no `batch_alter_table`) nunca recrea la tabla: triggers e

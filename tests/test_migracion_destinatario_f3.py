@@ -3,7 +3,7 @@ NATIVAS (`op.add_column`).
 
 Guarda de regresion (mismo patron que test_migracion_cualificada.py / migracion
 0009): la migracion 0010 en si NO toca `trg_venta_no_update` ni
-`_VENTA_CAMPOS_CONGELADOS` (ver ADR en `app/infraestructura/persistencia/ddl.py` y el
+`_VENTA_CAMPOS_CONGELADOS_0001` (ver ADR en `app/infraestructura/persistencia/ddl.py` y el
 comentario de la propia migracion). `ADD COLUMN` nativo (no `batch_alter_table`)
 nunca recrea la tabla: triggers e invariantes quedan intactos, y la huella de una
 venta YA EMITIDA bajo el esquema anterior (revision 0009) no cambia (las columnas
@@ -11,7 +11,7 @@ nuevas son ajenas a la huella).
 
 ACTUALIZACION (Judgment Day, round 2): el analisis original de "una venta `cobrada`
 ya esta totalmente congelada" resulto INCOMPLETO -- el trigger solo revisaba
-`_VENTA_CAMPOS_CONGELADOS` durante la transicion de estado PERMITIDA, y estas dos
+`_VENTA_CAMPOS_CONGELADOS_0001` durante la transicion de estado PERMITIDA, y estas dos
 columnas no estaban en esa lista (hueco cerrado en la migracion 0011, ver 3c) mas
 abajo). `head` en este fichero ya incluye 0011: este test verifica el estado FINAL
 (con el hueco cerrado), no solo el efecto aislado de 0010.
@@ -160,7 +160,7 @@ def test_migracion_0010_no_rompe_triggers_ni_huella(tmp_path, aplicar_migracione
     #    anulada_con_rastro) Y, en la MISMA sentencia, cambia
     #    destinatario_nombre/destinatario_nif, tambien se rechaza -- ANTES de la
     #    migracion 0011 este UPDATE SUCEDIA sin ser detectado (el trigger solo
-    #    revisaba `_VENTA_CAMPOS_CONGELADOS` durante la transicion permitida, y esas
+    #    revisaba `_VENTA_CAMPOS_CONGELADOS_0001` durante la transicion permitida, y esas
     #    dos columnas no estaban en la lista). "head" en este test ya incluye la
     #    migracion 0011 (endurece `trg_venta_no_update`), asi que este bloque
     #    prueba el hueco CERRADO.

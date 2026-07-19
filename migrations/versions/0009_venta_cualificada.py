@@ -11,7 +11,7 @@ quedan intactos. Columna nullable, sin default ni backfill: las filas ya emitida
 quedan `NULL`, sin efecto.
 
 D2 override (ver tasks.md "Nota de override sobre D2"): NO se recrea
-`trg_venta_no_update` ni se anade `cualificada` a `_VENTA_CAMPOS_CONGELADOS`. Una
+`trg_venta_no_update` ni se anade `cualificada` a `_VENTA_CAMPOS_CONGELADOS_0001`. Una
 venta `cobrada` ya esta totalmente congelada por el trigger vigente (un UPDATE
 plano sobre CUALQUIER columna, incluida `cualificada`, ya es rechazado); ningun
 codigo de este cambio cambia el flag durante las transiciones de estado

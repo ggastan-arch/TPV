@@ -76,7 +76,7 @@ def test_no_se_puede_colar_destinatario_ni_cualificada_en_transicion_permitida(
     """Vector COMBINADO (Judgment Day, revision round 2, empiricamente probado): el
     trigger `trg_venta_no_update` exime la transicion de estado PERMITIDA
     (cobrada -> anulada_con_rastro/sustituida) y SOLO re-verifica los campos listados
-    en `_VENTA_CAMPOS_CONGELADOS` durante esa transicion. Antes de la migracion 0011,
+    en `_VENTA_CAMPOS_CONGELADOS_0001` durante esa transicion. Antes de la migracion 0011,
     `destinatario_nombre`/`destinatario_nif`/`cualificada` NO estaban en esa lista: un
     UPDATE que combinara la transicion PERMITIDA con un cambio de estos campos, en la
     MISMA sentencia, se colaba sin ser detectado -- esto rompia el invariante 1 de
@@ -138,3 +138,37 @@ def test_venta_aparcada_si_es_editable(crear_sesion, datos_base):
     with crear_sesion() as s, s.begin():
         venta = s.get(Venta, venta_id)
         s.delete(venta)  # permitido
+
+
+# --- Drift guard (FIX Judgment Day round 3): footgun de las DOS constantes ------
+def test_trigger_venta_no_update_no_diverge_de_ddl_v2(engine):
+    """`app/infraestructura/persistencia/ddl.py` tiene DOS constantes de campos
+    congelados: `_VENTA_CAMPOS_CONGELADOS_0001` (historica, SOLO usada por la
+    migracion 0001 para crear el trigger desde cero -- muerta a HEAD, nunca
+    tocar) y `_VENTA_CAMPOS_CONGELADOS_V2`/`TRIGGER_VENTA_NO_UPDATE_V2`
+    (autoritativa a HEAD, aplicada por la migracion 0011 via DROP+CREATE). Este
+    test es la guarda DIRECTA contra el footgun: construye una BD desde cero
+    hasta `head` (fixture `engine`, migraciones reales) y compara el cuerpo VIVO
+    de `trg_venta_no_update` en `sqlite_master` contra `TRIGGER_VENTA_NO_UPDATE_V2`
+    byte a byte. Si una migracion futura anade una columna congelada y olvida el
+    DROP+CREATE (o lo hace con un cuerpo distinto de `ddl.py`), este test falla
+    inmediatamente -- sin depender de un vector de ataque concreto como
+    `test_no_se_puede_colar_destinatario_ni_cualificada_en_transicion_permitida`."""
+    from sqlalchemy import text
+
+    from app.infraestructura.persistencia import ddl
+
+    with engine.connect() as conn:
+        fila = conn.execute(
+            text(
+                "SELECT sql FROM sqlite_master "
+                "WHERE type = 'trigger' AND name = 'trg_venta_no_update'"
+            )
+        ).first()
+
+    assert fila is not None, "trg_venta_no_update no existe en la BD migrada a head"
+    # SQLite guarda en `sqlite_master.sql` el texto EXACTO de la sentencia CREATE
+    # que se ejecuto, sin el `;` final ni espacios en blanco de borde: se normaliza
+    # `TRIGGER_VENTA_NO_UPDATE_V2` de la misma forma para una comparacion justa.
+    esperado = ddl.TRIGGER_VENTA_NO_UPDATE_V2.strip().rstrip(";")
+    assert fila[0] == esperado

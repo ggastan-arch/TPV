@@ -1,5 +1,5 @@
 """venta: endurece `trg_venta_no_update` (anade `cualificada`/`destinatario_nombre`/
-`destinatario_nif` a `_VENTA_CAMPOS_CONGELADOS`)
+`destinatario_nif` a `_VENTA_CAMPOS_CONGELADOS_V2`)
 
 Revision ID: 0011_venta_trigger_campos_congelados
 Revises: 0010_venta_destinatario_f3
@@ -9,7 +9,7 @@ Riesgo fiscal corregido (Judgment Day, round 2): el override D2 documentado en l
 migraciones 0009/0010 asumia que una venta `cobrada` ya estaba "totalmente" bloqueada
 salvo el campo `estado` durante la transicion permitida
 `cobrada -> {anulada_con_rastro, sustituida}`. ESO ERA FALSO (probado empiricamente):
-`trg_venta_no_update` SOLO re-verifica los campos listados en `_VENTA_CAMPOS_CONGELADOS`
+`trg_venta_no_update` SOLO re-verifica los campos listados en `_VENTA_CAMPOS_CONGELADOS_0001`
 durante esa transicion -- cualquier columna AUSENTE de esa lista podia colarse GRATIS en
 el MISMO UPDATE que hace la transicion de estado, por ejemplo:
 
@@ -23,7 +23,7 @@ Ese UPDATE SUCEDIA sin ser rechazado, violando el invariante 1 de CLAUDE.md
 del destinatario de una F1/F3 ya expedida (migracion 0010) y para el flag `cualificada`
 (migracion 0009).
 
-Se cierra anadiendo esas tres columnas a `_VENTA_CAMPOS_CONGELADOS`
+Se cierra anadiendo esas tres columnas a `_VENTA_CAMPOS_CONGELADOS_V2`
 (`app/infraestructura/persistencia/ddl.py`) y recreando `trg_venta_no_update` con la
 lista endurecida. Se confirmo que ningun camino de codigo legitimo escribe estas
 columnas durante la transicion permitida:
@@ -42,7 +42,7 @@ los otros 15 triggers de inmutabilidad (`trg_venta_no_delete`, los de
 `venta_linea`/`pago`, `registro_fiscal`, `registro_fiscal_desglose`,
 `registro_factura_sustituida`, `log_auditoria`, `movimiento_stock`).
 
-IMPORTANTE (probado empiricamente): `_VENTA_CAMPOS_CONGELADOS` (la lista que usa la
+IMPORTANTE (probado empiricamente): `_VENTA_CAMPOS_CONGELADOS_0001` (la lista que usa la
 migracion 0001 para CREAR el trigger por primera vez) NO se modifico in-place -- eso
 rompe CUALQUIER migracion desde cero, porque migracion 0001 crearia un trigger que
 referencia `NEW.cualificada`/`NEW.destinatario_nombre`/`NEW.destinatario_nif` antes de
@@ -68,7 +68,7 @@ down_revision = "0010_venta_destinatario_f3"
 branch_labels = None
 depends_on = None
 
-# Version ANTERIOR del trigger (0001-0010): `_VENTA_CAMPOS_CONGELADOS` SIN
+# Version ANTERIOR del trigger (0001-0010): `_VENTA_CAMPOS_CONGELADOS_0001` SIN
 # `cualificada`/`destinatario_nombre`/`destinatario_nif`. Literal historico fijo (no se
 # reimporta de ddl.py, que ya solo conoce la version endurecida) para que `downgrade`
 # restaure EXACTAMENTE el trigger que existia antes de esta migracion.

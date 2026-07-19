@@ -26,7 +26,7 @@ emitida antes de este cambio se re-remite ni se corrige automaticamente.
 
 D2 override (mismo patron que 0009, ver tasks.md "Nota de override sobre D2" y
 el ADR en `app/infraestructura/persistencia/ddl.py`): NO se recrea
-`trg_venta_no_update` ni se anaden estas columnas a `_VENTA_CAMPOS_CONGELADOS`.
+`trg_venta_no_update` ni se anaden estas columnas a `_VENTA_CAMPOS_CONGELADOS_0001`.
 Una venta `cobrada` YA esta totalmente congelada por el trigger vigente para
 CUALQUIER UPDATE que no sea la transicion de estado controlada
 `cobrada -> {anulada_con_rastro, sustituida}`; y ningun codigo de este cambio

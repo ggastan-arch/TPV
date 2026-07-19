@@ -17,8 +17,17 @@ from __future__ import annotations
 
 # Igualdad null-safe de los campos que NO pueden cambiar en una venta emitida.
 #
-# NOTA: esta lista alimenta `TRIGGERS` (mas abajo), que la migracion 0001 ejecuta
-# TAL CUAL para CREAR el trigger por primera vez en una BD desde cero. Por eso esta
+# NOTA (renombrado FIX Judgment Day round 3 -- disambiguacion, sin cambio de
+# comportamiento): esta constante era historicamente `_VENTA_CAMPOS_CONGELADOS`
+# (nombre sin sufijo). Se renombra a `_VENTA_CAMPOS_CONGELADOS_0001` porque, a
+# HEAD, es la version MUERTA/inerte -- la autoritativa es `_VENTA_CAMPOS_CONGELADOS_V2`
+# (mas abajo), aplicada por la migracion 0011. El nombre sin sufijo era un footgun:
+# un futuro desarrollador podia editarlo pensando que endurece el trigger vigente,
+# sin efecto real a HEAD, y arriesgando romper la cadena de migraciones desde cero
+# (ver nota siguiente).
+#
+# Esta lista alimenta `TRIGGERS` (mas abajo), que la migracion 0001 ejecuta TAL
+# CUAL para CREAR el trigger por primera vez en una BD desde cero. Por eso esta
 # lista NUNCA debe incluir una columna que no exista todavia en el esquema de la
 # migracion 0001 (p. ej. `cualificada`/`destinatario_nombre`/`destinatario_nif`,
 # anadidas 8-9 migraciones despues, en 0009/0010): si lo hiciera, migrar una BD desde
@@ -29,7 +38,7 @@ from __future__ import annotations
 # El endurecimiento POSTERIOR de esta lista (D2 override cerrado, migracion 0011)
 # vive en `_VENTA_CAMPOS_CONGELADOS_V2` / `TRIGGER_VENTA_NO_UPDATE_V2`, aplicado por
 # esa migracion via DROP+CREATE DESPUES de que esas columnas ya existan.
-_VENTA_CAMPOS_CONGELADOS = " AND ".join(
+_VENTA_CAMPOS_CONGELADOS_0001 = " AND ".join(
     f"NEW.{c} IS OLD.{c}"
     for c in (
         "serie",
@@ -71,9 +80,10 @@ _REGISTRO_CAMPOS_CONGELADOS = " AND ".join(
 
 TRIGGERS: list[str] = [
     # --- venta: inmutable tras emitir, salvo transicion de estado controlada ---
-    # (creacion HISTORICA, migracion 0001 -- ver nota sobre `_VENTA_CAMPOS_CONGELADOS`
-    # arriba: NO tocar este cuerpo para endurecer campos; usar
-    # `TRIGGER_VENTA_NO_UPDATE_V2` + una migracion DROP+CREATE nueva, como 0011).
+    # (creacion HISTORICA, migracion 0001 -- ver nota sobre
+    # `_VENTA_CAMPOS_CONGELADOS_0001` arriba: NO tocar este cuerpo para endurecer
+    # campos; usar `TRIGGER_VENTA_NO_UPDATE_V2` + una migracion DROP+CREATE nueva,
+    # como 0011).
     f"""
     CREATE TRIGGER trg_venta_no_update
     BEFORE UPDATE ON venta
@@ -82,7 +92,7 @@ TRIGGERS: list[str] = [
      AND NOT (
         OLD.estado = 'cobrada'
         AND NEW.estado IN ('anulada_con_rastro', 'sustituida')
-        AND {_VENTA_CAMPOS_CONGELADOS}
+        AND {_VENTA_CAMPOS_CONGELADOS_0001}
      )
     BEGIN
         SELECT RAISE(ABORT, 'Venta emitida inmutable (RRSIF art. 8): solo transicion de estado permitida');
@@ -219,7 +229,7 @@ TRIGGERS: list[str] = [
 # las migraciones 0009/0010 asumia que una venta `cobrada` ya estaba "totalmente"
 # bloqueada salvo el campo `estado` durante la transicion permitida
 # `cobrada -> {anulada_con_rastro, sustituida}`. ESO ERA FALSO: el trigger de arriba
-# SOLO re-verifica `_VENTA_CAMPOS_CONGELADOS` durante esa transicion -- un UPDATE que
+# SOLO re-verifica `_VENTA_CAMPOS_CONGELADOS_0001` durante esa transicion -- un UPDATE que
 # combinara la transicion PERMITIDA con un cambio de `cualificada`/
 # `destinatario_nombre`/`destinatario_nif` en la MISMA sentencia se colaba sin ser
 # detectado (violando el invariante 1 de CLAUDE.md). Se confirmo que ningun camino de
@@ -229,7 +239,7 @@ TRIGGERS: list[str] = [
 # que anadirlas aqui no rompe ningun flujo real.
 #
 # `_VENTA_CAMPOS_CONGELADOS_V2`/`TRIGGER_VENTA_NO_UPDATE_V2` (separados de la version
-# HISTORICA de arriba, ver la nota junto a `_VENTA_CAMPOS_CONGELADOS`) son la fuente
+# HISTORICA de arriba, ver la nota junto a `_VENTA_CAMPOS_CONGELADOS_0001`) son la fuente
 # unica de verdad que importa la migracion 0011 para el DROP+CREATE dirigido de
 # `trg_venta_no_update` -- se aplican DESPUES de que las migraciones 0009/0010 ya
 # hayan anadido esas columnas, por eso es seguro referenciarlas aqui.
