@@ -240,10 +240,10 @@ const eur = (s) => (s ?? "0.00").toString().replace(".", ",") + " €";
 // icono generico (Nocturne, /static/nocturne-icons.js) ocupa el lugar de la foto
 // y el titulo va centrado debajo. Un unico punto para todos los botones
 // (botonera, familia, buscador).
-function pintarContenido(btn, imagen, titulo, precioHtml = "") {
+function pintarContenido(btn, imagen, titulo, precioHtml = "", iconoFallback = "basket") {
   btn.classList.toggle("con-img", !!imagen);
   const img = imagen ? `<img class="b-img" src="${imagen}" alt="">` : "";
-  const relleno = imagen ? "" : `<span class="b-fallback" aria-hidden="true">${icono("basket")}</span>`;
+  const relleno = imagen ? "" : `<span class="b-fallback" aria-hidden="true">${icono(iconoFallback)}</span>`;
   const precio = precioHtml ? `<span class="b-precio">${precioHtml}</span>` : "";
   btn.innerHTML = `${img}${relleno}<span class="b-cap"><span class="b-tit">${titulo}</span>${precio}</span>`;
 }
@@ -288,6 +288,13 @@ async function irInicio() {
   await pintarBotonera();
 }
 
+// Icono de relleno por funcion (boton sin imagen, tipo="funcion"): un icono
+// especifico donde aporta claridad ("abrir cajon"/"cierre Z" no deberian
+// compartir la cesta generica de un articulo), "basket" como fallback neutro
+// para el resto (cobrar, aparcar, etc., ya llevan su propio icono estatico
+// en la barra de funciones y no pasan por este mapa).
+const ICONOS_FUNCION = { abrir_cajon: "cash-register", cierre_z: "chart-bar" };
+
 // Pinta la botonera normal SIN tocar el campo de busqueda. La busqueda por
 // nombre la usa para restaurar la rejilla cuando el texto es demasiado corto,
 // sin borrar lo que la persona esta tecleando.
@@ -307,13 +314,13 @@ async function pintarBotonera() {
     btn.style.gridRow = `${b.fila + 1} / span ${b.alto}`;
     if (b.color) btn.style.background = b.color;
     if (b.tipo === "articulo") {
-      pintarContenido(btn, b.articulo.imagen, b.articulo.nombre_corto, precioBoton(b.articulo));
+      pintarContenido(btn, b.articulo.imagen, b.articulo.nombre_corto, precioBoton(b.articulo), "shopping-bag");
       btn.onclick = () => anadir(b.articulo);
     } else if (b.tipo === "familia") {
       pintarContenido(btn, b.familia.imagen, b.texto || b.familia.nombre);
       btn.onclick = () => abrirFamilia(b.familia.id);
     } else {
-      pintarContenido(btn, null, b.texto || b.funcion);
+      pintarContenido(btn, null, b.texto || b.funcion, "", ICONOS_FUNCION[b.funcion] || "basket");
       btn.onclick = () => ejecutarFuncion(b.funcion);
     }
     grid.appendChild(btn);
@@ -336,7 +343,7 @@ async function abrirFamilia(id) {
   for (const a of fam.articulos) {
     const b = document.createElement("button");
     b.className = "btn b-articulo";
-    pintarContenido(b, a.imagen, a.nombre_corto, precioBoton(a));
+    pintarContenido(b, a.imagen, a.nombre_corto, precioBoton(a), "shopping-bag");
     b.onclick = () => anadir(a); grid.appendChild(b);
   }
 }
@@ -375,6 +382,12 @@ function ejecutarFuncion(f) {
   else if (f === "aparcar") aparcarTicket();
   else if (f === "desaparcar") abrirDesaparcar();
   else if (f === "cliente_en_venta") abrirClienteEnVenta();
+  // Cierre Z sigue siendo exclusivo de la consola admin (sin endpoint TPV, sin
+  // cambio de permisos): este boton es solo un atajo de navegacion. admin.html
+  // no tiene deep-link (pestanaActual es una variable JS en memoria, sin hash
+  // ni query param que la fije al cargar), asi que se enlaza a la raiz de la
+  // consola en vez de a la pestana "Cierres Z" directamente.
+  else if (f === "cierre_z") window.location.href = "/admin/";
   else alert("Funcion '" + f + "': disponible en una fase siguiente.");
 }
 

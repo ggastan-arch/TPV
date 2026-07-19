@@ -23,6 +23,7 @@ FUNCIONES = (
     "abrir_cajon",
     "descuento",
     "cierre_caja",
+    "cierre_z",
 )
 
 

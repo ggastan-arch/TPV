@@ -237,7 +237,9 @@ def _sembrar_botonera_demo(
     `test_sembrar_demo_oculta_familias_de_material`).
 
     Rejilla 3x2: fila 0 las 3 familias raiz, fila 1 "Bolsa" (0,10 EUR,
-    presente en casi cada ticket) mas la funcion "abrir cajon"."""
+    presente en casi cada ticket) mas las funciones "abrir cajon" y
+    "cierre dia" (atajo de navegacion a la consola admin; el Cierre Z en si
+    sigue siendo exclusivo de admin, sin endpoint TPV nuevo)."""
     perfil = PerfilBotonera(nombre="Principal")
     s.add(perfil)
     s.flush()
@@ -259,14 +261,17 @@ def _sembrar_botonera_demo(
                         columna=i % pagina.columnas, texto=texto, familia_id=fam.id))
 
     # Fila 1: cobro rapido de "Bolsa" (art. 0,10 EUR, en casi cada ticket) +
-    # funcion "abrir cajon". No se siembra "convertir_factura" mientras la
-    # funcion no exista (evita un boton que no hace nada).
+    # funcion "abrir cajon" + funcion "cierre dia" (llena la rejilla 3x2). No
+    # se siembra "convertir_factura" mientras la funcion no exista (evita un
+    # boton que no hace nada).
     bolsa = articulos.get("Bolsa")
     if bolsa is not None:
         s.add(Boton(pagina_id=pagina.id, fila=1, columna=0,
                     texto=bolsa.nombre_corto, articulo_id=bolsa.id))
     s.add(Boton(pagina_id=pagina.id, fila=1, columna=1, texto="Abrir cajón",
                 funcion="abrir_cajon"))
+    s.add(Boton(pagina_id=pagina.id, fila=1, columna=2, texto="Cierre día",
+                funcion="cierre_z"))
 
 
 def sembrar() -> None:
