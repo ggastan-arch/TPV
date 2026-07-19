@@ -130,9 +130,9 @@ Chain strategy: pending
   (`RemitirLote`) nunca pasa `destinatario` para F2 aunque exista
   `venta.cliente_id` (no regresión del invariante "T inalterada")
 
-## Fase 4: Confirmación de reglas ya existentes (Requirement: soporte estructural F1/F3 en validaciones — motor-fiscal-verifactu spec — dep. ninguna)
+## Fase 4: Confirmación de reglas ya existentes (Requirement: soporte estructural F1/F3 en validaciones — motor-fiscal-verifactu spec — dep. ninguna) — [APLICADO, PR2]
 
-- [ ] 4.1 `tests/test_validaciones_negocio.py::test_f3_con_destinatario_no_rechaza_falta_destinatario`
+- [x] 4.1 `tests/test_validaciones_negocio.py::test_f3_con_destinatario_no_rechaza_falta_destinatario`
   — registro F3 realista + `tiene_destinatario=True` → sin `FALTA_DESTINATARIO`;
   mismo registro con `tiene_destinatario=False` → sí (ver Nota de alcance arriba;
   SIN cambio de código en `validaciones_negocio.py`)
