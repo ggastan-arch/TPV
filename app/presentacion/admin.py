@@ -31,6 +31,14 @@ from app.aplicacion.clientes import (
     NifInvalido,
     ServicioClientes,
 )
+from app.aplicacion.convertir_en_factura_f3 import (
+    ConvertirEnFacturaF3,
+    DatosDestinatario,
+    DestinatarioInvalido,
+    SimplificadaNoElegible,
+    SinSimplificadas,
+    YaSustituida,
+)
 from app.aplicacion.usuarios import (
     DatosUsuario,
     NombreDuplicado,
@@ -213,6 +221,21 @@ class ReencolarReq(BaseModel):
     registro_id: int
 
 
+class ConvertirReq(BaseModel):
+    """DTO del endpoint de conversion (Fase 5). Los campos del destinatario son
+    `str | None` (NO `str` a secas): un `null`/campo ausente en el JSON debe llegar
+    intacto hasta el `ConvertirEnFacturaF3` y convertirse en un `DestinatarioInvalido`
+    (422) controlado -- si fueran `str` obligatorios, un cliente que mande `null`
+    recibiria un 422 generico de Pydantic, pero cualquier consumidor que construyera
+    el DTO en Python (sin pasar por HTTP) podria seguir colando `None` hasta el caso
+    de uso. La guarda real vive en `convertir_en_factura`, no aqui."""
+
+    ids: list[int]
+    nif: str | None = None
+    nombre: str | None = None
+    domicilio: str | None = None
+
+
 def _origen(request: Request) -> str:
     host = request.client.host if request.client else ""
     return "local" if host in ("127.0.0.1", "::1", "localhost") else "remoto"
@@ -384,6 +407,47 @@ def informe_dia(_: int = Depends(require_admin), s: Session = Depends(get_sessio
         "num_ventas": len(ventas),
         "total": str(total),
         "por_medio": {k: str(val) for k, val in por_medio.items()},
+    }
+
+
+# --- Ventas: conversion de simplificadas en factura F3 (Requirement: Listado de
+# simplificadas elegibles + Endpoint de conversion -- consola-administracion spec) --
+@router.get("/api/ventas/convertibles")
+def listar_convertibles(_: int = Depends(require_admin), uow=Depends(get_uow)) -> list[dict]:
+    return [
+        {"id": v.id, "num_serie_factura": v.num_serie_factura,
+         "fecha_hora_huso": v.fecha_hora_huso, "total_con_iva": str(v.total_con_iva)}
+        for v in uow.ventas.convertibles()
+    ]
+
+
+@router.post("/api/ventas/convertir")
+def convertir_en_factura(req: ConvertirReq, request: Request,
+                         usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
+    motor = NullEngine(settings.nif_emisor, settings.nombre_emisor)
+    # Boundary guard (`(x or "").strip()`): un NIF/nombre/domicilio `null` u omitido
+    # en el JSON llega aqui como `None` (ver docstring de `ConvertirReq`); se coacciona
+    # a cadena vacia ANTES de construir `DatosDestinatario`, para que el rechazo salga
+    # siempre por `DestinatarioInvalido` (422 controlado) y nunca por un
+    # `AttributeError` (`None.strip()`) que subiria como 500 crudo.
+    destinatario = DatosDestinatario(
+        nif=(req.nif or "").strip(),
+        nombre=(req.nombre or "").strip(),
+        domicilio=(req.domicilio or "").strip(),
+    )
+    try:
+        resultado = ConvertirEnFacturaF3(uow, motor).ejecutar(
+            usuario_id=usuario_id, origen=_origen(request),
+            simplificada_ids=req.ids, destinatario=destinatario,
+        )
+    except (SinSimplificadas, DestinatarioInvalido) as exc:
+        raise HTTPException(422, str(exc) or "Destinatario invalido (NIF/nombre/domicilio)") from exc
+    except (SimplificadaNoElegible, YaSustituida) as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {
+        "venta_id": resultado.venta_id, "num_serie": resultado.num_serie,
+        "fecha": resultado.fecha, "total": resultado.total,
+        "num_origenes": resultado.num_origenes,
     }
 
 
