@@ -12,7 +12,7 @@ from app.aplicacion.remitir_lote import RemitirLote
 from app.infraestructura.fiscal.remitente import RemisionIncidencia, RemitenteVerifactu, endpoint_verifactu
 from app.infraestructura.fiscal.xml import NS, sistema_desde_settings
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
-from app.infraestructura.persistencia.modelos import LogAuditoria, RemisionIntento
+from app.infraestructura.persistencia.modelos import Cliente, LogAuditoria, RemisionIntento
 
 _E_SF = "{%s}" % NS
 
@@ -319,3 +319,79 @@ def test_remitir_lote_no_cualificada_no_incluye_flag_no_regresion(crear_sesion, 
 
     _remitir(crear_sesion, poster)
     assert b"FacturaSimplificadaArt7273" not in capturado["body"]
+
+
+# --- Fase 3: bloque Destinatarios resuelto al remitir (F1/F3) -------------------
+def test_remitir_lote_resuelve_destinatario_para_f1_f3(crear_sesion, motor, datos_base):
+    with crear_sesion() as s, s.begin():
+        cliente = Cliente(nif="A58818501", nombre="Acuario S.L.")
+        s.add(cliente)
+        s.flush()
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        venta.cliente_id = cliente.id
+        s.add(venta)
+        motor.emit(s, venta, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+
+    capturado: dict = {}
+
+    def poster(url, headers, body):
+        capturado["body"] = body
+        root = etree.fromstring(body)
+        nums = [e.text for e in root.findall(f".//{_E_SF}IDFactura/{_E_SF}NumSerieFactura")]
+        return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
+
+    _remitir(crear_sesion, poster)
+    body = capturado["body"]
+    assert b"<sum1:Destinatarios>" in body
+    assert b"<sum1:NombreRazon>Acuario S.L.</sum1:NombreRazon>" in body
+    assert b"<sum1:NIF>A58818501</sum1:NIF>" in body
+
+
+def test_remitir_lote_no_resuelve_destinatario_sin_cliente(crear_sesion, motor, datos_base):
+    """F1/F3 sin cliente asignado (venta.cliente_id es None) -> destinatario=None,
+    igual que antes de este cambio (no regresion)."""
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        s.add(venta)
+        motor.emit(s, venta, serie="F", ejercicio=datos_base["ejercicio"], tipo_factura="F3")
+
+    capturado: dict = {}
+
+    def poster(url, headers, body):
+        capturado["body"] = body
+        root = etree.fromstring(body)
+        nums = [e.text for e in root.findall(f".//{_E_SF}IDFactura/{_E_SF}NumSerieFactura")]
+        return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
+
+    _remitir(crear_sesion, poster)
+    assert b"Destinatarios" not in capturado["body"]
+
+
+# --- Fase 3 (3.7): no regresion -- F2 nunca recibe destinatario -----------------
+def test_xml_f2_nunca_recibe_destinatario(crear_sesion, motor, datos_base):
+    """Confirma que el camino real (RemitirLote) NUNCA pasa `destinatario` para
+    F2, aunque `venta.cliente_id` este fijado (regla AEAT DESTINATARIO_NO_PERMITIDO,
+    3.1.3.13; ver tambien test_f2_con_destinatario_rechaza en
+    test_validaciones_negocio.py). Nota de ubicacion: tasks.md 3.7 referencia
+    `tests/test_xml_validacion.py`, pero esta prueba necesita la infraestructura
+    de `RemitirLote`/`Remitente` ya presente en este fichero (mismo patron que
+    3.5/3.6): se mantiene aqui junto al resto de pruebas de remision real."""
+    with crear_sesion() as s, s.begin():
+        cliente = Cliente(nif="A58818501", nombre="Acuario S.L.")
+        s.add(cliente)
+        s.flush()
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        venta.cliente_id = cliente.id
+        s.add(venta)
+        motor.emit(s, venta, serie="T", ejercicio=datos_base["ejercicio"], tipo_factura="F2")
+
+    capturado: dict = {}
+
+    def poster(url, headers, body):
+        capturado["body"] = body
+        root = etree.fromstring(body)
+        nums = [e.text for e in root.findall(f".//{_E_SF}IDFactura/{_E_SF}NumSerieFactura")]
+        return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
+
+    _remitir(crear_sesion, poster)
+    assert b"Destinatarios" not in capturado["body"]

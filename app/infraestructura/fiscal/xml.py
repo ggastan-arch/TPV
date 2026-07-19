@@ -96,6 +96,18 @@ def _sistema_informatico(parent, sistema: SistemaInformatico) -> None:
     _sub(si, "IndicadorMultiplesOT", sistema.indicador_multiples_ot)
 
 
+@dataclass
+class Destinatario:
+    """Bloque Destinatarios/IDDestinatario (F1/F3): NIF y nombre/razon social del
+    cliente. NUNCA participa en el computo de la huella -- `huella_alta` (ver
+    app.dominio.servicios.huella) no declara este parametro; la huella ya queda
+    fijada por `motor.emit` ANTES de que exista ningun destinatario resuelto
+    (eso solo ocurre aqui, en la SERIALIZACION, ver app.aplicacion.remitir_lote)."""
+
+    nombre: str
+    nif: str
+
+
 def registro_alta_xml(
     reg: RegistroFiscal,
     *,
@@ -103,6 +115,7 @@ def registro_alta_xml(
     sistema: SistemaInformatico,
     anterior: RegistroFiscal | None = None,
     cualificada: bool = False,
+    destinatario: Destinatario | None = None,
 ) -> etree._Element:
     root = etree.Element(_q("RegistroAlta"), nsmap=_NSMAP)
     _sub(root, "IDVersion", "1.0")
@@ -132,6 +145,17 @@ def registro_alta_xml(
     # (los elementos opcionales intermedios del XSD no se emiten en este SIF).
     if cualificada:
         _sub(root, "FacturaSimplificadaArt7273", "S")
+
+    # Destinatarios/IDDestinatario (F1/F3): minOccurs=0, se OMITE cuando None (T/F2
+    # quedan byte-identicas). Posicion XSD exacta (SuministroInformacion.xsd.xml:153):
+    # entre el bloque cualificada y Desglose (los elementos opcionales intermedios
+    # del XSD -- FacturaSinIdentifDestinatarioArt61d, Macrodato,
+    # EmitidaPorTerceroODestinatario, Tercero -- no se emiten en este SIF).
+    if destinatario is not None:
+        destinatarios = _sub(root, "Destinatarios")
+        idd = _sub(destinatarios, "IDDestinatario")
+        _sub(idd, "NombreRazon", destinatario.nombre)
+        _sub(idd, "NIF", destinatario.nif)
 
     desglose = _sub(root, "Desglose")
     for d in reg.desglose:

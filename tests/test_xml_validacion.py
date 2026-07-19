@@ -4,6 +4,7 @@ from __future__ import annotations
 from _helpers import construir_venta
 from app.infraestructura.fiscal import validacion
 from app.infraestructura.fiscal.xml import (
+    Destinatario,
     a_bytes,
     registro_alta_xml,
     registro_anulacion_xml,
@@ -126,3 +127,49 @@ def test_cualificada_emite_flag_s_valida_xsd(crear_sesion, motor, datos_base):
         # emiten, asi que la validez de secuencia del XSD solo exige este orden).
         assert cuerpo.index(b"</sum1:DescripcionOperacion>") < cuerpo.index(b"<sum1:FacturaSimplificadaArt7273>")
         assert cuerpo.index(b"</sum1:FacturaSimplificadaArt7273>") < cuerpo.index(b"<sum1:Desglose>")
+
+
+# --- Fase 3: bloque Destinatarios/IDDestinatario (F1/F3) ----------------------
+
+
+def test_xml_simplificada_t_byte_identica(crear_sesion, motor, datos_base):
+    """Guarda de regresion fiscal (golden): una F2/T sin destinatario produce el
+    MISMO XML que antes de anadir el bloque Destinatarios -- el bloque es
+    estrictamente condicional (`destinatario=None` por defecto -> se OMITE)."""
+    ejercicio = datos_base["ejercicio"]
+    reg_id = _emitir(
+        crear_sesion, motor, datos_base["usuario_id"], [("Neon", "2.50", "2", "21")],
+        serie="T", ejercicio=ejercicio, tipo_factura="F2",
+    )
+    with crear_sesion() as s:
+        reg = s.get(RegistroFiscal, reg_id)
+        xml_por_defecto = registro_alta_xml(reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None)
+        xml_destinatario_none = registro_alta_xml(
+            reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None, destinatario=None)
+        assert a_bytes(xml_por_defecto) == a_bytes(xml_destinatario_none)
+        assert b"Destinatarios" not in a_bytes(xml_por_defecto)
+        assert validacion.errores(xml_por_defecto) == []
+
+
+def test_xml_f3_con_destinatarios_valida_xsd(crear_sesion, motor, datos_base):
+    ejercicio = datos_base["ejercicio"]
+    reg_id = _emitir(
+        crear_sesion, motor, datos_base["usuario_id"], [("Neon", "2.50", "2", "21")],
+        serie="F", ejercicio=ejercicio, tipo_factura="F3",
+    )
+    with crear_sesion() as s:
+        reg = s.get(RegistroFiscal, reg_id)
+        destinatario = Destinatario(nombre="Acuario S.L.", nif="A58818501")
+        xml = registro_alta_xml(
+            reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None, destinatario=destinatario)
+        cuerpo = a_bytes(xml)
+        assert b"<sum1:Destinatarios>" in cuerpo
+        assert b"<sum1:IDDestinatario>" in cuerpo
+        assert b"<sum1:NombreRazon>Acuario S.L.</sum1:NombreRazon>" in cuerpo
+        assert b"<sum1:NIF>A58818501</sum1:NIF>" in cuerpo
+        # Posicion XSD exacta (SuministroInformacion.xsd.xml:153): entre
+        # DescripcionOperacion (y el bloque opcional cualificada, si presente) y
+        # Desglose.
+        assert cuerpo.index(b"</sum1:DescripcionOperacion>") < cuerpo.index(b"<sum1:Destinatarios>")
+        assert cuerpo.index(b"</sum1:Destinatarios>") < cuerpo.index(b"<sum1:Desglose>")
+        assert validacion.errores(xml) == []

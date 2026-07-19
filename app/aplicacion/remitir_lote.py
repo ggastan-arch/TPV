@@ -16,6 +16,12 @@ if TYPE_CHECKING:
     from app.infraestructura.fiscal.remitente import Remitente, RespuestaEnvio
     from app.infraestructura.fiscal.xml import SistemaInformatico
 
+# F1/F3 llevan destinatario (contraparte de la operacion, art. 6 ROF); F2/T (y
+# R5) lo tienen PROHIBIDO (regla AEAT DESTINATARIO_NO_PERMITIDO, 3.1.3.13; ver
+# validaciones_negocio.py _CON_DESTINATARIO/_SIN_DESTINATARIO). Se resuelve
+# SOLO para esos dos tipos, nunca para el resto.
+_TIPOS_CON_DESTINATARIO = {"F1", "F3"}
+
 
 class RemitirLote:
     def __init__(self, uow: UnidadDeTrabajo, remitente: "Remitente"):
@@ -28,6 +34,7 @@ class RemitirLote:
         from app.infraestructura.fiscal.remitente import RemisionIncidencia
         from app.infraestructura.fiscal.xml import (
             Cabecera,
+            Destinatario,
             a_bytes,
             envelope_remision,
             registro_alta_xml,
@@ -59,9 +66,19 @@ class RemitirLote:
                 # del bucle, pero eso queda fuera de alcance de esta revision.
                 venta = self.uow.ventas.buscar(reg.venta_id)
                 cualificada = bool(venta.cualificada) if venta is not None else False
+                # Destinatarios/IDDestinatario (F1/F3): resuelto aqui, en la
+                # SERIALIZACION, a partir de `venta.cliente_id` (ya congelado
+                # por ConvertirEnFacturaF3, ver design.md D2). NUNCA participa
+                # en la huella, ya fijada por `motor.emit` (huella.py).
+                destinatario = None
+                if (reg.tipo_factura in _TIPOS_CON_DESTINATARIO
+                        and venta is not None and venta.cliente is not None):
+                    destinatario = Destinatario(
+                        nombre=venta.cliente.nombre, nif=venta.cliente.nif)
                 elementos.append(
                     registro_alta_xml(reg, nombre_emisor=nombre_emisor, sistema=sistema,
-                                       anterior=anterior, cualificada=cualificada))
+                                       anterior=anterior, cualificada=cualificada,
+                                       destinatario=destinatario))
             else:
                 elementos.append(registro_anulacion_xml(reg, sistema=sistema, anterior=anterior))
 

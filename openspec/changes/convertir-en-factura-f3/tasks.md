@@ -98,33 +98,37 @@ Chain strategy: pending
   modificar `total_con_iva` de una T ya `sustituida` → `sa.exc.DatabaseError` (trigger
   existente, invariante 1; sin código nuevo)
 
-## Fase 3: Bloque `Destinatarios` en XML (Requirement: Bloque Destinatarios/IDDestinatario condicional F1/F3 — motor-fiscal-verifactu spec — dep. ninguna, en paralelo a Fase 2)
+## Fase 3: Bloque `Destinatarios` en XML (Requirement: Bloque Destinatarios/IDDestinatario condicional F1/F3 — motor-fiscal-verifactu spec — dep. ninguna, en paralelo a Fase 2) — [APLICADO, PR2]
 
-- [ ] 3.1 RED (golden, regresión) `tests/test_xml_validacion.py::test_xml_simplificada_t_byte_identica`
+- [x] 3.1 RED (golden, regresión) `tests/test_xml_validacion.py::test_xml_simplificada_t_byte_identica`
   — F2/T sin destinatario → XML idéntico al actual (`destinatario=None`)
-- [ ] 3.2 RED `tests/test_xml_validacion.py::test_xml_f3_con_destinatarios_valida_xsd`
+- [x] 3.2 RED `tests/test_xml_validacion.py::test_xml_f3_con_destinatarios_valida_xsd`
   — F3 con `Destinatario(nombre, nif)` → bloque `Destinatarios/IDDestinatario`
   presente tras el bloque `FacturaSimplificadaArt7273`/`DescripcionOperacion` y
   antes de `Desglose`; valida contra el XSD oficial
-- [ ] 3.3 GREEN `app/infraestructura/fiscal/xml.py`: dataclass
+- [x] 3.3 GREEN `app/infraestructura/fiscal/xml.py`: dataclass
   `Destinatario(nombre: str, nif: str)`; `registro_alta_xml(..., destinatario:
   Destinatario | None = None)`; bloque `if destinatario is not None:` insertado
   tras el bloque `cualificada` (línea ~134) y antes de `Desglose` (línea ~136)
-- [ ] 3.4 RED `tests/test_huella_vectores.py::test_huella_f3_independiente_del_destinatario`
+- [x] 3.4 RED `tests/test_huella_vectores.py::test_huella_f3_independiente_del_destinatario`
   — 2 registros F3 con mismos importes/fecha, destinatario distinto → huella idéntica
   (`huella_alta` no recibe destinatario; frontera fiscal confirmada)
-- [ ] 3.5 RED (integración) `tests/test_remitir_lote.py` (o fichero equivalente):
+- [x] 3.5 RED (integración) `tests/test_remision.py` (fichero equivalente a
+  `test_remitir_lote.py` — ya contiene toda la infraestructura `RemitirLote`):
   `test_remitir_lote_resuelve_destinatario_para_f1_f3` — registro F3 con
   `venta.cliente_id` fijado → `registro_alta_xml` recibe `Destinatario` resuelto;
   registro F2/T (sin cliente asignado o `tipo_factura` fuera de `{F1,F3}`) →
   `destinatario=None`
-- [ ] 3.6 GREEN `app/aplicacion/remitir_lote.py`: para `reg.tipo_factura in {"F1",
+- [x] 3.6 GREEN `app/aplicacion/remitir_lote.py`: para `reg.tipo_factura in {"F1",
   "F3"}` resolver `venta = uow.ventas.buscar(reg.venta_id)`; si `venta.cliente` no
   es `None`, construir `Destinatario(nombre=cliente.nombre, nif=cliente.nif)`;
   pasar a `registro_alta_xml`; para el resto, `destinatario=None`
-- [ ] 3.7 RED `tests/test_xml_validacion.py::test_xml_f2_nunca_recibe_destinatario`
-  — confirma que el camino real (`RemitirLote`) nunca pasa `destinatario` para
-  F2 aunque exista `venta.cliente_id` (no regresión del invariante "T inalterada")
+- [x] 3.7 RED `tests/test_remision.py::test_xml_f2_nunca_recibe_destinatario`
+  (nota de ubicación: tasks.md original referenciaba `test_xml_validacion.py`,
+  pero esta prueba necesita la infraestructura `RemitirLote`/`Remitente` ya
+  presente en `test_remision.py`, junto a 3.5/3.6) — confirma que el camino real
+  (`RemitirLote`) nunca pasa `destinatario` para F2 aunque exista
+  `venta.cliente_id` (no regresión del invariante "T inalterada")
 
 ## Fase 4: Confirmación de reglas ya existentes (Requirement: soporte estructural F1/F3 en validaciones — motor-fiscal-verifactu spec — dep. ninguna)
 
