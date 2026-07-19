@@ -8,7 +8,7 @@ Create Date: 2026-07-18
 entera y PERDERIA los triggers de inmutabilidad (`trg_venta_no_update/no_delete`,
 ver design.md). `ADD COLUMN` nativo nunca recrea la tabla: triggers e invariantes
 quedan intactos. Columna nullable, sin default ni backfill: ajena a la huella y a
-`_VENTA_CAMPOS_CONGELADOS`; las filas ya emitidas quedan `NULL`, sin efecto.
+`_VENTA_CAMPOS_CONGELADOS_0001`; las filas ya emitidas quedan `NULL`, sin efecto.
 """
 from __future__ import annotations
 

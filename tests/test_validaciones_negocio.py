@@ -120,6 +120,30 @@ def test_cualificada_completa_no_rechaza():
     assert "CUALIFICADA_SIN_NIF_DOMICILIO" not in _codigos(inc)
 
 
+# --- Fase 4 (convertir-en-factura-f3): confirmacion de reglas ya existentes --
+
+
+def test_f3_con_destinatario_no_rechaza_falta_destinatario():
+    """Confirmacion SIN cambio de codigo en validaciones_negocio.py (tasks.md
+    Fase 4, "Nota de alcance"): la regla F1/F3 requieren destinatario
+    (3.1.3.13) YA esta implementada (lineas ~125-133); este test solo
+    documenta/confirma el comportamiento para un F3 realista (con
+    FacturasSustituidas, como el que emite ConvertirEnFacturaF3)."""
+    reg = _reg(
+        tipo_factura="F3", num_serie_factura="F2026-000001",
+        facturas_sustituidas=[SimpleNamespace(
+            id_emisor="00000000T", num_serie_factura="T2026-000001",
+            fecha_expedicion="10-07-2026")],
+    )
+    inc_con_destinatario = vn.validar_alta(
+        reg, nif_obligado="00000000T", sistema=SISTEMA_OK, ahora=AHORA, tiene_destinatario=True)
+    assert "FALTA_DESTINATARIO" not in _codigos(inc_con_destinatario)
+
+    inc_sin_destinatario = vn.validar_alta(
+        reg, nif_obligado="00000000T", sistema=SISTEMA_OK, ahora=AHORA, tiene_destinatario=False)
+    assert "FALTA_DESTINATARIO" in _codigos(inc_sin_destinatario)
+
+
 def test_registro_real_emitido_pasa_las_validaciones(crear_sesion, motor, datos_base):
     with crear_sesion() as s, s.begin():
         venta = construir_venta(datos_base["usuario_id"],

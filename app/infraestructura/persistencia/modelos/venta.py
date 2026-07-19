@@ -58,15 +58,31 @@ class Venta(Base):
     )
 
     # Etiqueta de texto libre, opcional, para borradores aparcados (no fiscal:
-    # ajena a la huella y a `_VENTA_CAMPOS_CONGELADOS`, ver ddl.py).
+    # ajena a la huella y a `_VENTA_CAMPOS_CONGELADOS_0001`, ver ddl.py).
     etiqueta_aparcada: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Marca de factura simplificada cualificada (art. 7.2/7.3 ROF): serializa
     # CONDICIONALMENTE a `FacturaSimplificadaArt7273=S` (ausente si False/NULL).
     # Nullable, ajena a la huella (D1/D2, ver design.md y tasks.md "Nota de
-    # override"): NUNCA se anade a `_VENTA_CAMPOS_CONGELADOS` ni recrea el
+    # override"): NUNCA se anade a `_VENTA_CAMPOS_CONGELADOS_0001` ni recrea el
     # trigger; el UPDATE plano de una venta emitida ya esta bloqueado.
     cualificada: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+
+    # Snapshot CONGELADO del destinatario (F1/F3), resuelto y escrito UNA SOLA VEZ
+    # por `ConvertirEnFacturaF3.ejecutar()` mientras la venta aun esta `aparcada`
+    # (antes de `motor.emit`). Riesgo fiscal corregido (Judgment Day, migracion
+    # 0010): sin este snapshot, `RemitirLote` resolvia el destinatario EN VIVO
+    # desde `cliente.nombre/nif` en el momento de la remision asincrona -- un
+    # cliente editado tras la emision hacia que la AEAT recibiera un destinatario
+    # DISTINTO del emitido/impreso (documento fiscal, debe ser inmutable). Ajenas
+    # a la huella (igual que `cualificada`); NO se anaden a
+    # `_VENTA_CAMPOS_CONGELADOS_0001` (D2 override, ver migracion 0010 y ddl.py): una
+    # venta `cobrada` ya esta bloqueada para cualquier UPDATE que no sea la
+    # transicion de estado controlada, y ningun codigo escribe estas columnas
+    # durante esa transicion (la F3 no transiciona de estado en este alcance; las
+    # T origen sustituidas nunca reciben destinatario, quedan `NULL`).
+    destinatario_nombre: Mapped[str | None] = mapped_column(String, nullable=True)
+    destinatario_nif: Mapped[str | None] = mapped_column(String, nullable=True)
 
     lineas: Mapped[list["VentaLinea"]] = relationship(
         back_populates="venta", cascade="all, delete-orphan"
