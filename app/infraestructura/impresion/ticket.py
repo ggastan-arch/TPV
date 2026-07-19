@@ -19,6 +19,7 @@ from app.infraestructura.fiscal import qr as qr_mod
 
 if TYPE_CHECKING:
     from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscal
+    from app.infraestructura.persistencia.modelos.maestros import Cliente
     from app.infraestructura.persistencia.modelos.venta import Venta
 
 
@@ -53,6 +54,7 @@ def imprimir_ticket(
     nif_emisor: str | None = None,
     cortar: bool = True,
     demo: bool | None = None,
+    cliente: "Cliente | None" = None,
 ) -> None:
     ancho = ancho or settings.ticket_ancho
     nombre_emisor = nombre_emisor or settings.nombre_emisor
@@ -84,6 +86,19 @@ def imprimir_ticket(
     printer.text(nombre_emisor + "\n")
     printer.set(align="center", bold=False)
     printer.text(f"NIF: {nif_emisor}\n")
+
+    # --- Destinatario (SOLO simplificada cualificada, art. 7.2/7.3 ROF): NIF y
+    # domicilio del cliente asignado. La cuota separada por tipo ya la imprime
+    # el desglose de mas abajo, sin cambios (D6, design.md). Una venta NO
+    # cualificada (o sin `cliente`) omite este bloque -> byte-idéntico a antes.
+    if venta.cualificada and cliente is not None:
+        printer.set(align="left")
+        printer.text(sep + "\n")
+        printer.text(f"Cliente: {cliente.nombre}\n")
+        if cliente.nif:
+            printer.text(f"NIF: {cliente.nif}\n")
+        if cliente.domicilio:
+            printer.text(f"Domicilio: {cliente.domicilio}\n")
 
     # --- Identificacion de la factura ---
     printer.set(align="left")

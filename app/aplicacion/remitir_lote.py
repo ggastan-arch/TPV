@@ -43,8 +43,25 @@ class RemitirLote:
         for reg in lote:
             anterior = registros.buscar(reg.registro_anterior_id) if reg.registro_anterior_id else None
             if reg.tipo_registro == "alta":
+                # El flag FacturaSimplificadaArt7273 (D3, design.md) vive en `venta`,
+                # no en `registro_fiscal`: se resuelve aqui, en la SERIALIZACION, sin
+                # tocar la huella (ya calculada en la emision, ver huella.py).
+                #
+                # N+1 aceptado (Judgment Day S-2, documentado — sin cambio de
+                # comportamiento): este `buscar(reg.venta_id)` por registro es un
+                # lookup adicional por alta del lote. Se acepta porque (a) el lote
+                # esta acotado (<=1000 registros por remision, ver Remitente/lote),
+                # (b) ya sigue el MISMO patron per-registro que `anterior =
+                # registros.buscar(...)` dos lineas arriba, y (c) el camino de
+                # remision fiscal es el de MAYOR riesgo del sistema (huella/cadena):
+                # no se toca por una optimizacion de rendimiento de bajo valor. Si se
+                # quisiera batchear, seria un `SELECT venta_id IN (...)` unico ANTES
+                # del bucle, pero eso queda fuera de alcance de esta revision.
+                venta = self.uow.ventas.buscar(reg.venta_id)
+                cualificada = bool(venta.cualificada) if venta is not None else False
                 elementos.append(
-                    registro_alta_xml(reg, nombre_emisor=nombre_emisor, sistema=sistema, anterior=anterior))
+                    registro_alta_xml(reg, nombre_emisor=nombre_emisor, sistema=sistema,
+                                       anterior=anterior, cualificada=cualificada))
             else:
                 elementos.append(registro_anulacion_xml(reg, sistema=sistema, anterior=anterior))
 

@@ -94,6 +94,32 @@ def test_f3_sin_destinatario_rechaza():
     assert "FALTA_DESTINATARIO" in _codigos(inc)
 
 
+# --- Fase 3 (B): simplificada cualificada (art. 7.2/7.3 ROF) ------------------
+
+
+def test_f2_con_destinatario_sigue_rechazado():
+    """Guarda de regresion (tasks.md 3.1): el trabajo de cualificada usa el flag
+    `FacturaSimplificadaArt7273`, NUNCA un bloque `Destinatarios` — F2 sigue
+    rechazando `Destinatarios` exactamente igual que antes de este cambio."""
+    inc = vn.validar_alta(_reg(), nif_obligado="00000000T", sistema=SISTEMA_OK,
+                          ahora=AHORA, tiene_destinatario=True)
+    assert "DESTINATARIO_NO_PERMITIDO" in _codigos(inc)
+    assert vn.hay_rechazos(inc)
+
+
+def test_cualificada_sin_nif_domicilio_rechaza():
+    inc = vn.validar_alta(_reg(), nif_obligado="00000000T", sistema=SISTEMA_OK,
+                          ahora=AHORA, cualificada_incompleta=True)
+    assert "CUALIFICADA_SIN_NIF_DOMICILIO" in _codigos(inc)
+    assert vn.hay_rechazos(inc)
+
+
+def test_cualificada_completa_no_rechaza():
+    inc = vn.validar_alta(_reg(), nif_obligado="00000000T", sistema=SISTEMA_OK,
+                          ahora=AHORA, cualificada_incompleta=False)
+    assert "CUALIFICADA_SIN_NIF_DOMICILIO" not in _codigos(inc)
+
+
 def test_registro_real_emitido_pasa_las_validaciones(crear_sesion, motor, datos_base):
     with crear_sesion() as s, s.begin():
         venta = construir_venta(datos_base["usuario_id"],

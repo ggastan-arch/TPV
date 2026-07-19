@@ -24,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.infraestructura.tipos import Cantidad, Dinero, Porcentaje
 from app.infraestructura.persistencia.modelos.base import Base
+from app.infraestructura.persistencia.modelos.maestros import Cliente
 
 ESTADOS = ("aparcada", "cobrada", "anulada_con_rastro", "sustituida")
 
@@ -60,12 +61,20 @@ class Venta(Base):
     # ajena a la huella y a `_VENTA_CAMPOS_CONGELADOS`, ver ddl.py).
     etiqueta_aparcada: Mapped[str | None] = mapped_column(String, nullable=True)
 
+    # Marca de factura simplificada cualificada (art. 7.2/7.3 ROF): serializa
+    # CONDICIONALMENTE a `FacturaSimplificadaArt7273=S` (ausente si False/NULL).
+    # Nullable, ajena a la huella (D1/D2, ver design.md y tasks.md "Nota de
+    # override"): NUNCA se anade a `_VENTA_CAMPOS_CONGELADOS` ni recrea el
+    # trigger; el UPDATE plano de una venta emitida ya esta bloqueado.
+    cualificada: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+
     lineas: Mapped[list["VentaLinea"]] = relationship(
         back_populates="venta", cascade="all, delete-orphan"
     )
     pagos: Mapped[list["Pago"]] = relationship(
         back_populates="venta", cascade="all, delete-orphan"
     )
+    cliente: Mapped["Cliente | None"] = relationship()
 
     __table_args__ = (
         # Sin duplicados de numeracion a nivel de BD.

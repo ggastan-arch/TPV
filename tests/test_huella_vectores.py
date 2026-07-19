@@ -53,3 +53,19 @@ def test_caso_3_anulacion_encadenada():
         fecha_hora_huso_gen="2024-01-01T19:20:40+01:00",
     )
     assert huella == HUELLA_CASO_3
+
+
+def test_flag_cualificada_no_altera_huella():
+    """Guarda de regresion (D3, design.md; corregido en revision Judgment Day
+    S-1): el flag `cualificada` de la venta NUNCA entra en la composicion de la
+    huella. `huella_alta` no declara ese parametro en su firma -- ni siquiera
+    puede recibirlo -- lo cual es la prueba real de que ninguna variacion del
+    flag puede alterar el hash. (Una version anterior de este test comparaba
+    `huella_alta(**campos)` contra si misma con los MISMOS argumentos, lo cual
+    era tautologico: la igualdad era trivial y no probaba nada sobre el flag.
+    Ver test_migracion_cualificada.py y RemitirLote para la cobertura real de
+    extremo a extremo de que `NullEngine.emit`/`huella_alta` ignoran
+    `venta.cualificada`.)"""
+    import inspect
+
+    assert "cualificada" not in inspect.signature(huella_alta).parameters

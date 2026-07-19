@@ -284,3 +284,38 @@ def test_noregresion_aceptado_incidencia_rechazo_linea(crear_sesion, motor, dato
         repo = UnidadDeTrabajoSQL(s).registros
         assert repo.contar_pendientes() == 1
         assert repo.hay_incidencia_pendiente() is True
+
+
+# --- Fase 3 (B): flag FacturaSimplificadaArt7273 resuelto por venta al remitir ---
+def test_remitir_lote_incluye_flag_cualificada_en_el_xml(crear_sesion, motor, datos_base):
+    with crear_sesion() as s, s.begin():
+        venta = construir_venta(datos_base["usuario_id"], [("Neon", "2.50", "1", "21")])
+        venta.cualificada = True
+        s.add(venta)
+        motor.emit(s, venta)
+
+    capturado: dict = {}
+
+    def poster(url, headers, body):
+        capturado["body"] = body
+        root = etree.fromstring(body)
+        nums = [e.text for e in root.findall(f".//{_E_SF}IDFactura/{_E_SF}NumSerieFactura")]
+        return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
+
+    _remitir(crear_sesion, poster)
+    assert b"FacturaSimplificadaArt7273" in capturado["body"]
+
+
+def test_remitir_lote_no_cualificada_no_incluye_flag_no_regresion(crear_sesion, motor, datos_base):
+    _emitir(crear_sesion, motor, datos_base["usuario_id"], 1)
+
+    capturado: dict = {}
+
+    def poster(url, headers, body):
+        capturado["body"] = body
+        root = etree.fromstring(body)
+        nums = [e.text for e in root.findall(f".//{_E_SF}IDFactura/{_E_SF}NumSerieFactura")]
+        return 200, respuesta_remision_xml([(n, "Correcto", None, None) for n in nums])
+
+    _remitir(crear_sesion, poster)
+    assert b"FacturaSimplificadaArt7273" not in capturado["body"]

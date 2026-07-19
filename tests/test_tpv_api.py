@@ -224,6 +224,134 @@ def test_calcular_eco_descripcion_override(cliente, datos_tpv):
     assert r.json()["lineas"][0]["descripcion"] == "Promo verano"
 
 
+def test_cobrar_con_cliente_asignado(cliente, crear_sesion, datos_tpv):
+    from app.aplicacion.clientes import DatosCliente, ServicioClientes
+    from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
+
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(DatosCliente(nombre="Juan Perez"))
+
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "2"}],
+        "pagos": [{"medio": "efectivo", "importe": "10.00"}],
+        "cliente_id": cliente_id,
+    })
+    assert r.status_code == 200
+    datos = r.json()
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, datos["venta_id"])
+        assert venta.cliente_id == cliente_id
+
+
+def test_cobrar_cualificada_sin_datos_devuelve_422(cliente, crear_sesion, datos_tpv):
+    from app.aplicacion.clientes import DatosCliente, ServicioClientes
+    from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
+
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Sin datos"))  # sin nif ni domicilio
+
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}],
+        "pagos": [{"medio": "efectivo", "importe": "2.50"}],
+        "cliente_id": cliente_id, "cualificada": True,
+    })
+    assert r.status_code == 422
+
+    with crear_sesion() as s:
+        assert s.query(Venta).count() == 0
+
+
+def test_cobrar_cualificada_con_datos_completos_marca_venta(cliente, crear_sesion, datos_tpv):
+    from app.aplicacion.clientes import DatosCliente, ServicioClientes
+    from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
+
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Acuario S.L.", nif="A58818501", domicilio="Calle Mayor 1"))
+
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}],
+        "pagos": [{"medio": "efectivo", "importe": "2.50"}],
+        "cliente_id": cliente_id, "cualificada": True,
+    })
+    assert r.status_code == 200
+    datos = r.json()
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, datos["venta_id"])
+        assert venta.cualificada is True
+
+
+def test_cobrar_cualificada_pasa_cliente_a_imprimir_ticket(
+    cliente, crear_sesion, datos_tpv, monkeypatch
+):
+    """`_imprimir_ticket_seguro` debe cargar `venta.cliente` y pasarlo a
+    `imprimir_ticket` (tasks.md 3.14), para que el ticket cualificado pueda
+    imprimir el destinatario (NIF + domicilio)."""
+    from app.aplicacion.clientes import DatosCliente, ServicioClientes
+    from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
+
+    with crear_sesion() as s:
+        cliente_id = ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Acuario S.L.", nif="A58818501", domicilio="Calle Mayor 1"))
+
+    llamadas: list[tuple] = []
+    monkeypatch.setattr("app.infraestructura.db.SessionLocal", crear_sesion)
+    monkeypatch.setattr("app.infraestructura.impresion.ticket.crear_impresora", lambda: object())
+    monkeypatch.setattr(
+        "app.infraestructura.impresion.ticket.imprimir_ticket",
+        lambda *a, **k: llamadas.append((a, k)),
+    )
+
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}],
+        "pagos": [{"medio": "efectivo", "importe": "2.50"}],
+        "cliente_id": cliente_id, "cualificada": True,
+    })
+    assert r.status_code == 200
+
+    assert len(llamadas) == 1
+    _, kwargs = llamadas[0]
+    assert kwargs.get("cliente") is not None
+    assert kwargs["cliente"].nombre == "Acuario S.L."
+
+
+def test_cobrar_sin_cliente_pasa_cliente_none_a_imprimir_ticket(
+    cliente, crear_sesion, datos_tpv, monkeypatch
+):
+    """No-regresion: sin cliente asignado, `_imprimir_ticket_seguro` pasa
+    `cliente=None` (mismo comportamiento por defecto de `imprimir_ticket`)."""
+    llamadas: list[tuple] = []
+    monkeypatch.setattr("app.infraestructura.db.SessionLocal", crear_sesion)
+    monkeypatch.setattr("app.infraestructura.impresion.ticket.crear_impresora", lambda: object())
+    monkeypatch.setattr(
+        "app.infraestructura.impresion.ticket.imprimir_ticket",
+        lambda *a, **k: llamadas.append((a, k)),
+    )
+
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["neon_id"], "cantidad": "1"}],
+        "pagos": [{"medio": "efectivo", "importe": "2.50"}],
+    })
+    assert r.status_code == 200
+
+    assert len(llamadas) == 1
+    _, kwargs = llamadas[0]
+    assert kwargs.get("cliente") is None
+
+
 def test_cobrar_emite_venta(cliente, crear_sesion, datos_tpv):
     login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
     r = cliente.post("/tpv/api/cobrar", json={

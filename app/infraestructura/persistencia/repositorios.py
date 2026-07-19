@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.dominio.puertos import TotalesRangoZ, UltimoErrorRemision
+from app.dominio.servicios.validadores import normalizar_documento
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.persistencia.modelos import (
     Articulo,
@@ -157,6 +158,31 @@ class RepositorioClientesSQL:
         stmt = select(Cliente).order_by(Cliente.nombre)
         if not incluir_inactivos:
             stmt = stmt.where(Cliente.activo.is_(True))
+        return list(self._s.execute(stmt).scalars())
+
+    def buscar_por_nif(self, nif: str) -> Cliente | None:
+        """Coincidencia EXACTA por NIF normalizado (mismo formato canonico que
+        `ServicioClientes._validar_nif` almacena, ver app/aplicacion/clientes.py)."""
+        stmt = select(Cliente).where(
+            Cliente.activo.is_(True), Cliente.nif == normalizar_documento(nif)
+        )
+        return self._s.execute(stmt).scalars().first()
+
+    def buscar_por_nombre(self, q: str, limite: int = 20) -> list[Cliente]:
+        """Busqueda incremental por nombre (panel "Cliente en venta" del TPV):
+        subcadena case-insensitive, solo clientes activos. Mirror de
+        `RepositorioArticulosSQL.buscar_por_nombre` (guarda de longitud minima y
+        escape de comodines LIKE, ver ahi para el detalle)."""
+        q = q.strip()
+        if len(q) < 2:
+            return []
+        patron = f"%{_escapar_comodines_like(q)}%"
+        stmt = (
+            select(Cliente)
+            .where(Cliente.activo.is_(True), Cliente.nombre.ilike(patron, escape="\\"))
+            .order_by(Cliente.nombre)
+            .limit(limite)
+        )
         return list(self._s.execute(stmt).scalars())
 
 

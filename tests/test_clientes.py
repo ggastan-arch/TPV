@@ -91,3 +91,55 @@ def test_desactivar_no_borra(crear_sesion, datos_base):
         cliente = s.get(Cliente, cliente_id)
         assert cliente is not None and cliente.activo is False
     assert len(_auditorias(crear_sesion, "desactivar_cliente")) == 1
+
+
+# --- Repositorio: busqueda por NIF / nombre (cliente-en-venta, mirror de
+# RepositorioArticulosSQL.buscar_por_nombre, ver repositorios.py:70-90) -------
+
+
+def test_repositorio_clientes_buscar_por_nif_exacto_normalizado(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Acuario S.L.", nif=" a58818501 "))
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).clientes
+        encontrado = repo.buscar_por_nif("A58818501")
+        assert encontrado is not None and encontrado.nombre == "Acuario S.L."
+        # Tambien acepta el valor sin normalizar de entrada (normaliza antes de comparar).
+        assert repo.buscar_por_nif(" a58818501 ") is not None
+        assert repo.buscar_por_nif("00000000T") is None
+
+
+def test_repositorio_clientes_buscar_por_nombre_subcadena_case_insensitive(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Juan Perez"))
+        _svc(s, datos_base).crear(DatosCliente(nombre="Maria Garcia"))
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).clientes
+        resultado = repo.buscar_por_nombre("perez")
+        assert [c.nombre for c in resultado] == ["Juan Perez"]
+        assert repo.buscar_por_nombre("PEREZ") != []
+
+
+def test_repositorio_clientes_buscar_por_nombre_excluye_inactivos(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        activo_id = _svc(s, datos_base).crear(DatosCliente(nombre="Cliente activo"))
+        inactivo_id = _svc(s, datos_base).crear(DatosCliente(nombre="Cliente inactivo"))
+    with crear_sesion() as s:
+        _svc(s, datos_base).desactivar(inactivo_id)
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).clientes
+        resultado = repo.buscar_por_nombre("cliente")
+        assert [c.id for c in resultado] == [activo_id]
+
+
+def test_repositorio_clientes_buscar_por_nombre_query_corta_devuelve_vacio(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Juan Perez"))
+
+    with crear_sesion() as s:
+        repo = UnidadDeTrabajoSQL(s).clientes
+        assert repo.buscar_por_nombre("") == []
+        assert repo.buscar_por_nombre("a") == []
