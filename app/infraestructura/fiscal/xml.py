@@ -102,10 +102,18 @@ class Destinatario:
     cliente. NUNCA participa en el computo de la huella -- `huella_alta` (ver
     app.dominio.servicios.huella) no declara este parametro; la huella ya queda
     fijada por `motor.emit` ANTES de que exista ningun destinatario resuelto
-    (eso solo ocurre aqui, en la SERIALIZACION, ver app.aplicacion.remitir_lote)."""
+    (eso solo ocurre aqui, en la SERIALIZACION, ver app.aplicacion.remitir_lote).
+
+    `nif: str | None` (honesto, revision Judgment Day): un NIF vacio/None NUNCA
+    produce un `<NIF/>` vacio en el XML (invalido contra el XSD, bloquearia la
+    cola FIFO de remision si la AEAT lo rechaza) -- `registro_alta_xml` omite el
+    bloque ENTERO si `nif` es falsy, igual que si `destinatario` fuera `None`.
+    La defensa PRIMARIA es la guarda de `remitir_lote.py` (nunca construye un
+    `Destinatario` con NIF vacio en el camino real); esto es defensa en
+    profundidad en el propio serializador."""
 
     nombre: str
-    nif: str
+    nif: str | None
 
 
 def registro_alta_xml(
@@ -151,7 +159,13 @@ def registro_alta_xml(
     # entre el bloque cualificada y Desglose (los elementos opcionales intermedios
     # del XSD -- FacturaSinIdentifDestinatarioArt61d, Macrodato,
     # EmitidaPorTerceroODestinatario, Tercero -- no se emiten en este SIF).
-    if destinatario is not None:
+    #
+    # Guarda (defensa en profundidad, revision Judgment Day): un NIF falsy
+    # (None/"") NUNCA emite un `<NIF/>` vacio (invalido contra el XSD) -- se
+    # omite el bloque ENTERO, igual que `destinatario=None`. La defensa PRIMARIA
+    # vive en `remitir_lote.py` (nunca construye un `Destinatario` sin NIF en el
+    # camino real).
+    if destinatario is not None and destinatario.nif:
         destinatarios = _sub(root, "Destinatarios")
         idd = _sub(destinatarios, "IDDestinatario")
         _sub(idd, "NombreRazon", destinatario.nombre)

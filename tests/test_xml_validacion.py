@@ -1,9 +1,12 @@
 """El XML de RegistroAlta/RegistroAnulacion valida contra el XSD oficial de la AEAT."""
 from __future__ import annotations
 
+from decimal import Decimal
+
 from _helpers import construir_venta
 from app.infraestructura.fiscal import validacion
 from app.infraestructura.fiscal.xml import (
+    NS,
     Destinatario,
     a_bytes,
     registro_alta_xml,
@@ -11,9 +14,86 @@ from app.infraestructura.fiscal.xml import (
     sistema_desde_settings,
 )
 from app.infraestructura.persistencia.modelos import RegistroFacturaSustituida, RegistroFiscal
+from app.infraestructura.persistencia.modelos.fiscal import RegistroFiscalDesglose
 
 SISTEMA = sistema_desde_settings()
 EMISOR = "AcuaTPV"
+
+
+def _registro_f2_fijo() -> RegistroFiscal:
+    """`RegistroFiscal` construido en memoria (sin BD) con TODOS los campos
+    fijos/deterministicos -- fundamental para el golden pinned de abajo: si se
+    generara via `motor.emit`, la fecha/hora y la huella cambiarian en cada
+    ejecucion y el byte-a-byte nunca podria fijarse."""
+    reg = RegistroFiscal(
+        orden=1, tipo_registro="alta", venta_id=1,
+        id_emisor="00000000T", num_serie_factura="T2026-000001",
+        fecha_expedicion="18-07-2026", tipo_factura="F2",
+        descripcion_operacion="Venta de mercaderia",
+        cuota_total=Decimal("0.53"), importe_total=Decimal("3.03"),
+        primer_registro=True, registro_anterior_id=None, huella_anterior=None,
+        huella="A" * 64, tipo_huella="01",
+        fecha_hora_huso_gen_registro="2026-07-18T10:00:00+02:00",
+        estado_remision="no_remitido",
+    )
+    reg.desglose.append(RegistroFiscalDesglose(
+        impuesto="01", clave_regimen="01", calificacion="S1",
+        tipo_impositivo=Decimal("21.00"), base_imponible=Decimal("2.50"),
+        cuota_repercutida=Decimal("0.53"),
+    ))
+    return reg
+
+
+# Golden PINNED, capturado del serializador ACTUAL (revision Judgment Day: el
+# test anterior comparaba una llamada por defecto contra una llamada explicita
+# `destinatario=None` -- identicas por construccion, nunca podia fallar). Esta
+# constante fija byte-a-byte el XML de una F2/T sin destinatario: cualquier
+# reordenamiento de elementos, cambio de namespace o de indentacion futuro hara
+# fallar este test.
+_GOLDEN_XML_F2 = (
+    b"<?xml version='1.0' encoding='UTF-8'?>\n"
+    b'<sum1:RegistroAlta xmlns:sum1="https://www2.agenciatributaria.gob.es/static_files/'
+    b'common/internet/dep/aplicaciones/es/aeat/tike/cont/ws/SuministroInformacion.xsd">\n'
+    b"  <sum1:IDVersion>1.0</sum1:IDVersion>\n"
+    b"  <sum1:IDFactura>\n"
+    b"    <sum1:IDEmisorFactura>00000000T</sum1:IDEmisorFactura>\n"
+    b"    <sum1:NumSerieFactura>T2026-000001</sum1:NumSerieFactura>\n"
+    b"    <sum1:FechaExpedicionFactura>18-07-2026</sum1:FechaExpedicionFactura>\n"
+    b"  </sum1:IDFactura>\n"
+    b"  <sum1:NombreRazonEmisor>AcuaTPV</sum1:NombreRazonEmisor>\n"
+    b"  <sum1:TipoFactura>F2</sum1:TipoFactura>\n"
+    b"  <sum1:DescripcionOperacion>Venta de mercaderia</sum1:DescripcionOperacion>\n"
+    b"  <sum1:Desglose>\n"
+    b"    <sum1:DetalleDesglose>\n"
+    b"      <sum1:Impuesto>01</sum1:Impuesto>\n"
+    b"      <sum1:ClaveRegimen>01</sum1:ClaveRegimen>\n"
+    b"      <sum1:CalificacionOperacion>S1</sum1:CalificacionOperacion>\n"
+    b"      <sum1:TipoImpositivo>21.00</sum1:TipoImpositivo>\n"
+    b"      <sum1:BaseImponibleOimporteNoSujeto>2.50</sum1:BaseImponibleOimporteNoSujeto>\n"
+    b"      <sum1:CuotaRepercutida>0.53</sum1:CuotaRepercutida>\n"
+    b"    </sum1:DetalleDesglose>\n"
+    b"  </sum1:Desglose>\n"
+    b"  <sum1:CuotaTotal>0.53</sum1:CuotaTotal>\n"
+    b"  <sum1:ImporteTotal>3.03</sum1:ImporteTotal>\n"
+    b"  <sum1:Encadenamiento>\n"
+    b"    <sum1:PrimerRegistro>S</sum1:PrimerRegistro>\n"
+    b"  </sum1:Encadenamiento>\n"
+    b"  <sum1:SistemaInformatico>\n"
+    b"    <sum1:NombreRazon>AcuaTPV Dev</sum1:NombreRazon>\n"
+    b"    <sum1:NIF>00000000T</sum1:NIF>\n"
+    b"    <sum1:NombreSistemaInformatico>TPV AcuaTPV</sum1:NombreSistemaInformatico>\n"
+    b"    <sum1:IdSistemaInformatico>AT</sum1:IdSistemaInformatico>\n"
+    b"    <sum1:Version>0.1.0</sum1:Version>\n"
+    b"    <sum1:NumeroInstalacion>1</sum1:NumeroInstalacion>\n"
+    b"    <sum1:TipoUsoPosibleSoloVerifactu>S</sum1:TipoUsoPosibleSoloVerifactu>\n"
+    b"    <sum1:TipoUsoPosibleMultiOT>N</sum1:TipoUsoPosibleMultiOT>\n"
+    b"    <sum1:IndicadorMultiplesOT>N</sum1:IndicadorMultiplesOT>\n"
+    b"  </sum1:SistemaInformatico>\n"
+    b"  <sum1:FechaHoraHusoGenRegistro>2026-07-18T10:00:00+02:00</sum1:FechaHoraHusoGenRegistro>\n"
+    b"  <sum1:TipoHuella>01</sum1:TipoHuella>\n"
+    b"  <sum1:Huella>" + b"A" * 64 + b"</sum1:Huella>\n"
+    b"</sum1:RegistroAlta>\n"
+)
 
 
 def _emitir(crear_sesion, motor, usuario_id, lineas, **kw) -> int:
@@ -133,22 +213,77 @@ def test_cualificada_emite_flag_s_valida_xsd(crear_sesion, motor, datos_base):
 
 
 def test_xml_simplificada_t_byte_identica(crear_sesion, motor, datos_base):
-    """Guarda de regresion fiscal (golden): una F2/T sin destinatario produce el
-    MISMO XML que antes de anadir el bloque Destinatarios -- el bloque es
-    estrictamente condicional (`destinatario=None` por defecto -> se OMITE)."""
+    """Guarda de regresion fiscal (golden PINNED, revision Judgment Day): una F2/T
+    sin destinatario produce byte-a-byte el MISMO XML que el capturado ANTES de
+    este cambio -- el `RegistroFiscal` es fijo/deterministico (sin `motor.emit`),
+    por lo que este assert SI detecta cualquier reordenamiento de elementos,
+    cambio de namespace o de indentacion (el test anterior comparaba
+    `destinatario` por defecto contra `destinatario=None` explicito, identicos
+    por construccion: nunca podia fallar)."""
+    reg = _registro_f2_fijo()
+    xml = registro_alta_xml(reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None)
+    cuerpo = a_bytes(xml)
+    assert cuerpo == _GOLDEN_XML_F2
+    assert b"Destinatarios" not in cuerpo
+    assert validacion.errores(xml) == []
+
+
+def test_registro_alta_xml_omite_destinatario_con_nif_vacio(crear_sesion, motor, datos_base):
+    """Defensa en profundidad (item 6, revision Judgment Day): un `Destinatario`
+    con NIF vacio/None NUNCA produce un `<NIF/>` vacio (invalido contra el XSD) --
+    se omite el bloque ENTERO, igual que si `destinatario=None`. La defensa
+    PRIMARIA es la guarda en `remitir_lote.py` (nunca se construye un
+    `Destinatario` con NIF vacio en el camino real); esto es un segundo cinturon
+    de seguridad en el propio serializador."""
     ejercicio = datos_base["ejercicio"]
     reg_id = _emitir(
         crear_sesion, motor, datos_base["usuario_id"], [("Neon", "2.50", "2", "21")],
-        serie="T", ejercicio=ejercicio, tipo_factura="F2",
+        serie="F", ejercicio=ejercicio, tipo_factura="F3",
     )
     with crear_sesion() as s:
         reg = s.get(RegistroFiscal, reg_id)
-        xml_por_defecto = registro_alta_xml(reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None)
-        xml_destinatario_none = registro_alta_xml(
-            reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None, destinatario=None)
-        assert a_bytes(xml_por_defecto) == a_bytes(xml_destinatario_none)
-        assert b"Destinatarios" not in a_bytes(xml_por_defecto)
-        assert validacion.errores(xml_por_defecto) == []
+        for nif_vacio in (None, ""):
+            destinatario = Destinatario(nombre="Acuario S.L.", nif=nif_vacio)
+            xml = registro_alta_xml(
+                reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None,
+                destinatario=destinatario)
+            cuerpo = a_bytes(xml)
+            assert b"Destinatarios" not in cuerpo
+            assert b"<sum1:NIF/>" not in cuerpo
+            assert b"<sum1:NIF></sum1:NIF>" not in cuerpo
+            assert validacion.errores(xml) == []
+
+
+def test_xml_destinatario_con_caracteres_especiales_escapa_correctamente(
+    crear_sesion, motor, datos_base
+):
+    """Item 8 (revision Judgment Day): un nombre/razon social con caracteres
+    especiales de XML (`&`, `<`, `>`, `"`) se escapa correctamente en el XML
+    serializado y el resultado sigue siendo valido contra el XSD -- lxml escapa
+    automaticamente el contenido de texto (`.text = ...`), pero se confirma
+    explicitamente porque el destinatario es texto libre capturado por un admin
+    (nombre de cliente), no una constante interna."""
+    ejercicio = datos_base["ejercicio"]
+    reg_id = _emitir(
+        crear_sesion, motor, datos_base["usuario_id"], [("Neon", "2.50", "2", "21")],
+        serie="F", ejercicio=ejercicio, tipo_factura="F3",
+    )
+    with crear_sesion() as s:
+        reg = s.get(RegistroFiscal, reg_id)
+        destinatario = Destinatario(nombre='Peces & Plantas "El Acuario" <S.L.>', nif="A58818501")
+        xml = registro_alta_xml(
+            reg, nombre_emisor=EMISOR, sistema=SISTEMA, anterior=None, destinatario=destinatario)
+        cuerpo = a_bytes(xml)
+        # El nombre crudo (con &/</>/") NUNCA aparece literal en el XML serializado.
+        assert destinatario.nombre.encode("utf-8") not in cuerpo
+        assert b"&amp;" in cuerpo
+        assert b"&lt;" in cuerpo
+        assert b"&gt;" in cuerpo
+        # lxml solo re-parsea limpio si el escapado es correcto: confirma que
+        # `NombreRazon` recupera el texto ORIGINAL exacto tras el roundtrip.
+        nombre_recuperado = xml.find(".//{%s}NombreRazon" % NS).text
+        assert nombre_recuperado == destinatario.nombre
+        assert validacion.errores(xml) == []
 
 
 def test_xml_f3_con_destinatarios_valida_xsd(crear_sesion, motor, datos_base):
