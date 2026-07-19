@@ -63,6 +63,12 @@ spec `cierre-z` — dep. ninguna)
   regresión en ningún test existente
 - [x] 3.3 `.venv/Scripts/lint-imports` — capas hexagonal intactas (sin
   contratos rotos)
+- [x] 3.4 Guardas de regresión recomendadas por judgment-day (no bloqueantes,
+  bloquean comportamiento ya correcto): `test_z_excluye_venta_anulada_con_rastro`
+  (una venta `anulada_con_rastro` en rango no aporta al Z) y
+  `test_z_no_sobre_excluye_cobrada_independiente_junto_a_conversion` (una
+  cobrada ajena a la conversión, en el mismo rango que una F3, sigue contando
+  íntegra — el `notin_` no sobre-excluye)
 
 ## Fase 4: Verificación documental final (dep. Fase 3)
 

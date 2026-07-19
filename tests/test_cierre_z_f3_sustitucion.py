@@ -18,7 +18,7 @@ from decimal import Decimal
 from _helpers import construir_venta
 from app.aplicacion.convertir_en_factura_f3 import ConvertirEnFacturaF3, DatosDestinatario
 from app.aplicacion.generar_cierre_z import GenerarCierreZ
-from app.infraestructura.persistencia.modelos import Pago
+from app.infraestructura.persistencia.modelos import Pago, RegistroFiscal
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 
 _DESTINATARIO_OK = DatosDestinatario(
@@ -140,3 +140,75 @@ def test_cross_period_no_duplica_efectivo(crear_sesion, motor, datos_base):
     # T (ya contado en z1), duplicando el efectivo real.
     assert z2.num_tickets == 0
     assert z2.total_con_iva == Decimal("0.00")
+
+
+# --- Guarda: una venta anulada no aporta al cuadre ---------------------------
+#
+# Regresion, no RED->GREEN: bloquea que un futuro cambio anada
+# 'anulada_con_rastro' a la tupla de estados de `cobradas_por_rango_orden`.
+
+def test_z_excluye_venta_anulada_con_rastro(crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+
+    t_id, _ = _emitir_t(
+        crear_sesion, motor, usuario_id, ejercicio,
+        [("Neon cardenal", "2.50", "2", "21")], medio="efectivo",
+    )
+
+    with crear_sesion() as s, s.begin():
+        alta = s.query(RegistroFiscal).filter_by(venta_id=t_id, tipo_registro="alta").one()
+        motor.cancel(s, alta)
+
+    z = _generar(crear_sesion, usuario_id)
+
+    assert z.num_tickets == 0
+    assert z.base_total == Decimal("0.00")
+    assert z.cuota_total == Decimal("0.00")
+    assert z.total_con_iva == Decimal("0.00")
+
+    with crear_sesion() as s:
+        uow = UnidadDeTrabajoSQL(s)
+        persistido = uow.cierres_z.buscar(z.numero)
+        assert persistido.desglose_pago == []
+
+
+# --- Guarda: el NOT IN de la conversion no sobre-excluye cobradas ajenas -----
+#
+# Regresion: en un rango que SI contiene una conversion F3 (VentaSustitucion no
+# vacia), una venta cobrada normal, sin ninguna relacion con esa conversion,
+# debe seguir contando integra -- el `notin_(venta_sustituta_id)` solo debe
+# alcanzar al lado sustituto real.
+
+def test_z_no_sobre_excluye_cobrada_independiente_junto_a_conversion(crear_sesion, motor, datos_base):
+    usuario_id = datos_base["usuario_id"]
+    ejercicio = datos_base["ejercicio"]
+
+    t1_id, t1 = _emitir_t(
+        crear_sesion, motor, usuario_id, ejercicio,
+        [("Neon cardenal", "2.50", "2", "21")], medio="efectivo",
+    )
+    t2_id, t2 = _emitir_t(
+        crear_sesion, motor, usuario_id, ejercicio,
+        [("Anubias", "6.90", "1", "10")], medio="tarjeta",
+    )
+
+    _convertir(crear_sesion, motor, usuario_id, [t1_id, t2_id])
+
+    # Venta cobrada normal, sin relacion con la conversion, en el MISMO rango.
+    t3_id, t3 = _emitir_t(
+        crear_sesion, motor, usuario_id, ejercicio,
+        [("Guppy", "3.00", "1", "21")], medio="efectivo",
+    )
+
+    z = _generar(crear_sesion, usuario_id)
+
+    assert z.total_con_iva == t1["total_con_iva"] + t2["total_con_iva"] + t3["total_con_iva"]
+
+    with crear_sesion() as s:
+        uow = UnidadDeTrabajoSQL(s)
+        persistido = uow.cierres_z.buscar(z.numero)
+        por_medio = {d.medio: d.importe for d in persistido.desglose_pago}
+
+    assert por_medio["efectivo"] == t1["total_con_iva"] + t3["total_con_iva"]
+    assert por_medio["tarjeta"] == t2["total_con_iva"]
