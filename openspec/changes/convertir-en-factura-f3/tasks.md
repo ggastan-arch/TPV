@@ -130,6 +130,73 @@ Chain strategy: pending
   (`RemitirLote`) nunca pasa `destinatario` para F2 aunque exista
   `venta.cliente_id` (no regresión del invariante "T inalterada")
 
+### Fase 3 (bis): correcciones de revisión fiscal (Judgment Day) — snapshot congelado del destinatario — [APLICADO, review-driven, rama `-c2`]
+
+> Hallazgo: `ConvertirEnFacturaF3` solo congelaba `venta.cliente_id` (la FK); la
+> remisión (`RemitirLote`, cola FIFO asíncrona) resolvía el destinatario EN VIVO
+> desde `venta.cliente.nombre/nif` en el momento del envío. Un admin editando el
+> cliente entre la emisión y la remisión hacía que la AEAT recibiera un
+> destinatario DISTINTO del emitido/impreso en la F3 (documento fiscal, debe ser
+> inmutable); un NIF vaciado producía un `<NIF/>` vacío (inválido contra el XSD)
+> que bloquearía toda la cola FIFO.
+
+- [x] 3.8 RED/GREEN `migrations/versions/0010_venta_destinatario_f3.py` (patrón
+  exacto de `0009_venta_cualificada.py`, `op.add_column` NATIVO, sin
+  `batch_alter_table`): columnas nullable `destinatario_nombre`/`destinatario_nif`
+  en `venta`. Test `tests/test_migracion_destinatario_f3.py`
+  (`test_migracion_0010_no_rompe_triggers_ni_huella`, mirror de
+  `test_migracion_cualificada.py`): los 6 triggers de inmutabilidad sobreviven,
+  huella de una venta ya emitida no cambia, UPDATE ilegal (incl. intento de
+  "colar" un destinatario) sigue rechazado. D2 override documentado (mismo
+  patrón 0009): NO se recrea `trg_venta_no_update`, columnas fuera de
+  `_VENTA_CAMPOS_CONGELADOS` (ver ADR en `ddl.py` y en la propia migración) — una
+  venta `cobrada` ya está bloqueada para cualquier UPDATE que no sea la
+  transición de estado controlada, y ningún código escribe estas columnas
+  durante esa transición.
+- [x] 3.9 GREEN `app/infraestructura/persistencia/modelos/venta.py`: columnas
+  `destinatario_nombre`/`destinatario_nif` (`str | None`) en el modelo `Venta`.
+- [x] 3.10 RED `tests/test_convertir_en_factura_f3.py::test_conversion_congela_destinatario_resuelto_en_la_f3`
+  + `::test_editar_cliente_tras_conversion_no_afecta_snapshot_f3` (prueba directa
+  del hallazgo: editar el `Cliente` DESPUÉS de convertir no afecta el snapshot) →
+  GREEN `app/aplicacion/convertir_en_factura_f3.py`: tras `_resolver_cliente`, fija
+  `f3.destinatario_nombre = cliente.nombre` / `f3.destinatario_nif = cliente.nif`
+  en el mismo `Venta(...)` que fija `cliente_id`, mientras la F3 aún está
+  `aparcada` (antes de `motor.emit`) — congela el valor REALMENTE usado, inmune a
+  ediciones posteriores del cliente.
+- [x] 3.11 RED `tests/test_remision.py::test_remitir_lote_usa_snapshot_congelado_no_cliente_editado_despues`
+  (edita el cliente tras emitir, antes de remitir; asserta que el XML remitido
+  sigue llevando el destinatario ORIGINAL) + `::test_remitir_lote_f1_f3_sin_destinatario_congelado_marca_requiere_intervencion`
+  + `::test_remitir_lote_excluye_solo_el_registro_invalido_resto_del_lote_sigue`
+  → GREEN `app/aplicacion/remitir_lote.py`: la resolución de `Destinatario` para
+  F1/F3/R1-R4 lee `venta.destinatario_nombre`/`venta.destinatario_nif` (snapshot),
+  NUNCA `venta.cliente` en vivo. Guarda: si `destinatario_nif` es falsy para un
+  tipo con destinatario obligatorio, el registro se marca `requiere_intervencion`
+  (nunca se remite un `<NIF/>` vacío/ausente) y se EXCLUYE del sobre — el resto
+  del lote sigue su curso normal (`lote_valido` separado de `lote`).
+- [x] 3.12 (item 5, golden real) RED/GREEN `tests/test_xml_validacion.py::test_xml_simplificada_t_byte_identica`
+  reescrito: el test anterior comparaba una llamada por defecto contra
+  `destinatario=None` explícito — idénticas por construcción, nunca podía
+  fallar. Reemplazado por un `RegistroFiscal` fijo/determinístico (sin
+  `motor.emit`) comparado byte-a-byte contra una constante `_GOLDEN_XML_F2`
+  pinneada, capturada del serializador actual. Verificado manualmente que SÍ
+  detecta regresiones (se reordenaron dos elementos, el test falló; revertido).
+- [x] 3.13 (item 6) GREEN `app/infraestructura/fiscal/xml.py`: `Destinatario.nif`
+  tipado `str | None` (honesto); `registro_alta_xml` omite el bloque
+  `Destinatarios` ENTERO si `destinatario.nif` es falsy (nunca `<NIF/>` vacío) —
+  defensa en profundidad, la guarda primaria vive en 3.11. Test
+  `tests/test_xml_validacion.py::test_registro_alta_xml_omite_destinatario_con_nif_vacio`.
+- [x] 3.14 (item 7) GREEN `app/dominio/servicios/validaciones_negocio.py`: alias
+  público `TIPOS_CON_DESTINATARIO = _CON_DESTINATARIO`; `remitir_lote.py` deriva
+  `_TIPOS_CON_DESTINATARIO` de ese alias (antes hardcodeaba `{"F1","F3"}`,
+  divergiendo de `{"F1","F3","R1","R2","R3","R4"}`). Seguro de expandir hoy
+  gracias a la guarda de 3.11 (cualquier R1-R4 sin snapshot queda
+  `requiere_intervencion`, nunca se remite sin destinatario). Test
+  `tests/test_remision.py::test_tipos_con_destinatario_alineado_con_validaciones_negocio`.
+- [x] 3.15 (item 8) RED/GREEN (confirmatorio, sin cambio de código — lxml ya
+  escapa el contenido de texto) `tests/test_xml_validacion.py::test_xml_destinatario_con_caracteres_especiales_escapa_correctamente`
+  — nombre de destinatario con `&`/`<`/`>`/`"` escapa correctamente y el XML
+  sigue siendo válido contra el XSD.
+
 ## Fase 4: Confirmación de reglas ya existentes (Requirement: soporte estructural F1/F3 en validaciones — motor-fiscal-verifactu spec — dep. ninguna) — [APLICADO, PR2]
 
 - [x] 4.1 `tests/test_validaciones_negocio.py::test_f3_con_destinatario_no_rechaza_falta_destinatario`
@@ -179,6 +246,15 @@ Chain strategy: pending
   con IVA mixto → completar destinatario → convertir → verificar F3 con
   `FacturasSustituidas` + `Destinatarios`, T origen en `sustituida`,
   `verify_chain().ok == True`
+
+**Fase 3 (bis), review-driven (rama `-c2`, tras PR2 mergeado en local)**:
+- [x] 7.1 (para la corrección review-driven) `.venv/Scripts/python -m pytest`:
+  591 → 599 passed (8 tests netos nuevos: 1 migración + 2 snapshot en el caso de
+  uso + 2 XML (guarda NIF vacío + escapado) + 4 en `test_remision.py` (snapshot
+  congelado, guarda `requiere_intervencion`, exclusión parcial del lote,
+  alineación de tipos) − 1 test reemplazado en `test_remision.py`), 0 failed.
+- [x] 7.2 (para la corrección review-driven) `.venv/Scripts/lint-imports`: 3/3
+  contratos kept.
 
 Nota: cada Work Unit (PR 1/2/3) debe correr 7.1-7.2 de forma independiente antes de
 integrarse (ver skill `chained-pr`); 7.3 se ejecuta completo solo tras la última PR.
