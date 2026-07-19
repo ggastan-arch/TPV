@@ -22,6 +22,7 @@ from app.aplicacion.aparcar_venta import (
     RecuperarAparcada,
 )
 from app.aplicacion.aparcar_venta import TicketVacio as TicketVacioAparcar
+from app.aplicacion.aparcar_venta import UsuarioNoValido as UsuarioNoValidoAparcar
 from app.aplicacion.emitir_venta import (
     EmitirVenta,
     PagoVenta,
@@ -273,8 +274,12 @@ def aparcar(req: AparcarReq, uow=Depends(get_uow)) -> dict:
         )
     except TicketVacioAparcar as exc:
         raise HTTPException(400, "El ticket esta vacio") from exc
+    except UsuarioNoValidoAparcar as exc:
+        raise HTTPException(401, "Usuario no valido") from exc
     except ArticuloNoExiste as exc:
         raise HTTPException(404, str(exc)) from exc
+    except DescripcionRequerida as exc:
+        raise HTTPException(422, str(exc)) from exc
 
     venta = uow.ventas.buscar(venta_id)
     return {

@@ -24,6 +24,10 @@ class TicketVacio(Exception):
     pass
 
 
+class UsuarioNoValido(Exception):
+    pass
+
+
 class BorradorNoEncontrado(Exception):
     def __init__(self, venta_id: int):
         super().__init__(f"Borrador aparcado {venta_id} no existe")
@@ -58,13 +62,19 @@ class AparcarVenta:
     ) -> int:
         if not items:
             raise TicketVacio()
-        # Un borrador no se emite; la exigencia de descripcion (modo_precio ==
-        # "libre") se aplica al cobrar (fresh emit), no aqui.
+        usuario = self.uow.usuarios.buscar(usuario_id)
+        if usuario is None:
+            raise UsuarioNoValido()
+        # Un borrador no se emite, pero SI exige la misma validacion de
+        # descripcion libre que `EmitirVenta` (mismo contrato): un articulo
+        # `modo_precio == "libre"` sin descripcion se rechaza YA al aparcar,
+        # para no dejar pasar en silencio un borrador que fallaria recien al
+        # desaparcar+cobrar.
         lineas, totales = resolver_items(
-            self.uow.articulos, items, exigir_descripcion_libre=False
+            self.uow.articulos, items, exigir_descripcion_libre=True
         )
         venta = Venta(
-            estado="aparcada", usuario_id=usuario_id, etiqueta_aparcada=etiqueta,
+            estado="aparcada", usuario_id=usuario.id, etiqueta_aparcada=etiqueta,
             base_total=totales.base_total, cuota_total=totales.cuota_total,
             total_con_iva=totales.total_con_iva,
         )
