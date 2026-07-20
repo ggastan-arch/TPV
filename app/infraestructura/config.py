@@ -26,6 +26,11 @@ DB_PATH_PRODUCCION = "tpv.db"
 DEMO_DB_PATH = "tpv_demo.db"
 DEMO_NIF = "00000000T"
 DEMO_NOMBRE = "AcuaTPV DEMO (documento de prueba)"
+# El bloque PRODUCTOR (SistemaInformatico) identifica al desarrollador y en el
+# .env real lleva los datos de la persona titular. En demo se fuerza generico
+# para NO filtrar datos personales reales (el demo es un despliegue publico).
+DEMO_NOMBRE_PRODUCTOR = "AcuaTPV"
+DEMO_NIF_PRODUCTOR = "00000000T"
 
 
 class Settings(BaseSettings):
@@ -94,7 +99,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolver_perfil(self) -> "Settings":
-        """En modo demo fuerza BD y emisor propios y anula el certificado.
+        """En modo demo fuerza BD, emisor y productor propios y anula el certificado.
 
         Se ejecuta ANTES de crear `engine`/`SessionLocal` (singletons de modulo
         en db.py), de modo que estos nacen ya ligados a la BD demo. No admite
@@ -106,6 +111,9 @@ class Settings(BaseSettings):
             self.db_path = DEMO_DB_PATH
             self.nif_emisor = DEMO_NIF
             self.nombre_emisor = DEMO_NOMBRE
+            # Privacidad: no filtrar los datos reales del PRODUCTOR (titular).
+            self.nombre_productor = DEMO_NOMBRE_PRODUCTOR
+            self.nif_productor = DEMO_NIF_PRODUCTOR
             self.certificado_cert_path = None
             self.certificado_key_path = None
         return self
