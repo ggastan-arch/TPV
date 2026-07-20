@@ -47,3 +47,24 @@ def test_alta_inline_cliente_ya_no_usa_prompt_encadenados():
     bloque = _bloque_cliente_en_venta(_html())
     assert 'prompt("Nombre del cliente:"' not in bloque
     assert "confirm(" not in bloque
+
+
+def test_buscar_cliente_dispara_en_vivo_con_debounce():
+    """El campo #ceBuscar espeja el patron del buscador de articulos
+    (`onBuscarInput`/`buscar()`): escucha `oninput` (no boton de disparo manual),
+    debounce de 250 ms vía `setTimeout` y umbral minimo de 2 caracteres antes de
+    llamar a la API."""
+    bloque = _bloque_cliente_en_venta(_html())
+    assert 'querySelector("#ceBuscar").oninput = (e) => {' in bloque
+    assert "clearTimeout(tCeBuscar)" in bloque
+    assert "q.length < 2" in bloque
+    assert "setTimeout(async () => {" in bloque
+    assert "}, 250);" in bloque
+    assert "/tpv/api/clientes?q=" in bloque
+
+
+def test_buscar_cliente_sin_resultados_se_informa_con_elegancia():
+    """Mismo tratamiento de "sin resultados" que el buscador de articulos: no
+    se deja la lista vacia sin explicacion."""
+    bloque = _bloque_cliente_en_venta(_html())
+    assert 'cont.textContent = "Sin resultados."' in bloque
