@@ -21,7 +21,7 @@ from app.aplicacion.aparcar_venta import (
     TicketVacio,
     UsuarioNoValido,
 )
-from app.aplicacion.lineas import DescripcionRequerida, ItemVenta
+from app.aplicacion.lineas import ItemVenta, PrecioLibreRequerido
 from app.infraestructura.persistencia.modelos import (
     Articulo,
     ContadorSerie,
@@ -126,16 +126,34 @@ def test_aparcar_usuario_id_invalido_rechaza_sin_persistir(
         assert s.query(VentaLinea).count() == 0
 
 
-def test_aparcar_libre_sin_descripcion_rechaza_con_descripcion_requerida(
+def test_aparcar_libre_sin_descripcion_persiste_ok(
     crear_sesion, datos_base, articulo_libre
 ):
-    """Cierra el bypass: un articulo `modo_precio == "libre"` sin descripcion
-    aparcado hoy congela `descripcion = articulo.nombre` y pasa silenciosamente
-    la validacion de `EmitirVenta` al cobrar. Se exige aqui, al aparcar."""
-    with crear_sesion() as s, pytest.raises(DescripcionRequerida):
-        _uc_aparcar(s).ejecutar(
+    """La descripcion en modo libre es OPCIONAL tambien al aparcar (mismo
+    contrato que EmitirVenta): sin ella, la linea congela `descripcion =
+    articulo.nombre` y el borrador se persiste sin bloqueo."""
+    with crear_sesion() as s:
+        venta_id = _uc_aparcar(s).ejecutar(
             usuario_id=datos_base["usuario_id"],
             items=[ItemVenta(articulo_id=articulo_libre, pvp=Decimal("50.00"))],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, venta_id)
+        assert venta.lineas[0].descripcion == "Tridacna maxima"
+
+
+def test_aparcar_libre_precio_no_positivo_rechaza(
+    crear_sesion, datos_base, articulo_libre
+):
+    """Mismo contrato que EmitirVenta: un articulo modo libre sin precio > 0 no
+    se puede ni siquiera aparcar (no dejar pasar en silencio un borrador que
+    fallaria recien al desaparcar+cobrar)."""
+    with crear_sesion() as s, pytest.raises(PrecioLibreRequerido):
+        _uc_aparcar(s).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_libre, pvp=Decimal("0.00"),
+                              descripcion="Promo verano")],
         )
 
     with crear_sesion() as s:

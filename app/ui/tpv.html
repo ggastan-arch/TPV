@@ -549,12 +549,15 @@ function anadir(articulo) {
   const modo = articulo.modo_precio;
   if (articulo.requiere_cites) alert("⚠ " + articulo.nombre_corto + " requiere documentacion CITES.");
 
-  // Modo libre: el backend exige precio Y descripcion al cobrar (DescripcionRequerida);
-  // se piden ambos ya al tocar el boton. Cada toque crea su propia linea (no se fusiona).
+  // Modo libre: el backend exige un PRECIO > 0,00 al cobrar/aparcar (PrecioLibreRequerido);
+  // la descripcion es OPCIONAL (si se deja vacia, la linea usa el nombre del articulo).
+  // Cada toque crea su propia linea (no se fusiona).
   if (modo === "libre") {
     const v = prompt("Precio (con IVA) para " + articulo.nombre_corto + ":", articulo.pvp);
     if (v === null) return;
-    const desc = prompt("Descripcion para " + articulo.nombre_corto + ":", "");
+    const precio = parseFloat(String(v).replace(",", "."));
+    if (!isFinite(precio) || precio <= 0) { alert("Precio no valido."); return; }
+    const desc = prompt("Descripcion (opcional) para " + articulo.nombre_corto + ":", "");
     if (desc === null) return;
     carrito.push({ articulo_id: articulo.id, nombre_corto: articulo.nombre_corto, modo_precio: modo,
                    cantidad: 1, pvp: v.replace(",", "."), descripcion: desc.trim() || null, editado: true });

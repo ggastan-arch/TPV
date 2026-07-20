@@ -421,12 +421,27 @@ def test_calcular_modo_libre_sin_descripcion_no_bloquea(cliente, datos_tpv):
     assert r.json()["total"] == "50.00"
 
 
-def test_cobrar_modo_libre_sin_descripcion_devuelve_422(cliente, datos_tpv):
+def test_cobrar_modo_libre_sin_descripcion_devuelve_200(cliente, datos_tpv):
+    """La descripcion en modo libre es OPCIONAL: sin ella, el cobro se emite OK
+    (la linea cae al nombre del articulo)."""
     login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
     r = cliente.post("/tpv/api/cobrar", json={
         "usuario_id": login["usuario_id"],
         "items": [{"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1", "pvp": "50.00"}],
         "pagos": [{"medio": "efectivo", "importe": "50.00"}],
+    })
+    assert r.status_code == 200
+
+
+def test_cobrar_modo_libre_precio_cero_devuelve_422(cliente, datos_tpv):
+    """En modo libre el precio es OBLIGATORIO y > 0,00: un generico no se puede
+    vender a 0,00 EUR."""
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/cobrar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1", "pvp": "0.00",
+                   "descripcion": "Promo verano"}],
+        "pagos": [{"medio": "efectivo", "importe": "0.00"}],
     })
     assert r.status_code == 422
 
@@ -753,13 +768,26 @@ def test_aparcar_usuario_id_invalido_devuelve_401(cliente, datos_tpv):
     assert r.status_code == 401
 
 
-def test_aparcar_libre_sin_descripcion_devuelve_422(cliente, datos_tpv):
-    """Hardening: cierra el bypass de `DescripcionRequerida` al aparcar (antes
-    solo se exigia al cobrar, permitiendo aparcar un libre sin descripcion)."""
+def test_aparcar_libre_sin_descripcion_devuelve_200(cliente, datos_tpv):
+    """La descripcion en modo libre es OPCIONAL tambien al aparcar (mismo
+    contrato que /api/cobrar)."""
     login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
     r = cliente.post("/tpv/api/aparcar", json={
         "usuario_id": login["usuario_id"],
         "items": [{"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1", "pvp": "50.00"}],
+    })
+    assert r.status_code == 200
+
+
+def test_aparcar_libre_precio_cero_devuelve_422(cliente, datos_tpv):
+    """En modo libre el precio es OBLIGATORIO y > 0,00 tambien al aparcar (mismo
+    contrato que /api/cobrar): no dejar pasar en silencio un borrador que
+    fallaria recien al desaparcar+cobrar."""
+    login = cliente.post("/tpv/api/login", json={"pin": "0000"}).json()
+    r = cliente.post("/tpv/api/aparcar", json={
+        "usuario_id": login["usuario_id"],
+        "items": [{"articulo_id": datos_tpv["tridacna_id"], "cantidad": "1", "pvp": "0.00",
+                   "descripcion": "Promo verano"}],
     })
     assert r.status_code == 422
 
