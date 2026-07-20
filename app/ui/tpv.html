@@ -198,7 +198,8 @@
   </div>
   </div>
   <footer class="barra-funciones">
-    <button class="btn fn-btn" disabled title="Próximamente">
+    <button class="btn fn-btn" onclick="ejecutarFuncion('convertir')"
+            title="Convertir simplificadas emitidas en factura completa (consola de administración)">
       <span class="fn-ico" data-icono="file-text" aria-hidden="true"></span>
       <span class="fn-txt">Convertir en factura</span>
     </button>
@@ -398,6 +399,7 @@ function ejecutarFuncion(f) {
   // ni query param que la fije al cargar), asi que se enlaza a la raiz de la
   // consola en vez de a la pestana "Cierres Z" directamente.
   else if (f === "cierre_z") window.location.href = "/admin/#cierres";
+  else if (f === "convertir") window.location.href = "/admin/#convertir";
   else alert("Funcion '" + f + "': disponible en una fase siguiente.");
 }
 
