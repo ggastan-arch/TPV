@@ -2,7 +2,7 @@
 
 Un boton apunta EXACTAMENTE a uno de: articulo, familia (navega a hijos) o funcion
 (cobrar, convertir en factura, devolucion, aparcar/desaparcar, abrir cajon,
-descuento, cierre de caja). Un CHECK garantiza que el destino sea unico.
+descuento, cierre de caja, cierre Z). Un CHECK garantiza que el destino sea unico.
 
 `FUNCIONES` es un concepto de DOMINIO (el conjunto de acciones rapidas soportadas
 por un boton); se define en `app.dominio.servicios.botonera` y se reexporta aqui

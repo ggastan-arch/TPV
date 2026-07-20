@@ -223,57 +223,55 @@ def _sembrar_botonera_demo(
     familias: dict[str, Familia],
     articulos: dict[str, Articulo],
 ) -> None:
-    """Botonera demo: pagina con articulos frecuentes, navegacion por familias
-    y funciones. Tolera que falte algun articulo del catalogo."""
+    """Botonera demo: la pagina de Inicio se organiza por FAMILIAS de nivel
+    raiz (una por familia, `tipo="familia"` en la API/tpv.html) mas el cobro
+    rapido de "Bolsa": la operadora entra a cada familia por boton y llega a
+    sus articulos por drill-down (`abrirFamilia` en tpv.html), sin la mezcla
+    de articulos sueltos que habia antes.
+
+    Solo se siembra boton para las familias raiz VISIBLES en tactil (peces,
+    plantas, agua fria); el material con codigo de barras (alimento,
+    filtracion, iluminacion, decoracion...) queda fuera del inicio a
+    proposito: esas familias estan ocultas (`FAMILIAS_OCULTAS_TACTIL`) y se
+    venden por escaner/buscador, no tocando botones (ver
+    `test_sembrar_demo_oculta_familias_de_material`).
+
+    Rejilla 3x2: fila 0 las 3 familias raiz, fila 1 "Bolsa" (0,10 EUR,
+    presente en casi cada ticket) mas las funciones "abrir cajon" y
+    "cierre dia" (atajo de navegacion a la consola admin; el Cierre Z en si
+    sigue siendo exclusivo de admin, sin endpoint TPV nuevo)."""
     perfil = PerfilBotonera(nombre="Principal")
     s.add(perfil)
     s.flush()
     pagina = PaginaBotonera(
-        perfil_id=perfil.id, nombre="Inicio", orden=0, columnas=5, filas=4
+        perfil_id=perfil.id, nombre="Inicio", orden=0, columnas=3, filas=2
     )
     s.add(pagina)
     s.flush()
 
-    # Filas 0-1: articulos con foto real (lucen el catalogo demo en los botones).
-    directos_fila0 = ["Neón cardenal", "Guppy macho", "Disco turquesa", "Betta macho", "Anubias"]
-    directos_fila1 = ["Ancistrus", "Apisto. borellii", "Yellow", "Cometa", "Guppy delta"]
-    for fila, cortos in ((0, directos_fila0), (1, directos_fila1)):
-        for col, corto in enumerate(cortos):
-            art = articulos.get(corto)
-            if art is not None:
-                s.add(Boton(pagina_id=pagina.id, fila=fila, columna=col,
-                            texto=art.nombre_corto, articulo_id=art.id))
-
-    # Fila 2: navegacion por las familias VISIBLES en tactil (peces, plantas,
-    # agua fria) mas dos peces con foto. El material (alimento, filtracion,
-    # iluminacion, decoracion...) NO tiene boton: esas familias estan ocultas y
-    # se venden por escaner/buscador, no tocando la pantalla.
-    fams_visibles = [
+    fams_raiz_visibles = [
         ("Peces", "Peces por familias"),
         ("Plantas", "Plantas"),
         ("Agua fría", "Agua fría"),
     ]
-    for col, (texto, ruta) in enumerate(fams_visibles):
+    for i, (texto, ruta) in enumerate(fams_raiz_visibles):
         fam = familias.get(ruta)
         if fam is not None:
-            s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
-                        texto=texto, familia_id=fam.id))
-    for col, corto in ((3, "Aphyosemion"), (4, "Tiburón bala")):
-        art = articulos.get(corto)
-        if art is not None:
-            s.add(Boton(pagina_id=pagina.id, fila=2, columna=col,
-                        texto=art.nombre_corto, articulo_id=art.id))
+            s.add(Boton(pagina_id=pagina.id, fila=i // pagina.columnas,
+                        columna=i % pagina.columnas, texto=texto, familia_id=fam.id))
 
-    # Fila 3: boton fijo de cobro rapido de "Bolsa" (art. 0,10 EUR) + funciones.
-    # Solo funciones ya implementadas en la botonera (ejecutarFuncion en tpv.html):
-    # "abrir_cajon". No se siembra "convertir_factura" mientras la funcion no exista
-    # (evita un boton que no hace nada en el demo).
+    # Fila 1: cobro rapido de "Bolsa" (art. 0,10 EUR, en casi cada ticket) +
+    # funcion "abrir cajon" + funcion "cierre dia" (llena la rejilla 3x2). No
+    # se siembra "convertir_factura" mientras la funcion no exista (evita un
+    # boton que no hace nada).
     bolsa = articulos.get("Bolsa")
     if bolsa is not None:
-        s.add(Boton(pagina_id=pagina.id, fila=3, columna=0,
+        s.add(Boton(pagina_id=pagina.id, fila=1, columna=0,
                     texto=bolsa.nombre_corto, articulo_id=bolsa.id))
-    s.add(Boton(pagina_id=pagina.id, fila=3, columna=4, texto="Abrir cajón",
+    s.add(Boton(pagina_id=pagina.id, fila=1, columna=1, texto="Abrir cajón",
                 funcion="abrir_cajon"))
+    s.add(Boton(pagina_id=pagina.id, fila=1, columna=2, texto="Cierre día",
+                funcion="cierre_z"))
 
 
 def sembrar() -> None:

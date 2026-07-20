@@ -146,6 +146,12 @@ async function dashboard() {
   if (btnSalir) btnSalir.onclick = async () => { await api("/admin/api/logout",{method:"POST"}); vistaLogin(); };
   document.querySelectorAll(".tabs button").forEach((b) =>
     b.onclick = () => { pestanaActual = b.dataset.t; pintarPestana(); });
+  // Deep-link opcional por hash (#cierres, #dia, ...): abre una pestaña concreta
+  // desde fuera (p.ej. el botón "Cierre día" del TPV -> /admin/#cierres).
+  const tabHash = location.hash.slice(1);
+  if (tabHash && document.querySelector(`.tabs button[data-t="${tabHash}"]`)) {
+    pestanaActual = tabHash;
+  }
   pintarPestana();
 }
 
@@ -676,6 +682,7 @@ const FUNCIONES_BOTONERA = [
   ["devolucion", "Devolución"], ["aparcar", "Aparcar venta"],
   ["desaparcar", "Desaparcar venta"], ["abrir_cajon", "Abrir cajón"],
   ["descuento", "Descuento"], ["cierre_caja", "Cierre de caja"],
+  ["cierre_z", "Cierre día (atajo a Cierres Z)"],
 ];
 
 function perfilActual() { return bbArbol.find((p) => p.id === bbPerfilId) || null; }
