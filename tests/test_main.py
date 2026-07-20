@@ -118,29 +118,25 @@ def _bloque_boton_que_contiene(html: str, etiqueta: str) -> str:
     return html[inicio:fin]
 
 
-def test_tpv_boton_convertir_en_factura_deshabilitado_sin_comportamiento_simulado():
+def test_tpv_boton_convertir_en_factura_navega_al_panel_admin():
+    # La conversion F3 vive en el admin (sobre simplificadas YA emitidas); el boton
+    # del TPV es un ATAJO a ese panel (/admin/#convertir), no una accion sobre el
+    # ticket en curso. Antes estaba deshabilitado ("Proximamente").
     html = TestClient(main_module.crear_app()).get("/tpv/").text
 
     bloque = _bloque_boton_que_contiene(html, "Convertir en factura")
-    assert "disabled" in bloque
-    assert "fetch" not in bloque
-    assert "onclick" not in bloque
+    assert "disabled" not in bloque
+    assert "ejecutarFuncion('convertir')" in bloque
+    assert "/admin/#convertir" in html
 
 
-def test_tpv_barra_funciones_futuras_presentes_deshabilitadas():
-    """'Convertir en factura' sigue sin backend (`disabled`, sin handler).
-    'Aparcar ticket'/'Desaparcar' tienen backend desde aparcar-desaparcar; se
-    verifican habilitados en
-    `test_tpv_api.test_tpv_aparcar_y_desaparcar_habilitados_y_referencian_su_api`.
-    'Cliente en venta' tiene backend desde este cambio (cliente-en-venta)."""
+def test_tpv_barra_funciones_todas_habilitadas():
+    """Las 4 funciones de la barra tienen comportamiento: 'Aparcar ticket'/
+    'Desaparcar' (aparcar-desaparcar), 'Cliente en venta' (cliente-en-venta) y
+    'Convertir en factura' (atajo al panel de conversion F3 del admin)."""
     html = TestClient(main_module.crear_app()).get("/tpv/").text
 
-    bloque = _bloque_boton_que_contiene(html, "Convertir en factura")
-    assert "disabled" in bloque, "boton 'Convertir en factura' no esta deshabilitado"
-    assert "fetch" not in bloque, "boton 'Convertir en factura' no debe llamar a fetch"
-    assert "onclick" not in bloque, "boton 'Convertir en factura' no debe tener handler"
-
-    for etiqueta in ("Aparcar ticket", "Desaparcar", "Cliente en venta"):
+    for etiqueta in ("Convertir en factura", "Aparcar ticket", "Desaparcar", "Cliente en venta"):
         bloque = _bloque_boton_que_contiene(html, etiqueta)
         assert "disabled" not in bloque, f"boton '{etiqueta}' deberia estar habilitado"
         assert "onclick" in bloque, f"boton '{etiqueta}' deberia tener handler"
