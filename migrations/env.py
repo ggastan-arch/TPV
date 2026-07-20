@@ -3,6 +3,7 @@ del runner) y usa el engine configurado (WAL, foreign_keys)."""
 from __future__ import annotations
 
 from alembic import context
+from sqlalchemy import event
 
 from app.infraestructura.config import settings
 from app.infraestructura.db import crear_engine, resolver_url_migracion
@@ -36,6 +37,24 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     # inmediato=False: durante las migraciones no interesa forzar BEGIN IMMEDIATE.
     engine = crear_engine(url, inmediato=False)
+
+    # foreign_keys=OFF durante TODA migracion online (no solo 0007/articulo). El
+    # patron "move and copy" de `batch_alter_table` en SQLite recrea la tabla con
+    # un DROP TABLE; con las FKs activas ese DROP ejecuta un DELETE implicito que
+    # falla ("FOREIGN KEY constraint failed") si otra tabla (venta_linea,
+    # movimiento_stock, boton...) tiene filas apuntando a ella. Se registra como
+    # listener `connect` para aplicarlo sobre la conexion cruda ANTES de cualquier
+    # transaccion (el PRAGMA es no-op dentro de una) y DESPUES del listener de
+    # `_configurar_pragmas` que las activa. En produccion la integridad referencial
+    # sigue vigente: cada conexion de la aplicacion reactiva foreign_keys=ON.
+    # (El modo offline `--sql` no desactiva FKs: el script generado debe
+    # prependerse manualmente con `PRAGMA foreign_keys=OFF;`.)
+    @event.listens_for(engine, "connect")
+    def _foreign_keys_off_en_migracion(dbapi_conn, _rec):  # noqa: ANN001
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA foreign_keys=OFF")
+        cur.close()
+
     with engine.connect() as connection:
         context.configure(
             connection=connection,
