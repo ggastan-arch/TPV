@@ -66,7 +66,7 @@ class EmitirVenta:
             self._exigir_datos_cualificada(cliente_id)
 
         lineas, totales = resolver_items(
-            self.uow.articulos, items, exigir_descripcion_libre=True
+            self.uow.articulos, items, exigir_precio_libre=True
         )
         venta = Venta(estado="aparcada", usuario_id=usuario.id, cliente_id=cliente_id,
                       cualificada=cualificada,

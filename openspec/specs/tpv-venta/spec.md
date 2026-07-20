@@ -73,8 +73,8 @@ habilitar el cobro, sin exponer el PIN en claro.
 El sistema MUST congelar en `VentaLinea`, al emitir, los valores editados en el carrito
 pre-emisión: si el ítem trae un `pvp` override, `VentaLinea.pvp_unitario` MUST ser ese
 valor; si trae una `descripcion` override, `VentaLinea.descripcion` MUST ser ese texto
-(si no, `articulo.nombre` como hoy, salvo en `modo_precio == "libre"`, ver requisito de
-descripción obligatoria); `VentaLinea.cantidad` MUST ser la cantidad del ítem (en
+(si no, `articulo.nombre`, en cualquier `modo_precio` incluido "libre", ver requisito de
+precio obligatorio en modo libre); `VentaLinea.cantidad` MUST ser la cantidad del ítem (en
 `modo_precio == "al_peso"`, el peso ingresado). Si el `pvp_unitario` congelado de una
 línea de un artículo con `modo_precio` en `{"fijo", "al_peso"}` difiere del PVP de
 catálogo en ese momento, el sistema MUST registrar un evento en `LogAuditoria` con
@@ -140,33 +140,61 @@ basa en `modo_precio == "libre"`, y se aclara que `al_peso` audita igual que `fi
 `::test_emitir_venta_modo_libre_no_registra_auditoria`,
 `::test_emitir_venta_articulo_migrado_modo_libre_no_regresion` (NUEVO)
 
-### Requirement: Descripción obligatoria en modo libre al emitir
+### Requirement: Precio obligatorio (>0) en modo libre al emitir/aparcar; descripción opcional
 
-El sistema MUST rechazar la emisión completa de la venta (sin persistir nada) cuando una
-línea de un artículo con `modo_precio == "libre"` resuelve una descripción vacía (sin
-override, o un override compuesto solo de espacios). El sistema MUST lanzar
-`DescripcionRequerida` (422 vía API) en ese caso. Esta validación solo aplica al emitir;
-el cálculo/preview (`POST /tpv/api/calcular`) MUST NOT bloquearse por descripción vacía.
+El sistema MUST rechazar la emisión completa de la venta (sin persistir nada) cuando el
+`pvp` resuelto (override del ítem, o el de catálogo si no hay override) de una línea de
+un artículo con `modo_precio == "libre"` es menor o igual a 0,00 €. El sistema MUST
+lanzar `PrecioLibreRequerido` (422 vía API) en ese caso. Esta misma validación MUST
+aplicarse también al aparcar un borrador (mismo contrato, para no dejar pasar en
+silencio un borrador que fallaría recién al desaparcar+cobrar). La `descripcion` de una
+línea `modo_precio == "libre"` es OPCIONAL: si no se aporta (o es solo espacios), la
+línea usa `articulo.nombre`, igual que cualquier otro `modo_precio`. Esta validación de
+precio solo aplica al emitir/aparcar; el cálculo/preview (`POST /tpv/api/calcular`) MUST
+NOT bloquearse por precio no positivo ni por descripción vacía.
+(Previously: el requisito exigía descripción no vacía en modo libre y no validaba el
+precio. Ahora es al revés: el precio > 0 es obligatorio y la descripción es opcional,
+porque el hecho fiscal relevante es no vender un artículo genérico a 0,00 €, no la falta
+de una etiqueta descriptiva — el nombre de catálogo ya describe el bien, art. 7 ROF.)
 
-#### Scenario: Línea libre sin descripción se rechaza al emitir
-- GIVEN un ítem de un artículo `modo_precio = "libre"` sin `descripcion` en el payload
+#### Scenario: Línea libre sin descripción se emite correctamente (descripción opcional)
+- GIVEN un ítem de un artículo `modo_precio = "libre"` con `pvp` > 0 y sin `descripcion` en
+  el payload
 - WHEN se ejecuta `EmitirVenta` / POST `/tpv/api/cobrar`
-- THEN se lanza `DescripcionRequerida`; no se persiste venta ni registro fiscal
+- THEN la venta se emite con éxito y `VentaLinea.descripcion` es `articulo.nombre`
 
-#### Scenario: Línea libre con descripción se emite correctamente
-- GIVEN un ítem `modo_precio = "libre"` con `descripcion = "Roca decorativa 2kg"`
+#### Scenario: Línea libre con precio 0,00 (o sin precio, catálogo 0,00) se rechaza al emitir
+- GIVEN un ítem `modo_precio = "libre"` cuyo `pvp` resuelto (override o catálogo) es
+  menor o igual a 0,00 €
+- WHEN se ejecuta `EmitirVenta` / POST `/tpv/api/cobrar`
+- THEN se lanza `PrecioLibreRequerido`; no se persiste venta ni registro fiscal
+
+#### Scenario: Línea libre con precio 0,00 se rechaza también al aparcar
+- GIVEN un ítem `modo_precio = "libre"` cuyo `pvp` resuelto es menor o igual a 0,00 €
+- WHEN se ejecuta `AparcarVenta` / POST `/tpv/api/aparcar`
+- THEN se lanza `PrecioLibreRequerido`; no se persiste ningún borrador
+
+#### Scenario: Línea libre con precio y descripción se emite correctamente
+- GIVEN un ítem `modo_precio = "libre"` con `pvp` > 0 y `descripcion = "Roca decorativa 2kg"`
 - WHEN se emite la venta
 - THEN la venta se emite con éxito y `VentaLinea.descripcion` es `"Roca decorativa 2kg"`
 
-#### Scenario: El cálculo/preview no bloquea por descripción vacía
-- GIVEN un ítem de un artículo `modo_precio = "libre"` sin `descripcion`
+#### Scenario: El cálculo/preview no bloquea por precio no positivo ni por descripción vacía
+- GIVEN un ítem de un artículo `modo_precio = "libre"` sin `descripcion` y con `pvp` = 0,00 €
 - WHEN POST `/tpv/api/calcular`
-- THEN la línea se calcula igual; la validación solo se aplica al emitir
+- THEN la línea se calcula igual; la validación de precio solo se aplica al emitir/aparcar
 
-**Tests**: `tests/test_emitir_venta.py::test_emitir_venta_modo_libre_sin_descripcion_rechaza`
-(NUEVO), `::test_emitir_venta_modo_libre_con_descripcion_ok` (NUEVO);
-`tests/test_tpv_api.py::test_calcular_modo_libre_sin_descripcion_no_bloquea` (NUEVO),
-`::test_cobrar_modo_libre_sin_descripcion_devuelve_422` (NUEVO)
+**Tests**: `tests/test_emitir_venta.py::test_emitir_venta_modo_libre_sin_descripcion_emite_ok`
+(NUEVO), `::test_emitir_venta_modo_libre_precio_no_positivo_rechaza` (NUEVO),
+`::test_emitir_venta_modo_libre_sin_precio_usa_catalogo_cero_rechaza` (NUEVO),
+`::test_emitir_venta_modo_libre_con_descripcion_ok`;
+`tests/test_aparcar_venta.py::test_aparcar_libre_sin_descripcion_persiste_ok` (NUEVO),
+`::test_aparcar_libre_precio_no_positivo_rechaza` (NUEVO);
+`tests/test_tpv_api.py::test_calcular_modo_libre_sin_descripcion_no_bloquea`,
+`::test_cobrar_modo_libre_sin_descripcion_devuelve_200` (NUEVO),
+`::test_cobrar_modo_libre_precio_cero_devuelve_422` (NUEVO),
+`::test_aparcar_libre_sin_descripcion_devuelve_200` (NUEVO),
+`::test_aparcar_libre_precio_cero_devuelve_422` (NUEVO)
 
 ### Requirement: Emisión de venta atómica y offline
 

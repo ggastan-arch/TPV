@@ -198,7 +198,8 @@
   </div>
   </div>
   <footer class="barra-funciones">
-    <button class="btn fn-btn" disabled title="Próximamente">
+    <button class="btn fn-btn" onclick="ejecutarFuncion('convertir')"
+            title="Convertir simplificadas emitidas en factura completa (consola de administración)">
       <span class="fn-ico" data-icono="file-text" aria-hidden="true"></span>
       <span class="fn-txt">Convertir en factura</span>
     </button>
@@ -398,6 +399,7 @@ function ejecutarFuncion(f) {
   // ni query param que la fije al cargar), asi que se enlaza a la raiz de la
   // consola en vez de a la pestana "Cierres Z" directamente.
   else if (f === "cierre_z") window.location.href = "/admin/#cierres";
+  else if (f === "convertir") window.location.href = "/admin/#convertir";
   else alert("Funcion '" + f + "': disponible en una fase siguiente.");
 }
 
@@ -463,20 +465,46 @@ function abrirClienteEnVenta() {
     }, 250);
   };
 
-  ov.querySelector("#ceCrear").onclick = async () => {
-    const nombre = prompt("Nombre del cliente:", "");
-    if (!nombre) return;
-    const nif = prompt("NIF (opcional):", "") || null;
-    const domicilio = prompt("Domicilio (opcional; requerido para cualificada):", "") || null;
-    const rgpd = confirm("¿El cliente consiente el tratamiento de sus datos (RGPD)?");
-    try {
-      const nuevo = await api("/tpv/api/clientes?pin=" + encodeURIComponent(pin), {
-        method: "POST",
-        body: JSON.stringify({ nombre, nif, domicilio, rgpd_consentimiento: rgpd }),
-      });
-      clienteAsignado = nuevo; ventaCualificada = false;
-      ov.remove(); actualizarClienteEnCarrito();
-    } catch (err) { ov.querySelector("#ceError").textContent = err.message; }
+  ov.querySelector("#ceCrear").onclick = () => {
+    // Ficha completa de alta inline: solo "nombre" es obligatorio; el resto
+    // (nif/domicilio/email/telefono/rgpd) es opcional, igual que en el CRUD
+    // de administracion (ver app/ui/admin.html::modalCliente).
+    ov.querySelector(".modal").innerHTML = `<h2>Cliente nuevo</h2>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">Nombre *</label>
+        <input class="campo-buscar" id="ceNombre" style="width:100%"></div>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">NIF/NIE/CIF</label>
+        <input class="campo-buscar" id="ceNif" style="width:100%"></div>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">Domicilio</label>
+        <input class="campo-buscar" id="ceDomicilio" style="width:100%"></div>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">Email</label>
+        <input class="campo-buscar" id="ceEmail" style="width:100%"></div>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">Telefono</label>
+        <input class="campo-buscar" id="ceTelefono" style="width:100%"></div>
+      <label style="display:flex;align-items:center;gap:8px;margin:10px 0">
+        <input type="checkbox" id="ceRgpd"> Consentimiento RGPD</label>
+      <div class="msg-error" id="ceError"></div>
+      <div class="fila-modal">
+        <button class="btn" id="ceGuardar">Guardar</button>
+        <button class="btn b-vaciar" id="ceCancelar">Cancelar</button>
+      </div>`;
+    ov.querySelector("#ceCancelar").onclick = () => ov.remove();
+    ov.querySelector("#ceGuardar").onclick = async () => {
+      const nombre = ov.querySelector("#ceNombre").value.trim();
+      if (!nombre) { ov.querySelector("#ceError").textContent = "El nombre es obligatorio."; return; }
+      const nif = ov.querySelector("#ceNif").value.trim() || null;
+      const domicilio = ov.querySelector("#ceDomicilio").value.trim() || null;
+      const email = ov.querySelector("#ceEmail").value.trim() || null;
+      const telefono = ov.querySelector("#ceTelefono").value.trim() || null;
+      const rgpd = ov.querySelector("#ceRgpd").checked;
+      try {
+        const nuevo = await api("/tpv/api/clientes?pin=" + encodeURIComponent(pin), {
+          method: "POST",
+          body: JSON.stringify({ nombre, nif, domicilio, email, telefono, rgpd_consentimiento: rgpd }),
+        });
+        clienteAsignado = nuevo; ventaCualificada = false;
+        ov.remove(); actualizarClienteEnCarrito();
+      } catch (err) { ov.querySelector("#ceError").textContent = err.message; }
+    };
   };
 
   const btnQuitar = ov.querySelector("#ceQuitar");
@@ -549,12 +577,15 @@ function anadir(articulo) {
   const modo = articulo.modo_precio;
   if (articulo.requiere_cites) alert("⚠ " + articulo.nombre_corto + " requiere documentacion CITES.");
 
-  // Modo libre: el backend exige precio Y descripcion al cobrar (DescripcionRequerida);
-  // se piden ambos ya al tocar el boton. Cada toque crea su propia linea (no se fusiona).
+  // Modo libre: el backend exige un PRECIO > 0,00 al cobrar/aparcar (PrecioLibreRequerido);
+  // la descripcion es OPCIONAL (si se deja vacia, la linea usa el nombre del articulo).
+  // Cada toque crea su propia linea (no se fusiona).
   if (modo === "libre") {
     const v = prompt("Precio (con IVA) para " + articulo.nombre_corto + ":", articulo.pvp);
     if (v === null) return;
-    const desc = prompt("Descripcion para " + articulo.nombre_corto + ":", "");
+    const precio = parseFloat(String(v).replace(",", "."));
+    if (!isFinite(precio) || precio <= 0) { alert("Precio no valido."); return; }
+    const desc = prompt("Descripcion (opcional) para " + articulo.nombre_corto + ":", "");
     if (desc === null) return;
     carrito.push({ articulo_id: articulo.id, nombre_corto: articulo.nombre_corto, modo_precio: modo,
                    cantidad: 1, pvp: v.replace(",", "."), descripcion: desc.trim() || null, editado: true });

@@ -91,6 +91,32 @@ def test_alta_inline_con_rgpd_persiste_y_queda_disponible_para_buscar(
     assert [c["nombre"] for c in buscado.json()] == ["Cliente nuevo"]
 
 
+def test_alta_inline_con_ficha_completa_persiste_email_telefono_y_rgpd(
+    cliente, crear_sesion, datos_base
+):
+    """La ficha de alta inline del TPV admite email/telefono ademas de
+    nombre/nif/domicilio/rgpd; todos opcionales salvo nombre."""
+    r = cliente.post("/tpv/api/clientes", params={"pin": "0000"}, json={
+        "nombre": "Cliente completo",
+        "nif": "A58818501",
+        "domicilio": "Calle Falsa 123",
+        "email": "cliente@example.com",
+        "telefono": "600111222",
+        "rgpd_consentimiento": True,
+    })
+    assert r.status_code == 200
+    cliente_id = r.json()["id"]
+
+    with crear_sesion() as s:
+        c = s.get(Cliente, cliente_id)
+        assert c is not None
+        assert c.email == "cliente@example.com"
+        assert c.telefono == "600111222"
+        assert c.rgpd_consentimiento is True
+        assert c.nif == "A58818501"
+        assert c.domicilio == "Calle Falsa 123"
+
+
 def test_alta_inline_nif_invalido_rechaza_422_sin_persistir(cliente, crear_sesion, datos_base):
     r = cliente.post("/tpv/api/clientes", params={"pin": "0000"}, json={
         "nombre": "Malo", "nif": "12345678A", "rgpd_consentimiento": True,
@@ -99,6 +125,23 @@ def test_alta_inline_nif_invalido_rechaza_422_sin_persistir(cliente, crear_sesio
 
     with crear_sesion() as s:
         assert s.query(Cliente).count() == 0
+
+
+def test_alta_inline_nif_duplicado_de_activo_rechaza_409_sin_persistir(
+    cliente, crear_sesion, datos_base
+):
+    """Regla decidida: NIF unico entre clientes ACTIVOS (integridad de datos)."""
+    with crear_sesion() as s:
+        ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Acuario S.L.", nif="A58818501"))
+
+    r = cliente.post("/tpv/api/clientes", params={"pin": "0000"}, json={
+        "nombre": "Otro", "nif": "A58818501",
+    })
+    assert r.status_code == 409
+
+    with crear_sesion() as s:
+        assert s.query(Cliente).filter_by(nombre="Otro").count() == 0
 
 
 def test_alta_inline_exige_pin(cliente, datos_base):

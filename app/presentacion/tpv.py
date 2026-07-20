@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.aplicacion.aparcar_venta import (
@@ -23,7 +24,7 @@ from app.aplicacion.aparcar_venta import (
 )
 from app.aplicacion.aparcar_venta import TicketVacio as TicketVacioAparcar
 from app.aplicacion.aparcar_venta import UsuarioNoValido as UsuarioNoValidoAparcar
-from app.aplicacion.clientes import DatosCliente, NifInvalido, ServicioClientes
+from app.aplicacion.clientes import DatosCliente, NifDuplicado, NifInvalido, ServicioClientes
 from app.aplicacion.emitir_venta import (
     CualificadaSinDatos,
     EmitirVenta,
@@ -31,7 +32,7 @@ from app.aplicacion.emitir_venta import (
     TicketVacio,
     UsuarioNoValido,
 )
-from app.aplicacion.lineas import ArticuloNoExiste, DescripcionRequerida
+from app.aplicacion.lineas import ArticuloNoExiste, PrecioLibreRequerido
 from app.aplicacion.lineas import ItemVenta as ItemAplicacion
 from app.aplicacion.lineas import resolver_items
 from app.presentacion.deps import get_motor, get_session, get_uow
@@ -260,7 +261,7 @@ def cobrar(
         raise HTTPException(401, "Usuario no valido") from exc
     except ArticuloNoExiste as exc:
         raise HTTPException(404, str(exc)) from exc
-    except DescripcionRequerida as exc:
+    except PrecioLibreRequerido as exc:
         raise HTTPException(422, str(exc)) from exc
     except CualificadaSinDatos as exc:
         raise HTTPException(
@@ -335,6 +336,13 @@ def crear_cliente_inline(
         )
     except NifInvalido as exc:
         raise HTTPException(422, "NIF no valido") from exc
+    except NifDuplicado as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except IntegrityError as exc:
+        # Red de seguridad de BD (indice unico parcial `uq_cliente_nif_activo`,
+        # migracion 0012): defensa en profundidad ante una condicion de carrera
+        # que el chequeo de aplicacion anterior no llegara a atrapar.
+        raise HTTPException(409, "Ya existe un cliente activo con ese NIF") from exc
     return _cliente_dto(uow.clientes.buscar(cliente_id))
 
 
@@ -357,7 +365,7 @@ def aparcar(req: AparcarReq, uow=Depends(get_uow)) -> dict:
         raise HTTPException(401, "Usuario no valido") from exc
     except ArticuloNoExiste as exc:
         raise HTTPException(404, str(exc)) from exc
-    except DescripcionRequerida as exc:
+    except PrecioLibreRequerido as exc:
         raise HTTPException(422, str(exc)) from exc
 
     venta = uow.ventas.buscar(venta_id)

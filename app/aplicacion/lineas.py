@@ -39,17 +39,19 @@ class ArticuloNoExiste(Exception):
         self.articulo_id = articulo_id
 
 
-class DescripcionRequerida(Exception):
-    """Modo `libre`: exige descripcion (precio + descripcion) SOLO al emitir; el
-    preview `/calcular` nunca bloquea por esto (ver design.md)."""
+class PrecioLibreRequerido(Exception):
+    """Modo `libre`: exige un precio (override o catalogo) mayor que 0,00 EUR
+    SOLO al emitir/aparcar; el preview `/calcular` nunca bloquea por esto (ver
+    design.md). La descripcion, en cambio, es OPCIONAL: un generico siempre
+    trae un nombre de catalogo, que basta para describir el bien (art. 7 ROF)."""
 
     def __init__(self, articulo_id: int):
-        super().__init__(f"El articulo {articulo_id} (modo libre) exige descripcion al emitir")
+        super().__init__(f"El articulo {articulo_id} (modo libre) exige un precio mayor que 0,00")
         self.articulo_id = articulo_id
 
 
 def resolver_items(
-    articulos: "RepositorioArticulos", items, *, exigir_descripcion_libre: bool = False
+    articulos: "RepositorioArticulos", items, *, exigir_precio_libre: bool = False
 ) -> tuple[list[LineaResuelta], Totales]:
     resueltas: list[LineaResuelta] = []
     calculos: list[Linea] = []
@@ -61,8 +63,8 @@ def resolver_items(
         # el hecho fiscal auditable es "precio cobrado != catalogo" (ver EmitirVenta).
         pvp = it.pvp if it.pvp is not None else articulo.pvp
         descripcion_override = (getattr(it, "descripcion", None) or "").strip()
-        if exigir_descripcion_libre and articulo.modo_precio == "libre" and not descripcion_override:
-            raise DescripcionRequerida(articulo.id)
+        if exigir_precio_libre and articulo.modo_precio == "libre" and Decimal(pvp) <= 0:
+            raise PrecioLibreRequerido(articulo.id)
         descripcion = descripcion_override or articulo.nombre
         calculo = calcular_linea(
             Decimal(pvp), Decimal(it.cantidad), Decimal(articulo.tipo_iva.porcentaje)

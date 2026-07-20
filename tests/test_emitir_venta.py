@@ -13,7 +13,7 @@ from app.aplicacion.emitir_venta import (
     TicketVacio,
     UsuarioNoValido,
 )
-from app.aplicacion.lineas import ArticuloNoExiste, DescripcionRequerida, ItemVenta
+from app.aplicacion.lineas import ArticuloNoExiste, ItemVenta, PrecioLibreRequerido
 from app.infraestructura.persistencia.repositorios import RepositorioStockSQL
 from app.infraestructura.persistencia.unidad_de_trabajo import UnidadDeTrabajoSQL
 from app.infraestructura.persistencia.modelos import (
@@ -311,22 +311,73 @@ def test_emitir_venta_modo_libre_no_registra_auditoria(crear_sesion, motor, dato
     assert _auditorias(crear_sesion, "precio_manual_venta") == []
 
 
-# --- Fase 4: modo libre exige descripcion al EMITIR (no en /calcular) ---------
+# --- Fase 5: modo libre exige PRECIO (>0) al EMITIR; descripcion es opcional -
 
 
-@pytest.mark.parametrize("descripcion", [None, "   "])
-def test_emitir_venta_modo_libre_sin_descripcion_rechaza(
+@pytest.mark.parametrize("descripcion", [None, "   ", ""])
+def test_emitir_venta_modo_libre_sin_descripcion_emite_ok(
     crear_sesion, motor, datos_base, descripcion
 ):
+    """La descripcion en modo libre es OPCIONAL: sin ella, la linea cae al nombre
+    del articulo (igual que cualquier otro modo_precio); no bloquea la emision."""
     with crear_sesion() as s:
         articulo_id = _crear_articulo(
             s, datos_base, control_stock=False, nombre="Generico", modo_precio="libre")
 
-    with crear_sesion() as s, pytest.raises(DescripcionRequerida):
-        _uc(s, motor).ejecutar(
+    with crear_sesion() as s:
+        resultado = _uc(s, motor).ejecutar(
             usuario_id=datos_base["usuario_id"],
             items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"), pvp=Decimal("10.00"),
                              descripcion=descripcion)],
+            pagos=[PagoVenta("efectivo", Decimal("10.00"))],
+        )
+
+    with crear_sesion() as s:
+        venta = s.get(Venta, resultado.venta_id)
+        assert venta.lineas[0].descripcion == "Generico"
+
+
+@pytest.mark.parametrize("pvp_override", [Decimal("0.00"), Decimal("-1.00")])
+def test_emitir_venta_modo_libre_precio_no_positivo_rechaza(
+    crear_sesion, motor, datos_base, pvp_override
+):
+    """El hecho fiscal relevante en modo libre es no vender un generico a 0,00 EUR
+    (o a un precio negativo), no la falta de descripcion."""
+    with crear_sesion() as s:
+        articulo_id = _crear_articulo(
+            s, datos_base, control_stock=False, nombre="Generico", modo_precio="libre")
+
+    with crear_sesion() as s, pytest.raises(PrecioLibreRequerido):
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"), pvp=pvp_override,
+                             descripcion="Roca decorativa 2kg")],
+            pagos=[PagoVenta("efectivo", Decimal("10.00"))],
+        )
+
+    with crear_sesion() as s:
+        assert s.query(Venta).count() == 0
+        assert s.query(RegistroFiscal).count() == 0
+
+
+def test_emitir_venta_modo_libre_sin_precio_usa_catalogo_cero_rechaza(
+    crear_sesion, motor, datos_base
+):
+    """Sin override de pvp en el item, se resuelve el pvp de catalogo; si ese
+    catalogo es 0,00 (nominal, tipico de un generico 'libre') se rechaza igual."""
+    with crear_sesion() as s:
+        articulo = Articulo(nombre="Generico", nombre_corto="Generico",
+                            tipo_iva_id=datos_base["iva21_id"], pvp=Decimal("0.00"),
+                            modo_precio="libre")
+        s.add(articulo)
+        s.commit()
+        articulo_id = articulo.id
+
+    with crear_sesion() as s, pytest.raises(PrecioLibreRequerido):
+        _uc(s, motor).ejecutar(
+            usuario_id=datos_base["usuario_id"],
+            items=[ItemVenta(articulo_id=articulo_id, cantidad=Decimal("1"),
+                             descripcion="Roca decorativa 2kg")],
             pagos=[PagoVenta("efectivo", Decimal("10.00"))],
         )
 

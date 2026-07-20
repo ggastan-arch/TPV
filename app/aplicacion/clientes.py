@@ -32,6 +32,23 @@ class ClienteNoEncontrado(Exception):
     pass
 
 
+class NifDuplicado(Exception):
+    """Ya existe un cliente ACTIVO con este NIF.
+
+    Regla decidida: el NIF es unico solo entre clientes ACTIVOS cuando esta
+    presente (varios clientes SIN NIF son validos; un cliente INACTIVO con ese
+    NIF no bloquea un alta nueva). Esta comprobacion de aplicacion es la
+    primera barrera; el indice unico parcial `uq_cliente_nif_activo`
+    (migracion 0012_cliente_nif_unico_activo) es la red de seguridad de BD
+    para cualquier otra via de escritura (por ejemplo, reactivar un cliente
+    inactivo -- ver `ServicioClientes.activar`, que no repite este chequeo y
+    confia en el indice)."""
+
+    def __init__(self, nif: str):
+        self.nif = nif
+        super().__init__(f"Ya existe un cliente activo con el NIF {nif}")
+
+
 class ServicioClientes:
     def __init__(self, uow: UnidadDeTrabajo, *, usuario_id: int | None = None, origen: str = "local"):
         self.uow = uow
@@ -48,6 +65,7 @@ class ServicioClientes:
         # (la base legal de ese tratamiento es la obligacion legal, art. 6.1.c
         # RGPD, no el consentimiento del art. 6.1.a). No añadir esa validacion.
         nif = self._validar_nif(datos.nif)
+        self._rechazar_si_nif_duplicado(nif)
         cliente = Cliente(
             nombre=datos.nombre, nif=nif, domicilio=datos.domicilio,
             email=datos.email, telefono=datos.telefono,
@@ -62,7 +80,9 @@ class ServicioClientes:
         cliente = self.uow.clientes.buscar(cliente_id)
         if cliente is None:
             raise ClienteNoEncontrado(cliente_id)
-        cliente.nif = self._validar_nif(datos.nif)
+        nif = self._validar_nif(datos.nif)
+        self._rechazar_si_nif_duplicado(nif, excluir_cliente_id=cliente_id)
+        cliente.nif = nif
         cliente.nombre = datos.nombre
         cliente.domicilio = datos.domicilio
         cliente.email = datos.email
@@ -92,6 +112,19 @@ class ServicioClientes:
         if not validar_documento(nif):
             raise NifInvalido(nif)
         return normalizar_documento(nif)
+
+    def _rechazar_si_nif_duplicado(
+        self, nif: str | None, *, excluir_cliente_id: int | None = None
+    ) -> None:
+        """`buscar_por_nif` ya solo mira clientes ACTIVOS (ver repositorios.py), asi
+        que un match aqui siempre es un cliente activo con este NIF. En `actualizar`,
+        `excluir_cliente_id` evita el falso positivo de comparar el cliente contra si
+        mismo cuando conserva su propio NIF sin cambios."""
+        if nif is None:
+            return
+        existente = self.uow.clientes.buscar_por_nif(nif)
+        if existente is not None and existente.id != excluir_cliente_id:
+            raise NifDuplicado(nif)
 
     def _auditar(self, accion: str, cliente_id: int) -> None:
         # No se registra el detalle de los datos personales en el log de auditoria.

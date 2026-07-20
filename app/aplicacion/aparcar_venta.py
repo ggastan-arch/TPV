@@ -66,12 +66,12 @@ class AparcarVenta:
         if usuario is None:
             raise UsuarioNoValido()
         # Un borrador no se emite, pero SI exige la misma validacion de
-        # descripcion libre que `EmitirVenta` (mismo contrato): un articulo
-        # `modo_precio == "libre"` sin descripcion se rechaza YA al aparcar,
-        # para no dejar pasar en silencio un borrador que fallaria recien al
-        # desaparcar+cobrar.
+        # precio libre que `EmitirVenta` (mismo contrato): un articulo
+        # `modo_precio == "libre"` con precio <= 0,00 se rechaza YA al
+        # aparcar, para no dejar pasar en silencio un borrador que fallaria
+        # recien al desaparcar+cobrar.
         lineas, totales = resolver_items(
-            self.uow.articulos, items, exigir_descripcion_libre=True
+            self.uow.articulos, items, exigir_precio_libre=True
         )
         venta = Venta(
             estado="aparcada", usuario_id=usuario.id, etiqueta_aparcada=etiqueta,
