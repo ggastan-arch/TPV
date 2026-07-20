@@ -393,6 +393,25 @@ def fiscal_reencolar(req: ReencolarReq, request: Request,
     return {"ok": True}
 
 
+# --- Facturas: listado con filtros (fecha/tipo/texto libre/estado de remision) --
+# Solo LECTURA -- reusa `RepositorioRegistros.buscar_facturas` (puerto), sin SQL
+# crudo en esta capa (mismo patron que "Ultimos registros" del panel fiscal).
+@router.get("/api/facturas")
+def listar_facturas(
+    desde: str | None = None, hasta: str | None = None, tipo: str = "todas",
+    q: str | None = None, estado: str = "todas",
+    _: int = Depends(require_admin), uow=Depends(get_uow),
+) -> list[dict]:
+    filas = uow.registros.buscar_facturas(desde=desde, hasta=hasta, tipo=tipo, q=q, estado=estado)
+    return [
+        {"num_serie_factura": f.num_serie_factura, "tipo_factura": f.tipo_factura,
+         "fecha_hora_huso": f.fecha_hora_huso, "total_con_iva": str(f.total_con_iva),
+         "cliente": {"nombre": f.cliente_nombre, "nif": f.cliente_nif},
+         "estado_remision": f.estado_remision}
+        for f in filas
+    ]
+
+
 # --- Informe del dia -----------------------------------------------------------
 @router.get("/api/informes/dia")
 def informe_dia(_: int = Depends(require_admin), s: Session = Depends(get_session)) -> dict:
