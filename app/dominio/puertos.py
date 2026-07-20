@@ -35,6 +35,27 @@ class UltimoErrorRemision:
 
 
 @dataclass
+class FilaFactura:
+    """Fila del listado de facturas (panel "Facturas" de la consola de
+    administracion): registro de alta (factura emitida) + destinatario resuelto.
+    Solo lectura, no representa ninguna entidad persistida.
+
+    El destinatario (`cliente_nombre`/`cliente_nif`) se resuelve con la MISMA
+    prioridad que figura en el documento emitido: el snapshot congelado
+    `venta.destinatario_nombre/nif` (factura F3 "convertir en factura") si
+    existe, si no el cliente asociado en vivo (ver
+    `RepositorioRegistrosSQL.buscar_facturas`)."""
+
+    num_serie_factura: str
+    tipo_factura: str
+    fecha_hora_huso: str
+    total_con_iva: Decimal
+    cliente_nombre: str | None
+    cliente_nif: str | None
+    estado_remision: str
+
+
+@dataclass
 class TotalesRangoZ:
     """Agregado de las ventas cobradas de un rango de `registro_fiscal.orden`
     (registros de alta). Usado por `GenerarCierreZ` para congelar el snapshot."""
@@ -142,6 +163,19 @@ class RepositorioRegistros(Protocol):
         self, registro: "RegistroFiscal", *, usuario_id: int | None = None, origen: str = "local"
     ) -> None: ...
     def ultimo_error(self) -> "UltimoErrorRemision | None": ...
+    def buscar_facturas(
+        self, *, desde: str | None = None, hasta: str | None = None,
+        tipo: str | None = None, q: str | None = None, estado: str | None = None,
+        limite: int = 500,
+    ) -> list["FilaFactura"]:
+        """Listado de facturas emitidas (registros de alta) para el panel
+        "Facturas" de la consola de administracion, mas recientes primero.
+        Filtros combinables (AND): `desde`/`hasta` (fecha ISO `AAAA-MM-DD`),
+        `tipo` (`simplificada`/`completa`/`rectificativa`, cualquier otro valor
+        no filtra), `q` (texto libre: nº de serie / nombre / NIF del
+        destinatario) y `estado` (valor exacto de `estado_remision`, `"todas"`
+        o `None` no filtra)."""
+        ...
 
 
 class RepositorioCierresZ(Protocol):

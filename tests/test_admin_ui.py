@@ -195,3 +195,62 @@ def test_admin_convertir_confirmacion_sobrevive_al_refresco():
     pos_refresco = bloque.index("await pintarConvertir()")
     pos_confirmacion = bloque.index('$("#cvMsg").textContent = `Convertido en factura')
     assert pos_confirmacion > pos_refresco
+
+
+# --- Panel "Facturas": listado con filtros (fecha/tipo/texto libre/estado remision) --
+# Smoke estatico (sin navegador, sin motor de plantillas), mismo patron que el
+# resto de este fichero.
+
+
+def test_admin_tab_facturas_presente():
+    html = _html()
+    assert 'data-t="facturas"' in html
+    assert "pintarFacturas" in html
+    assert "/admin/api/facturas" in html
+
+
+def _bloque_pintar_facturas(html: str) -> str:
+    inicio = html.index("async function pintarFacturas")
+    fin = html.index("/* ---- MAESTROS", inicio)
+    return html[inicio:fin]
+
+
+def test_admin_facturas_controles_de_filtro_presentes():
+    """Los 4 filtros pedidos: rango de fechas, tipo, texto libre, estado remision."""
+    bloque = _bloque_pintar_facturas(_html())
+    assert 'id="fcDesde"' in bloque
+    assert 'id="fcHasta"' in bloque
+    assert 'id="fcTipo"' in bloque
+    assert 'id="fcTexto"' in bloque
+    assert 'id="fcEstado"' in bloque
+
+
+def test_admin_facturas_opciones_tipo_y_estado():
+    bloque = _bloque_pintar_facturas(_html())
+    for valor in ("simplificada", "completa", "rectificativa"):
+        assert f'value="{valor}"' in bloque
+    # Valores reales de estado_remision (app/infraestructura/persistencia/modelos/fiscal.py).
+    for valor in ("no_remitido", "pendiente", "aceptado", "aceptado_con_errores",
+                  "rechazado", "requiere_intervencion"):
+        assert f'value="{valor}"' in bloque
+
+
+def test_admin_facturas_tabla_de_resultados_presente():
+    bloque = _bloque_pintar_facturas(_html())
+    assert 'id="fcFilas"' in bloque
+    assert "<table>" in bloque
+
+
+def test_admin_facturas_reconsulta_al_aplicar_y_al_cambiar_filtros():
+    bloque = _bloque_pintar_facturas(_html())
+    assert '$("#fcAplicar").onclick = () => cargarFacturas();' in bloque
+    assert '$("#fcTipo").onchange = () => cargarFacturas();' in bloque
+    assert '$("#fcEstado").onchange = () => cargarFacturas();' in bloque
+
+
+def test_admin_facturas_llama_al_endpoint_con_parametros():
+    bloque = _bloque_pintar_facturas(_html())
+    assert "async function cargarFacturas" in bloque
+    assert "/admin/api/facturas?" in bloque
+    assert 'params.set("tipo"' in bloque
+    assert 'params.set("estado"' in bloque

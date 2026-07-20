@@ -134,6 +134,7 @@ async function dashboard() {
       <button data-t="fiscal">Fiscal</button>
       <button data-t="dia">Día</button>
       <button data-t="cierres">Cierres Z</button>
+      <button data-t="facturas">Facturas</button>
       <button data-t="maestros">Maestros</button>
       <button data-t="clientes">Clientes</button>
       <button data-t="convertir">Convertir en factura</button>
@@ -165,6 +166,7 @@ async function pintarPestana() {
   if (pestanaActual === "fiscal") return pintarFiscal();
   if (pestanaActual === "dia") return pintarDia();
   if (pestanaActual === "cierres") return pintarCierresZ();
+  if (pestanaActual === "facturas") return pintarFacturas();
   if (pestanaActual === "clientes") return pintarClientes();
   if (pestanaActual === "convertir") return pintarConvertir();
   if (pestanaActual === "botoneras") return pintarBotoneras();
@@ -313,6 +315,67 @@ async function detalleCierreZ(numero) {
     <h3>Desglose por forma de pago</h3>
     <table><thead><tr><th>Medio</th><th>Importe</th></tr></thead><tbody>${filasPago}</tbody></table>
   </div>`;
+}
+
+/* ---- FACTURAS (listado con filtros: fecha, tipo, texto libre, estado remision) ---- */
+// Solo LECTURA (GET /admin/api/facturas): 4 filtros combinables (AND), re-consulta
+// al pulsar "Aplicar filtros", al cambiar tipo/estado, o al pulsar Enter en el texto.
+async function pintarFacturas() {
+  $("#main").innerHTML = `
+    <div class="card"><h2>Facturas</h2>
+      <div class="grid2">
+        <div class="field"><label>Desde</label><input type="date" id="fcDesde" class="input"></div>
+        <div class="field"><label>Hasta</label><input type="date" id="fcHasta" class="input"></div>
+        <div class="field"><label>Tipo</label>
+          <select id="fcTipo" class="input">
+            <option value="todas">Todas</option>
+            <option value="simplificada">Simplificada</option>
+            <option value="completa">Completa</option>
+            <option value="rectificativa">Rectificativa</option>
+          </select>
+        </div>
+        <div class="field"><label>Estado de remisión</label>
+          <select id="fcEstado" class="input">
+            <option value="todas">Todos</option>
+            <option value="no_remitido">No remitido</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="aceptado">Aceptado</option>
+            <option value="aceptado_con_errores">Aceptado con errores</option>
+            <option value="rechazado">Rechazado</option>
+            <option value="requiere_intervencion">Requiere intervención</option>
+          </select>
+        </div>
+        <div class="field"><label>Buscar (nº serie / cliente / NIF)</label>
+          <input type="text" id="fcTexto" class="input" placeholder="T2026-000012, Pepe Pérez, 12345678Z...">
+        </div>
+      </div>
+      <p><button class="accion" id="fcAplicar">Aplicar filtros</button></p>
+    </div>
+    <div class="card"><h2>Resultados</h2>
+      <table><thead><tr><th>Nº serie</th><th>Tipo</th><th>Fecha</th><th>Total</th>
+        <th>Cliente</th><th>NIF</th><th>Remisión</th></tr></thead>
+      <tbody id="fcFilas"></tbody></table>
+    </div>`;
+  $("#fcAplicar").onclick = () => cargarFacturas();
+  $("#fcTipo").onchange = () => cargarFacturas();
+  $("#fcEstado").onchange = () => cargarFacturas();
+  $("#fcTexto").addEventListener("keydown", (e) => { if (e.key === "Enter") cargarFacturas(); });
+  await cargarFacturas();
+}
+
+async function cargarFacturas() {
+  const params = new URLSearchParams();
+  const desde = $("#fcDesde").value; if (desde) params.set("desde", desde);
+  const hasta = $("#fcHasta").value; if (hasta) params.set("hasta", hasta);
+  params.set("tipo", $("#fcTipo").value);
+  params.set("estado", $("#fcEstado").value);
+  const q = $("#fcTexto").value.trim(); if (q) params.set("q", q);
+  const filas = await api(`/admin/api/facturas?${params.toString()}`);
+  $("#fcFilas").innerHTML = filas.map((f) => `<tr>
+      <td>${f.num_serie_factura}</td><td>${f.tipo_factura}</td><td>${f.fecha_hora_huso}</td>
+      <td>${eur(f.total_con_iva)}</td><td>${f.cliente.nombre || "—"}</td>
+      <td>${f.cliente.nif || "—"}</td><td>${f.estado_remision}</td>
+    </tr>`).join("") || '<tr><td colspan="7">Sin facturas para los filtros aplicados.</td></tr>';
 }
 
 /* ---- MAESTROS ---- */

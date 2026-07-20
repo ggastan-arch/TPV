@@ -10,7 +10,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.dominio.puertos import TotalesRangoZ, UltimoErrorRemision
+from app.dominio.puertos import FilaFactura, TotalesRangoZ, UltimoErrorRemision
 from app.dominio.servicios.validadores import normalizar_documento
 from app.infraestructura.reloj import ahora_huso
 from app.infraestructura.persistencia.modelos import (
@@ -411,6 +411,70 @@ class RepositorioRegistrosSQL:
             .limit(1)
         )
         return self._s.execute(stmt).scalars().first()
+
+    def buscar_facturas(
+        self, *, desde: str | None = None, hasta: str | None = None,
+        tipo: str | None = None, q: str | None = None, estado: str | None = None,
+        limite: int = 500,
+    ) -> list[FilaFactura]:
+        """Listado de facturas EMITIDAS (registros de alta; las anulaciones no
+        aparecen aqui, ver `RegistroFiscal.tipo_registro`) para el panel
+        "Facturas" de la consola de administracion. Solo lectura: nunca muta
+        `registro_fiscal` ni `venta` (invariante 1).
+
+        El destinatario se resuelve con la MISMA prioridad que figura en el
+        documento emitido: el snapshot congelado `venta.destinatario_nombre/nif`
+        (factura F3 de "convertir en factura") si existe, si no el cliente
+        asociado en vivo (`venta.cliente`, p.ej. una simplificada con "cliente en
+        venta"). Filtros combinables (AND); `q` busca por subcadena
+        case-insensitive (mismo escape de comodines LIKE que `buscar_por_nombre`)
+        en `num_serie_factura`, `cliente.nombre` o `cliente.nif`."""
+        stmt = (
+            select(RegistroFiscal, Venta, Cliente)
+            .join(Venta, RegistroFiscal.venta_id == Venta.id)
+            .outerjoin(Cliente, Venta.cliente_id == Cliente.id)
+            .where(RegistroFiscal.tipo_registro == "alta")
+            .order_by(RegistroFiscal.orden.desc())
+        )
+        if desde:
+            stmt = stmt.where(
+                func.substr(RegistroFiscal.fecha_hora_huso_gen_registro, 1, 10) >= desde
+            )
+        if hasta:
+            stmt = stmt.where(
+                func.substr(RegistroFiscal.fecha_hora_huso_gen_registro, 1, 10) <= hasta
+            )
+        if tipo == "simplificada":
+            stmt = stmt.where(RegistroFiscal.tipo_factura == "F2")
+        elif tipo == "completa":
+            stmt = stmt.where(RegistroFiscal.tipo_factura.in_(("F1", "F3")))
+        elif tipo == "rectificativa":
+            stmt = stmt.where(RegistroFiscal.tipo_factura.like("R%"))
+        if estado and estado != "todas":
+            stmt = stmt.where(RegistroFiscal.estado_remision == estado)
+        if q and q.strip():
+            patron = f"%{_escapar_comodines_like(q.strip())}%"
+            stmt = stmt.where(
+                RegistroFiscal.num_serie_factura.ilike(patron, escape="\\")
+                | Cliente.nombre.ilike(patron, escape="\\")
+                | Cliente.nif.ilike(patron, escape="\\")
+            )
+        stmt = stmt.limit(limite)
+
+        filas = []
+        for registro, venta, cliente in self._s.execute(stmt).all():
+            nombre = venta.destinatario_nombre or (cliente.nombre if cliente else None)
+            nif = venta.destinatario_nif or (cliente.nif if cliente else None)
+            filas.append(FilaFactura(
+                num_serie_factura=registro.num_serie_factura,
+                tipo_factura=registro.tipo_factura,
+                fecha_hora_huso=registro.fecha_hora_huso_gen_registro,
+                total_con_iva=venta.total_con_iva,
+                cliente_nombre=nombre,
+                cliente_nif=nif,
+                estado_remision=registro.estado_remision,
+            ))
+        return filas
 
 
 class RepositorioCierresZSQL:
