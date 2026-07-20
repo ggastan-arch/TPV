@@ -32,6 +32,26 @@ DEMO_NOMBRE = "AcuaTPV DEMO (documento de prueba)"
 DEMO_NOMBRE_PRODUCTOR = "AcuaTPV"
 DEMO_NIF_PRODUCTOR = "00000000T"
 
+# Secreto por defecto de la cookie de sesion de la consola de administracion. En
+# produccion DEBE sobreescribirse con TPV_SESSION_SECRET: con este valor (publico,
+# versionado) cualquiera podria FIRMAR una cookie de sesion de admin valida.
+SESSION_SECRET_DEFAULT = "dev-secreto-de-sesion-CAMBIAR-en-produccion"
+
+
+class SecretoInseguro(RuntimeError):
+    """El TPV_SESSION_SECRET sigue en su valor por defecto en un arranque de produccion."""
+
+
+def validar_session_secret(perfil: str, session_secret: str) -> None:
+    """Falla (SecretoInseguro) si en produccion el secreto de sesion sigue en su
+    valor por defecto. En demo se admite: es un despliegue publico aislado y sin
+    datos reales (debe quedar como antes)."""
+    if perfil == "produccion" and session_secret == SESSION_SECRET_DEFAULT:
+        raise SecretoInseguro(
+            "TPV_SESSION_SECRET sigue en su valor por defecto en produccion; "
+            "defina un secreto largo y aleatorio en el .env antes de arrancar."
+        )
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -67,8 +87,18 @@ class Settings(BaseSettings):
     schemas_dir: str = "schemas"
 
     # Secreto para firmar la cookie de sesion de la consola de administracion.
-    # EN PRODUCCION hay que sobreescribirlo con TPV_SESSION_SECRET (valor largo y aleatorio).
-    session_secret: str = "dev-secreto-de-sesion-CAMBIAR-en-produccion"
+    # EN PRODUCCION hay que sobreescribirlo con TPV_SESSION_SECRET (valor largo y aleatorio):
+    # el arranque en produccion aborta si sigue en el default (ver validar_session_secret).
+    session_secret: str = SESSION_SECRET_DEFAULT
+    # Vida maxima de la cookie de sesion de admin (segundos). Por defecto una jornada.
+    session_max_age_s: int = 8 * 3600
+
+    # Endurecimiento del login de admin: se bloquea el login REMOTO tras
+    # `admin_max_intentos` fallos dentro de `admin_ventana_bloqueo_min` minutos
+    # (auto-desbloqueo al salir de la ventana). El equipo local nunca se bloquea;
+    # el perfil demo (despliegue publico) esta exento.
+    admin_max_intentos: int = 5
+    admin_ventana_bloqueo_min: int = 15
 
     # Entorno de la AEAT para la URL del QR y los servicios web de remision.
     entorno_aeat: str = "pruebas"  # 'pruebas' | 'produccion'

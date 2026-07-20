@@ -6,7 +6,7 @@ verificacion de la cadena de huellas y la declaracion responsable.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Literal
@@ -168,6 +168,9 @@ class UsuarioCrearReq(BaseModel):
 class UsuarioActualizarReq(BaseModel):
     nombre: str
     rol: str
+    # Solo se consume al PROMOVER a administracion (credencial >=8); en el resto de
+    # actualizaciones el PIN se cambia por el endpoint dedicado (.../pin).
+    pin: str | None = None
 
 
 class PinReq(BaseModel):
@@ -240,8 +243,38 @@ class ConvertirReq(BaseModel):
 
 
 def _origen(request: Request) -> str:
+    # Supuesto de despliegue (del que dependen el bloqueo remoto y la distincion
+    # local/remoto del invariante 4): uvicorn escucha DIRECTAMENTE en la interfaz de
+    # Tailscale (o 0.0.0.0 en una maquina solo-tailnet), de modo que
+    # `request.client.host` es la IP real del peer. NO poner delante un proxy inverso
+    # local (p.ej. `tailscale serve`): haria que todo el trafico remoto se viese como
+    # 127.0.0.1 -> el bloqueo quedaria inerte y la auditoria marcaria "local". Si algun
+    # dia se usa un proxy, hay que leer la IP real de su cabecera (X-Forwarded-For) con
+    # una lista de proxies de confianza.
     host = request.client.host if request.client else ""
     return "local" if host in ("127.0.0.1", "::1", "localhost") else "remoto"
+
+
+def _login_remoto_bloqueado(s: Session, ahora: datetime) -> bool:
+    """True si el login REMOTO esta bloqueado: hubo >= `admin_max_intentos` accesos
+    de admin fallidos remotos dentro de la ventana `admin_ventana_bloqueo_min`.
+
+    Auto-desbloqueo implicito: los fallos viejos salen de la ventana y dejan de
+    contar. Los fallos locales no cuentan (el equipo de la tienda nunca se bloquea).
+    Se toma solo la ventana de los N ultimos fallos remotos: si el mas antiguo de
+    esos N sigue dentro de la ventana, hubo N fallos en la ventana."""
+    limite = settings.admin_max_intentos
+    corte = ahora - timedelta(minutes=settings.admin_ventana_bloqueo_min)
+    ultimos = s.execute(
+        select(LogAuditoria.fecha_hora_huso)
+        .where(LogAuditoria.accion == "acceso_admin_fallido", LogAuditoria.origen == "remoto")
+        .order_by(LogAuditoria.id.desc())
+        .limit(limite)
+    ).scalars().all()
+    if len(ultimos) < limite:
+        return False
+    mas_antiguo = min(datetime.fromisoformat(f) for f in ultimos)
+    return mas_antiguo >= corte
 
 
 def require_admin(request: Request) -> int:
@@ -291,16 +324,37 @@ def pagina_admin() -> FileResponse:
 
 @router.post("/api/login")
 def login(req: LoginAdminReq, request: Request, s: Session = Depends(get_session)) -> dict:
+    origen = _origen(request)
+    ahora = datetime.now().astimezone()
+    ip = request.client.host if request.client else "?"
+
+    # Bloqueo por fuerza bruta: solo remoto y fuera del perfil demo (despliegue
+    # publico aislado que debe quedar como antes). El equipo local nunca se bloquea.
+    if origen == "remoto" and settings.perfil != "demo" and _login_remoto_bloqueado(s, ahora):
+        s.add(LogAuditoria(fecha_hora_huso=ahora_huso(), accion="acceso_admin_bloqueado",
+                           entidad="consola", detalle=f"ip={ip}", origen=origen))
+        s.commit()
+        raise HTTPException(429, "Demasiados intentos fallidos; espere unos minutos e intente de nuevo")
+
     usuario = s.execute(
         select(Usuario).where(Usuario.nombre == req.nombre, Usuario.activo.is_(True))
     ).scalars().first()
     if usuario is None or usuario.rol != "administracion" or not verificar_pin(req.password, usuario.pin_hash):
+        # Invariante 4: auditar el intento fallido (nunca la credencial). En demo
+        # no se audita ni bloquea: queda como antes.
+        if settings.perfil != "demo":
+            s.add(LogAuditoria(
+                fecha_hora_huso=ahora_huso(),
+                usuario_id=usuario.id if usuario is not None else None,
+                accion="acceso_admin_fallido", entidad="consola",
+                detalle=f"nombre={req.nombre!r} ip={ip}", origen=origen))
+            s.commit()
         raise HTTPException(401, "Credenciales invalidas")
 
     request.session["usuario_id"] = usuario.id
     request.session["rol"] = usuario.rol
     s.add(LogAuditoria(fecha_hora_huso=ahora_huso(), usuario_id=usuario.id,
-                       accion="acceso_admin", entidad="consola", origen=_origen(request)))
+                       accion="acceso_admin", entidad="consola", origen=origen))
     s.commit()
     return {"usuario_id": usuario.id, "nombre": usuario.nombre, "rol": usuario.rol}
 
@@ -800,8 +854,8 @@ def crear_usuario(req: UsuarioCrearReq, request: Request,
         raise HTTPException(409, "Ya existe un usuario con ese nombre")
     except RolInvalido:
         raise HTTPException(422, "Rol invalido (venta | administracion)")
-    except PinInvalido:
-        raise HTTPException(422, "El PIN no es valido (minimo 4 caracteres)")
+    except PinInvalido as exc:
+        raise HTTPException(422, str(exc))
     return {"id": nuevo_id}
 
 
@@ -810,13 +864,15 @@ def actualizar_usuario(usuario_objetivo_id: int, req: UsuarioActualizarReq, requ
                        usuario_id: int = Depends(require_admin), uow=Depends(get_uow)) -> dict:
     try:
         _servicio_usuarios(request, usuario_id, uow).actualizar(
-            usuario_objetivo_id, DatosUsuario(nombre=req.nombre, rol=req.rol))
+            usuario_objetivo_id, DatosUsuario(nombre=req.nombre, rol=req.rol, pin=req.pin))
     except UsuarioNoEncontrado:
         raise HTTPException(404, "Usuario no encontrado")
     except NombreDuplicado:
         raise HTTPException(409, "Ya existe un usuario con ese nombre")
     except RolInvalido:
         raise HTTPException(422, "Rol invalido (venta | administracion)")
+    except PinInvalido as exc:
+        raise HTTPException(422, str(exc))
     except UltimoAdministrador:
         raise HTTPException(409, "No se puede dejar el sistema sin un administrador activo")
     return {"ok": True}
@@ -829,8 +885,8 @@ def cambiar_pin_usuario(usuario_objetivo_id: int, req: PinReq, request: Request,
         _servicio_usuarios(request, usuario_id, uow).cambiar_pin(usuario_objetivo_id, req.pin)
     except UsuarioNoEncontrado:
         raise HTTPException(404, "Usuario no encontrado")
-    except PinInvalido:
-        raise HTTPException(422, "El PIN no es valido (minimo 4 caracteres)")
+    except PinInvalido as exc:
+        raise HTTPException(422, str(exc))
     return {"ok": True}
 
 

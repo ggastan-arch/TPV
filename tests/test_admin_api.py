@@ -28,8 +28,7 @@ def admin(session, datos_base):
     return {"nombre": "jefa", "password": "secreta123", "usuario_id": u.id}
 
 
-@pytest.fixture
-def cliente(crear_sesion):
+def _construir_cliente(crear_sesion, host: str | None = None) -> TestClient:
     app = crear_app()
 
     def _get_session():
@@ -48,7 +47,19 @@ def cliente(crear_sesion):
 
     app.dependency_overrides[get_session] = _get_session
     app.dependency_overrides[get_uow] = _get_uow
-    return TestClient(app)
+    # host=None -> TestClient usa "testclient" (origen remoto). "127.0.0.1" -> local.
+    kwargs = {"client": (host, 12345)} if host else {}
+    return TestClient(app, **kwargs)
+
+
+@pytest.fixture
+def cliente(crear_sesion):
+    return _construir_cliente(crear_sesion)
+
+
+@pytest.fixture
+def cliente_local(crear_sesion):
+    return _construir_cliente(crear_sesion, host="127.0.0.1")
 
 
 def _login(cliente, admin):
@@ -70,6 +81,91 @@ def test_login_solo_admin(cliente, admin, datos_base):
                         json={"nombre": "jefa", "password": "mal"}).status_code == 401
     # Admin correcto.
     assert _login(cliente, admin).status_code == 200
+
+
+def _login_mal(cliente, nombre: str = "jefa"):
+    return cliente.post("/admin/api/login", json={"nombre": nombre, "password": "incorrecta-xxxx"})
+
+
+def test_login_fallido_se_audita_sin_exponer_password(cliente, admin, crear_sesion):
+    """Invariante 4: los accesos de administracion (tambien los FALLIDOS) se auditan,
+    con origen local/remoto, y el log jamas contiene la credencial intentada."""
+    assert _login_mal(cliente).status_code == 401
+    with crear_sesion() as s:
+        fallidos = s.query(LogAuditoria).filter_by(accion="acceso_admin_fallido").all()
+        assert len(fallidos) == 1
+        assert fallidos[0].origen == "remoto"
+        assert "incorrecta-xxxx" not in (fallidos[0].detalle or "")
+
+
+def test_login_remoto_se_bloquea_tras_5_fallos(cliente, admin, crear_sesion):
+    for _ in range(5):
+        assert _login_mal(cliente).status_code == 401
+    # 6to intento: aunque las credenciales sean CORRECTAS, remoto queda bloqueado.
+    assert _login(cliente, admin).status_code == 429
+    with crear_sesion() as s:
+        assert s.query(LogAuditoria).filter_by(accion="acceso_admin_bloqueado").count() >= 1
+
+
+def test_login_local_no_se_bloquea(cliente_local, admin):
+    # El equipo local de la tienda (127.0.0.1) nunca se bloquea, aunque falle mucho.
+    for _ in range(6):
+        assert _login_mal(cliente_local).status_code == 401
+    assert _login(cliente_local, admin).status_code == 200
+
+
+def test_promover_a_admin_por_api_exige_pin(cliente, admin):
+    """El flujo por HTTP que evidenciaron los jueces: crear venta(4) y promover a
+    admin. Sin PIN nuevo -> 422; con PIN >=8 -> ok."""
+    assert _login(cliente, admin).status_code == 200
+    r = cliente.post("/admin/api/maestros/usuarios",
+                     json={"nombre": "cajera", "rol": "venta", "pin": "1234"})
+    assert r.status_code == 201
+    uid = r.json()["id"]
+    # Promover a administracion SIN indicar un PIN acorde -> rechazado.
+    assert cliente.put(f"/admin/api/maestros/usuarios/{uid}",
+                       json={"nombre": "cajera", "rol": "administracion"}).status_code == 422
+    # Con un PIN >=8 -> permitido.
+    assert cliente.put(f"/admin/api/maestros/usuarios/{uid}",
+                       json={"nombre": "cajera", "rol": "administracion",
+                             "pin": "clave-fuerte"}).status_code == 200
+
+
+def _sembrar_fallos(session, n: int, *, hace_min: int, origen: str = "remoto") -> None:
+    from datetime import datetime, timedelta
+
+    cuando = (datetime.now().astimezone() - timedelta(minutes=hace_min)).isoformat(timespec="seconds")
+    for _ in range(n):
+        session.add(LogAuditoria(fecha_hora_huso=cuando, accion="acceso_admin_fallido",
+                                 entidad="consola", origen=origen))
+    session.commit()
+
+
+def test_bloqueo_remoto_dentro_de_ventana(session):
+    from datetime import datetime
+
+    from app.presentacion.admin import _login_remoto_bloqueado
+
+    _sembrar_fallos(session, 5, hace_min=2)
+    assert _login_remoto_bloqueado(session, datetime.now().astimezone()) is True
+
+
+def test_bloqueo_autodesbloqueo_fuera_de_ventana(session):
+    from datetime import datetime
+
+    from app.presentacion.admin import _login_remoto_bloqueado
+
+    _sembrar_fallos(session, 5, hace_min=30)  # fuera de los 15 min
+    assert _login_remoto_bloqueado(session, datetime.now().astimezone()) is False
+
+
+def test_bloqueo_ignora_fallos_locales(session):
+    from datetime import datetime
+
+    from app.presentacion.admin import _login_remoto_bloqueado
+
+    _sembrar_fallos(session, 5, hace_min=2, origen="local")
+    assert _login_remoto_bloqueado(session, datetime.now().astimezone()) is False
 
 
 def test_require_admin_demo_devuelve_id_cacheado_en_arranque():
