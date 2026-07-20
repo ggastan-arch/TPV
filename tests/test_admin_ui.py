@@ -127,15 +127,14 @@ def test_admin_clientes_toggle_activo_sin_confirmacion_extra():
 
 
 # --- Fase 2.4: cierre C2 (no regresion) -------------------------------------
-def test_tpv_funciones_sin_backend_siguen_deshabilitadas_tras_reskin_admin():
-    """No regresion: el reskin de admin.html (Corte 2) no toca tpv.html. De los
-    4 botones de funciones maquetados en Corte 1, solo 'Convertir en factura'
-    sigue sin backend (`disabled`); 'Aparcar ticket'/'Desaparcar' (aparcar-
-    desaparcar) y 'Cliente en venta' (cliente-en-venta) pasaron a tener backend."""
+def test_tpv_funciones_todas_con_backend_tras_reskin_admin():
+    """No regresion: el reskin de admin.html (Corte 2) no toca tpv.html. Las 4
+    funciones de la barra ya tienen comportamiento; la ultima, 'Convertir en
+    factura', paso de deshabilitada a atajo al panel de conversion del admin."""
     html = TestClient(crear_app()).get("/tpv/").text
     for texto in ("Convertir en factura", "Aparcar ticket", "Desaparcar", "Cliente en venta"):
         assert texto in html
-    assert html.count('<button class="btn fn-btn" disabled') == 1
+    assert html.count('<button class="btn fn-btn" disabled') == 0
 
 
 # --- Fase 6: panel "Convertir en factura" (Requirement: Panel Convertir en factura --
