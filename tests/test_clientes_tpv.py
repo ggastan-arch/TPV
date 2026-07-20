@@ -127,6 +127,23 @@ def test_alta_inline_nif_invalido_rechaza_422_sin_persistir(cliente, crear_sesio
         assert s.query(Cliente).count() == 0
 
 
+def test_alta_inline_nif_duplicado_de_activo_rechaza_409_sin_persistir(
+    cliente, crear_sesion, datos_base
+):
+    """Regla decidida: NIF unico entre clientes ACTIVOS (integridad de datos)."""
+    with crear_sesion() as s:
+        ServicioClientes(UnidadDeTrabajoSQL(s)).crear(
+            DatosCliente(nombre="Acuario S.L.", nif="A58818501"))
+
+    r = cliente.post("/tpv/api/clientes", params={"pin": "0000"}, json={
+        "nombre": "Otro", "nif": "A58818501",
+    })
+    assert r.status_code == 409
+
+    with crear_sesion() as s:
+        assert s.query(Cliente).filter_by(nombre="Otro").count() == 0
+
+
 def test_alta_inline_exige_pin(cliente, datos_base):
     r = cliente.post("/tpv/api/clientes", json={"nombre": "Sin PIN"})
     assert r.status_code == 401

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.aplicacion.articulos import (
@@ -28,6 +29,7 @@ from app.aplicacion.articulos import (
 from app.aplicacion.clientes import (
     ClienteNoEncontrado,
     DatosCliente,
+    NifDuplicado,
     NifInvalido,
     ServicioClientes,
 )
@@ -714,6 +716,12 @@ def crear_cliente(req: ClienteReq, request: Request,
         nuevo_id = _servicio_clientes(request, usuario_id, uow).crear(DatosCliente(**req.model_dump()))
     except NifInvalido:
         raise HTTPException(422, "El NIF/NIE/CIF indicado no es valido")
+    except NifDuplicado as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except IntegrityError as exc:
+        # Red de seguridad de BD (indice unico parcial `uq_cliente_nif_activo`,
+        # migracion 0012): defensa en profundidad ante una condicion de carrera.
+        raise HTTPException(409, "Ya existe un cliente activo con ese NIF") from exc
     return {"id": nuevo_id}
 
 
@@ -726,6 +734,10 @@ def actualizar_cliente(cliente_id: int, req: ClienteReq, request: Request,
         raise HTTPException(404, "Cliente no encontrado")
     except NifInvalido:
         raise HTTPException(422, "El NIF/NIE/CIF indicado no es valido")
+    except NifDuplicado as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except IntegrityError as exc:
+        raise HTTPException(409, "Ya existe un cliente activo con ese NIF") from exc
     return {"ok": True}
 
 
@@ -746,6 +758,11 @@ def activar_cliente(cliente_id: int, request: Request,
         _servicio_clientes(request, usuario_id, uow).activar(cliente_id)
     except ClienteNoEncontrado:
         raise HTTPException(404, "Cliente no encontrado")
+    except IntegrityError as exc:
+        # `activar` no repite el chequeo de NIF duplicado de `crear`/`actualizar`
+        # (ver ServicioClientes.activar): la reactivacion depende del indice unico
+        # parcial (migracion 0012) para rechazar la colision con otro cliente activo.
+        raise HTTPException(409, "Ya existe un cliente activo con ese NIF") from exc
     return {"ok": True}
 
 

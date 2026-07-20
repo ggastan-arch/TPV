@@ -444,6 +444,39 @@ def test_actualizar_cliente_inexistente(cliente, admin, datos_base):
     assert r.status_code == 404
 
 
+def test_crear_cliente_nif_duplicado_de_activo_devuelve_409(cliente, admin, datos_base):
+    """Regla decidida: NIF unico entre clientes ACTIVOS (integridad de datos)."""
+    _login(cliente, admin)
+    cliente.post("/admin/api/maestros/clientes", json={"nombre": "Uno", "nif": "A58818501"})
+    r = cliente.post("/admin/api/maestros/clientes", json={"nombre": "Dos", "nif": "A58818501"})
+    assert r.status_code == 409
+
+
+def test_actualizar_cliente_nif_a_uno_duplicado_devuelve_409(cliente, admin, datos_base):
+    _login(cliente, admin)
+    cliente.post("/admin/api/maestros/clientes", json={"nombre": "Uno", "nif": "A58818501"})
+    dos_id = cliente.post("/admin/api/maestros/clientes",
+                          json={"nombre": "Dos", "nif": "12345678Z"}).json()["id"]
+    r = cliente.put(f"/admin/api/maestros/clientes/{dos_id}",
+                    json={"nombre": "Dos", "nif": "A58818501"})
+    assert r.status_code == 409
+
+
+def test_reactivar_cliente_choca_con_nif_de_otro_activo_devuelve_409(cliente, admin, datos_base):
+    """Red de seguridad de BD (indice unico parcial): `activar()` no repite el
+    chequeo de aplicacion de `crear`/`actualizar`, asi que una reactivacion que
+    colisiona con un NIF ya activo debe rechazarse via el IntegrityError del
+    indice, mapeado a 409 (nunca un 500 crudo)."""
+    _login(cliente, admin)
+    a_id = cliente.post("/admin/api/maestros/clientes",
+                        json={"nombre": "A", "nif": "A58818501"}).json()["id"]
+    cliente.post(f"/admin/api/maestros/clientes/{a_id}/desactivar")
+    cliente.post("/admin/api/maestros/clientes", json={"nombre": "B", "nif": "A58818501"})
+
+    r = cliente.post(f"/admin/api/maestros/clientes/{a_id}/activar")
+    assert r.status_code == 409
+
+
 # --- Maestros: usuarios --------------------------------------------------------
 def test_crear_usuario_exige_sesion(cliente, datos_base):
     assert cliente.post("/admin/api/maestros/usuarios",

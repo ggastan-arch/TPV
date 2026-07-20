@@ -11,6 +11,7 @@ import pytest
 from app.aplicacion.clientes import (
     ClienteNoEncontrado,
     DatosCliente,
+    NifDuplicado,
     NifInvalido,
     ServicioClientes,
 )
@@ -51,6 +52,81 @@ def test_crear_cliente_nif_invalido_falla_y_no_persiste(crear_sesion, datos_base
             _svc(s, datos_base).crear(DatosCliente(nombre="Malo", nif="12345678A"))
     with crear_sesion() as s:
         assert s.query(Cliente).count() == 0
+
+
+# --- NIF unico entre clientes ACTIVOS (integridad de datos) -----------------
+# Regla decidida: el NIF es unico solo entre clientes ACTIVOS cuando esta
+# presente. Varios clientes sin NIF son validos; un cliente INACTIVO con ese
+# NIF no bloquea un alta nueva (ver migracion 0012_cliente_nif_unico_activo,
+# indice unico parcial como red de seguridad de BD).
+
+
+def test_crear_cliente_nif_duplicado_de_activo_rechaza_y_no_persiste(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Acuario S.L.", nif="A58818501"))
+    with crear_sesion() as s:
+        with pytest.raises(NifDuplicado):
+            _svc(s, datos_base).crear(DatosCliente(nombre="Otro", nif="A58818501"))
+    with crear_sesion() as s:
+        assert s.query(Cliente).count() == 1
+
+
+def test_crear_cliente_nif_duplicado_distinto_formato_rechaza(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Acuario S.L.", nif="A58818501"))
+    with crear_sesion() as s:
+        with pytest.raises(NifDuplicado):
+            _svc(s, datos_base).crear(DatosCliente(nombre="Otro", nif=" a-58818501 "))
+
+
+def test_crear_cliente_nif_distinto_ok(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Acuario S.L.", nif="A58818501"))
+    with crear_sesion() as s:
+        cliente_id = _svc(s, datos_base).crear(DatosCliente(nombre="Otro", nif="12345678Z"))
+    with crear_sesion() as s:
+        assert s.get(Cliente, cliente_id) is not None
+
+
+def test_crear_varios_clientes_sin_nif_ok(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Uno"))
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Dos"))
+    with crear_sesion() as s:
+        assert s.query(Cliente).count() == 2
+
+
+def test_crear_cliente_con_nif_de_cliente_inactivo_se_permite(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        inactivo_id = _svc(s, datos_base).crear(DatosCliente(nombre="Baja", nif="A58818501"))
+    with crear_sesion() as s:
+        _svc(s, datos_base).desactivar(inactivo_id)
+    with crear_sesion() as s:
+        nuevo_id = _svc(s, datos_base).crear(DatosCliente(nombre="Nuevo", nif="A58818501"))
+    with crear_sesion() as s:
+        nuevo = s.get(Cliente, nuevo_id)
+        assert nuevo is not None and nuevo.activo is True
+
+
+def test_actualizar_cliente_nif_a_uno_de_otro_cliente_activo_rechaza(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        _svc(s, datos_base).crear(DatosCliente(nombre="Uno", nif="A58818501"))
+    with crear_sesion() as s:
+        dos_id = _svc(s, datos_base).crear(DatosCliente(nombre="Dos", nif="12345678Z"))
+    with crear_sesion() as s:
+        with pytest.raises(NifDuplicado):
+            _svc(s, datos_base).actualizar(dos_id, DatosCliente(nombre="Dos", nif="A58818501"))
+
+
+def test_actualizar_cliente_conservando_su_propio_nif_no_falla(crear_sesion, datos_base):
+    with crear_sesion() as s:
+        cliente_id = _svc(s, datos_base).crear(DatosCliente(nombre="Uno", nif="A58818501"))
+    with crear_sesion() as s:
+        _svc(s, datos_base).actualizar(
+            cliente_id, DatosCliente(nombre="Uno renombrado", nif="A58818501"))
+    with crear_sesion() as s:
+        assert s.get(Cliente, cliente_id).nombre == "Uno renombrado"
 
 
 def test_actualizar_cliente_ok_y_audita(crear_sesion, datos_base):
