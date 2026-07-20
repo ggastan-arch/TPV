@@ -463,20 +463,46 @@ function abrirClienteEnVenta() {
     }, 250);
   };
 
-  ov.querySelector("#ceCrear").onclick = async () => {
-    const nombre = prompt("Nombre del cliente:", "");
-    if (!nombre) return;
-    const nif = prompt("NIF (opcional):", "") || null;
-    const domicilio = prompt("Domicilio (opcional; requerido para cualificada):", "") || null;
-    const rgpd = confirm("¿El cliente consiente el tratamiento de sus datos (RGPD)?");
-    try {
-      const nuevo = await api("/tpv/api/clientes?pin=" + encodeURIComponent(pin), {
-        method: "POST",
-        body: JSON.stringify({ nombre, nif, domicilio, rgpd_consentimiento: rgpd }),
-      });
-      clienteAsignado = nuevo; ventaCualificada = false;
-      ov.remove(); actualizarClienteEnCarrito();
-    } catch (err) { ov.querySelector("#ceError").textContent = err.message; }
+  ov.querySelector("#ceCrear").onclick = () => {
+    // Ficha completa de alta inline: solo "nombre" es obligatorio; el resto
+    // (nif/domicilio/email/telefono/rgpd) es opcional, igual que en el CRUD
+    // de administracion (ver app/ui/admin.html::modalCliente).
+    ov.querySelector(".modal").innerHTML = `<h2>Cliente nuevo</h2>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">Nombre *</label>
+        <input class="campo-buscar" id="ceNombre" style="width:100%"></div>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">NIF/NIE/CIF</label>
+        <input class="campo-buscar" id="ceNif" style="width:100%"></div>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">Domicilio</label>
+        <input class="campo-buscar" id="ceDomicilio" style="width:100%"></div>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">Email</label>
+        <input class="campo-buscar" id="ceEmail" style="width:100%"></div>
+      <div style="margin-bottom:8px"><label style="display:block;margin-bottom:4px">Telefono</label>
+        <input class="campo-buscar" id="ceTelefono" style="width:100%"></div>
+      <label style="display:flex;align-items:center;gap:8px;margin:10px 0">
+        <input type="checkbox" id="ceRgpd"> Consentimiento RGPD</label>
+      <div class="msg-error" id="ceError"></div>
+      <div class="fila-modal">
+        <button class="btn" id="ceGuardar">Guardar</button>
+        <button class="btn b-vaciar" id="ceCancelar">Cancelar</button>
+      </div>`;
+    ov.querySelector("#ceCancelar").onclick = () => ov.remove();
+    ov.querySelector("#ceGuardar").onclick = async () => {
+      const nombre = ov.querySelector("#ceNombre").value.trim();
+      if (!nombre) { ov.querySelector("#ceError").textContent = "El nombre es obligatorio."; return; }
+      const nif = ov.querySelector("#ceNif").value.trim() || null;
+      const domicilio = ov.querySelector("#ceDomicilio").value.trim() || null;
+      const email = ov.querySelector("#ceEmail").value.trim() || null;
+      const telefono = ov.querySelector("#ceTelefono").value.trim() || null;
+      const rgpd = ov.querySelector("#ceRgpd").checked;
+      try {
+        const nuevo = await api("/tpv/api/clientes?pin=" + encodeURIComponent(pin), {
+          method: "POST",
+          body: JSON.stringify({ nombre, nif, domicilio, email, telefono, rgpd_consentimiento: rgpd }),
+        });
+        clienteAsignado = nuevo; ventaCualificada = false;
+        ov.remove(); actualizarClienteEnCarrito();
+      } catch (err) { ov.querySelector("#ceError").textContent = err.message; }
+    };
   };
 
   const btnQuitar = ov.querySelector("#ceQuitar");
