@@ -66,3 +66,29 @@ def test_perfil_invalido_rechaza_arranque(monkeypatch):
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_produccion_con_session_secret_default_aborta():
+    """En produccion, arrancar con el secreto de sesion por defecto (publico)
+    haria las cookies de admin falsificables -> se aborta el arranque."""
+    from app.infraestructura.config import (
+        SESSION_SECRET_DEFAULT,
+        SecretoInseguro,
+        validar_session_secret,
+    )
+
+    with pytest.raises(SecretoInseguro):
+        validar_session_secret("produccion", SESSION_SECRET_DEFAULT)
+
+
+def test_demo_con_session_secret_default_no_aborta():
+    """El modo demo debe quedar como antes: arranca con el secreto por defecto."""
+    from app.infraestructura.config import SESSION_SECRET_DEFAULT, validar_session_secret
+
+    validar_session_secret("demo", SESSION_SECRET_DEFAULT)  # no debe lanzar
+
+
+def test_produccion_con_session_secret_propio_no_aborta():
+    from app.infraestructura.config import validar_session_secret
+
+    validar_session_secret("produccion", "un-secreto-largo-y-aleatorio-2f9c")  # no debe lanzar

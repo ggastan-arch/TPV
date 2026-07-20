@@ -1,6 +1,7 @@
 """Punto de entrada FastAPI. Los routers TPV/admin/fiscal se anaden en fases siguientes."""
 from __future__ import annotations
 
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,7 +22,12 @@ from app.presentacion.health import router as health_router
 from app.presentacion.landing import router as landing_router
 from app.presentacion.tpv import router as tpv_router
 from app.infraestructura import imagenes
-from app.infraestructura.config import DB_PATH_PRODUCCION, Settings, settings
+from app.infraestructura.config import (
+    DB_PATH_PRODUCCION,
+    Settings,
+    settings,
+    validar_session_secret,
+)
 from app.infraestructura.db import crear_engine
 from app.infraestructura.persistencia.modelos import Usuario
 from app.seed import sembrar_demo
@@ -138,6 +144,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def crear_app() -> FastAPI:
     _verificar_aislamiento_demo(settings)
+    # Fail-fast del secreto de sesion SOLO en arranque real. Bajo pytest la suite
+    # corre con defaults deterministas (perfil produccion + secreto default, ver
+    # config._ENV_FILE); no abortamos ahi. En demo `validar_session_secret` no
+    # aplica (queda como antes).
+    if "pytest" not in sys.modules:
+        validar_session_secret(settings.perfil, settings.session_secret)
     app = FastAPI(
         title=settings.nombre_sistema, version=settings.version_sistema, lifespan=lifespan
     )
@@ -148,7 +160,7 @@ def crear_app() -> FastAPI:
         app.dependency_overrides[require_admin] = require_admin_demo
     # Sesion de la consola de administracion (cookie firmada).
     app.add_middleware(SessionMiddleware, secret_key=settings.session_secret,
-                       same_site="lax", https_only=False)
+                       same_site="lax", https_only=False, max_age=settings.session_max_age_s)
     app.include_router(landing_router)
     app.include_router(health_router)
     app.include_router(tpv_router)

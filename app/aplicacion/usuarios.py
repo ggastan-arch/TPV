@@ -13,14 +13,22 @@ from app.infraestructura.seguridad import hash_pin
 from app.infraestructura.persistencia.modelos import Usuario
 
 ROLES = ("venta", "administracion")
+# Longitud minima de credencial por rol. El operador de venta usa un PIN tactil
+# corto; el administrador entra por una consola accesible en remoto (Tailscale),
+# asi que exige una credencial mas larga.
 PIN_LONGITUD_MINIMA = 4
+PIN_LONGITUD_MINIMA_ADMIN = 8
+
+
+def _longitud_minima(rol: str) -> int:
+    return PIN_LONGITUD_MINIMA_ADMIN if rol == "administracion" else PIN_LONGITUD_MINIMA
 
 
 @dataclass
 class DatosUsuario:
     nombre: str
     rol: str
-    pin: str | None = None  # requerido al crear; ignorado al actualizar (ver cambiar_pin)
+    pin: str | None = None  # requerido al crear; en actualizar SOLO se usa al promover a administracion (los cambios de PIN van por cambiar_pin)
 
 
 class NombreDuplicado(Exception):
@@ -52,7 +60,7 @@ class ServicioUsuarios:
     def crear(self, datos: DatosUsuario) -> int:
         self._validar_rol(datos.rol)
         self._validar_nombre_libre(datos.nombre)
-        pin_hash = self._hashear_pin(datos.pin)
+        pin_hash = self._hashear_pin(datos.pin, datos.rol)
         usuario = Usuario(nombre=datos.nombre, rol=datos.rol, pin_hash=pin_hash)
         self.uow.usuarios.agregar(usuario)
         self.uow.flush()
@@ -67,6 +75,16 @@ class ServicioUsuarios:
         # No dejar el sistema sin administrador activo por degradacion de rol.
         if self._deja_sin_administrador(usuario, nuevo_rol=datos.rol, nuevo_activo=usuario.activo):
             raise UltimoAdministrador(usuario_id)
+        # Promover a administracion exige una credencial acorde al rol: `actualizar`
+        # NO re-hashea el PIN, asi que un usuario de venta (PIN >=4) promovido
+        # heredaria una credencial debil en una consola accesible en remoto. Se
+        # obliga a indicar un PIN nuevo que cumpla la politica de administracion.
+        if datos.rol == "administracion" and usuario.rol != "administracion":
+            if datos.pin is None:
+                raise PinInvalido(
+                    "promover a administracion exige un PIN nuevo de al menos "
+                    f"{PIN_LONGITUD_MINIMA_ADMIN} caracteres")
+            usuario.pin_hash = self._hashear_pin(datos.pin, "administracion")
         usuario.nombre = datos.nombre
         usuario.rol = datos.rol
         self._auditar("actualizar_usuario", usuario.id)
@@ -74,7 +92,7 @@ class ServicioUsuarios:
 
     def cambiar_pin(self, usuario_id: int, nuevo_pin: str) -> None:
         usuario = self._obtener(usuario_id)
-        usuario.pin_hash = self._hashear_pin(nuevo_pin)
+        usuario.pin_hash = self._hashear_pin(nuevo_pin, usuario.rol)
         # El detalle NO incluye el PIN.
         self._auditar("cambio_pin", usuario.id)
         self.uow.commit()
@@ -120,9 +138,10 @@ class ServicioUsuarios:
         if existente is not None and existente.id != excluir_id:
             raise NombreDuplicado(nombre)
 
-    def _hashear_pin(self, pin: str | None) -> str:
-        if pin is None or len(pin.strip()) < PIN_LONGITUD_MINIMA:
-            raise PinInvalido("El PIN debe tener al menos %d caracteres" % PIN_LONGITUD_MINIMA)
+    def _hashear_pin(self, pin: str | None, rol: str) -> str:
+        minimo = _longitud_minima(rol)
+        if pin is None or len(pin.strip()) < minimo:
+            raise PinInvalido(f"La credencial del rol '{rol}' debe tener al menos {minimo} caracteres")
         return hash_pin(pin)
 
     def _auditar(self, accion: str, usuario_afectado_id: int) -> None:
