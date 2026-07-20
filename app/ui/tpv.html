@@ -72,7 +72,9 @@
   .b-img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
   .b-fallback { display:flex; align-items:center; justify-content:center; color:color-mix(in srgb, var(--color-text) 40%, transparent); }
   .b-fallback svg { width:32px; height:32px; display:block; }
-  .b-fallback-img { width:84px; height:84px; object-fit:contain; display:block; opacity:.92; }
+  /* Iconos-imagen (PNG) procesados a transparencia real (luminancia->alpha):
+     glifo blanco sobre fondo transparente, centrado. */
+  .b-fallback-img { width:200px; height:200px; object-fit:contain; display:block; }
   .b-cap { position:relative; z-index:1; width:100%; display:flex; flex-direction:column; align-items:center; gap:1px; }
   .btn.con-img .b-cap { padding:8px 6px 7px; background:linear-gradient(to top, rgba(2,6,23,.92) 25%, rgba(2,6,23,0)); }
   .b-tit { line-height:1.15; text-shadow:0 1px 3px rgba(0,0,0,.75); }
@@ -300,8 +302,8 @@ async function irInicio() {
 const ICONOS_FUNCION = { abrir_cajon: "cash-register", cierre_z: "chart-bar" };
 // Iconos-imagen propios (PNG) para botones sin foto: sustituyen al glifo SVG
 // generico. Bolsa (articulo sin foto), abrir cajon y cierre Z.
-const ICONOS_IMG_FUNCION = { abrir_cajon: "/static/img/icono-cajon.png", cierre_z: "/static/img/icono-cierre-z.png" };
-const ICONO_IMG_ARTICULO = "/static/img/icono-bolsa.png";
+const ICONOS_IMG_FUNCION = { abrir_cajon: "/static/img/icono-cajon.png?v=2", cierre_z: "/static/img/icono-cierre-z.png?v=2" };
+const ICONO_IMG_ARTICULO = "/static/img/icono-bolsa.png?v=2";
 
 // Pinta la botonera normal SIN tocar el campo de busqueda. La busqueda por
 // nombre la usa para restaurar la rejilla cuando el texto es demasiado corto,
