@@ -1,0 +1,35 @@
+# Dependabot: revisa las dependencias cada semana (lunes) y abre PRs.
+# Las actualizaciones menores y parches se agrupan en un solo PR por ecosistema;
+# las versiones mayores llegan por separado para revisarlas con calma.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Madrid
+    open-pull-requests-limit: 5
+    groups:
+      pip-menores-y-parches:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "07:00"
+      timezone: Europe/Madrid
+    open-pull-requests-limit: 3
+    groups:
+      docker-menores-y-parches:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
